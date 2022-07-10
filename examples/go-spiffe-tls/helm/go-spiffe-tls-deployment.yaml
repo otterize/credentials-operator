@@ -4,7 +4,6 @@ metadata:
   name: client
   labels:
     app: client
-    otterize/service-name: go-spiffe-tls-client
 spec:
   selector:
     matchLabels:
@@ -13,6 +12,7 @@ spec:
     metadata:
       labels:
         app: client
+        otterize/service-name: go-spiffe-tls-client
     spec:
       containers:
         - name: client
@@ -33,7 +33,6 @@ metadata:
   name: server
   labels:
     app: server
-    otterize/service-name: go-spiffe-tls-server
 spec:
   selector:
     matchLabels:
@@ -42,6 +41,7 @@ spec:
     metadata:
       labels:
         app: server
+        otterize/service-name: go-spiffe-tls-server
     spec:
       containers:
         - name: server

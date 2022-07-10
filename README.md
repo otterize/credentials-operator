@@ -42,12 +42,11 @@ cd src
 ```shell
 apiVersion: apps/v1
 kind: Deployment
-metadata:
-  labels:
-    otterize/service-name: myservice  # label with otterize service name
 spec:
   template:
     metadata:
+      labels:
+        otterize/service-name: myservice  # label with otterize service name
       containers:
         - name: myservice
           ...
