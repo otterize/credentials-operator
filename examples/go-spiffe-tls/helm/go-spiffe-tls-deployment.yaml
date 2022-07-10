@@ -4,6 +4,7 @@ metadata:
   name: client
   labels:
     app: client
+    otterize/service-name: go-spiffe-tls-client
 spec:
   selector:
     matchLabels:
@@ -12,26 +13,19 @@ spec:
     metadata:
       labels:
         app: client
-        otterize/service-name: go-spiffe-tls-client
     spec:
       containers:
         - name: client
           imagePullPolicy: Always
           image: public.ecr.aws/e3b4k2v5/go-spiffe-client:latest
           volumeMounts:
-            - name: spifferize-trust-bundle
-              mountPath: /etc/spifferize/trust-bundle
-              readOnly: true
-            - name: spifferize-svid
-              mountPath: /etc/spifferize/svid
+            - name: spifferize-bundle
+              mountPath: /etc/spifferize
               readOnly: true
       volumes:
-        - name: spifferize-trust-bundle
+        - name: spifferize-bundle
           secret:
-            secretName: spifferize-trust-bundle
-        - name: spifferize-svid
-          secret:
-            secretName: spifferize-svid-go-spiffe-tls-client
+            secretName: spifferize-bundle-go-spiffe-tls-client
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -39,6 +33,7 @@ metadata:
   name: server
   labels:
     app: server
+    otterize/service-name: go-spiffe-tls-server
 spec:
   selector:
     matchLabels:
@@ -47,7 +42,6 @@ spec:
     metadata:
       labels:
         app: server
-        otterize/service-name: go-spiffe-tls-server
     spec:
       containers:
         - name: server
@@ -56,20 +50,13 @@ spec:
           imagePullPolicy: Always
           image: public.ecr.aws/e3b4k2v5/go-spiffe-server:latest
           volumeMounts:
-            - name: spifferize-trust-bundle
-              mountPath: /etc/spifferize/trust-bundle
-              readOnly: true
-            - name: spifferize-svid
-              mountPath: /etc/spifferize/svid
+            - name: spifferize-bundle
+              mountPath: /etc/spifferize
               readOnly: true
       volumes:
-        - name: spifferize-trust-bundle
+        - name: spifferize-bundle
           secret:
-            secretName: spifferize-trust-bundle
-        - name: spifferize-svid
-          secret:
-            secretName: spifferize-svid-go-spiffe-tls-server
-
+            secretName: spifferize-bundle-go-spiffe-tls-server
 ---
 apiVersion: v1
 kind: Service

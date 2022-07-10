@@ -16,9 +16,9 @@ import (
 
 const (
 	serverAddress = "go-spiffe-server-service:55555"
-	bundlePath    = "/etc/spifferize/trust-bundle/bundle.pem"
-	certFilePath  = "/etc/spifferize/svid/svid.pem"
-	keyFilePath   = "/etc/spifferize/svid/key.pem"
+	bundlePath    = "/etc/spifferize/bundle.pem"
+	certFilePath  = "/etc/spifferize/svid.pem"
+	keyFilePath   = "/etc/spifferize/key.pem"
 	serverID      = "spiffe://example.org/otterize/namespace/default/service/go-spiffe-tls-server"
 )
 
