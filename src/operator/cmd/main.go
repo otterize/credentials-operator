@@ -40,28 +40,12 @@ func init() {
 
 func initSpireClient(ctx context.Context, spireServerAddr string) (spire_client.ServerClient, error) {
 	// fetch SVID & bundle through spire-agent API
-	source, err := workloadapi.New(ctx, workloadapi.WithAddr(socketPath))
-	if err != nil {
-		return nil, err
-	}
-	defer source.Close()
-
-	svid, err := source.FetchX509SVID(ctx)
-	if err != nil {
-		return nil, err
-	}
-	bundle, err := source.FetchX509Bundles(ctx)
+	source, err := workloadapi.NewX509Source(ctx, workloadapi.WithClientOptions(workloadapi.WithAddr(socketPath)))
 	if err != nil {
 		return nil, err
 	}
 
-	// use SVID & bundle to connect to spire-server API
-	conf := spire_client.ServerClientConfig{
-		SVID:   svid,
-		Bundle: bundle,
-	}
-
-	serverClient, err := spire_client.NewServerClient(ctx, spireServerAddr, conf)
+	serverClient, err := spire_client.NewServerClient(ctx, spireServerAddr, source)
 	if err != nil {
 		return nil, err
 	}

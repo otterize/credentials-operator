@@ -7,7 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	entryv1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/entry/v1"
-	spireTypes "github.com/spiffe/spire-api-sdk/proto/spire/api/types"
+	"github.com/spiffe/spire-api-sdk/proto/spire/api/types"
 	"google.golang.org/grpc/codes"
 )
 
@@ -26,18 +26,20 @@ func NewEntriesManager(spireClient spire_client.ServerClient) *Manager {
 func (m *Manager) RegisterK8SPodEntry(ctx context.Context, namespace string, serviceName string) (spiffeid.ID, error) {
 	log := logrus.WithFields(logrus.Fields{"namespace": namespace, "service_name": serviceName})
 
-	trustDomain := m.SpireClient.ClientConf().ClientSpiffeID().TrustDomain()
+	trustDomain := m.SpireClient.GetSpiffeID().TrustDomain()
+	podSpiffeIDPath := fmt.Sprintf("/otterize/namespace/%s/service/%s", namespace, serviceName)
+	parentSpiffeIDPath := m.SpireClient.GetSpiffeID().Path()
 
-	entry := spireTypes.Entry{
-		SpiffeId: &spireTypes.SPIFFEID{
+	entry := types.Entry{
+		SpiffeId: &types.SPIFFEID{
 			TrustDomain: trustDomain.String(),
-			Path:        fmt.Sprintf("/otterize/namespace/%s/service/%s", namespace, serviceName),
+			Path:        podSpiffeIDPath,
 		},
-		ParentId: &spireTypes.SPIFFEID{
+		ParentId: &types.SPIFFEID{
 			TrustDomain: trustDomain.String(),
-			Path:        m.SpireClient.ClientConf().ClientSpiffeID().Path(),
+			Path:        parentSpiffeIDPath,
 		},
-		Selectors: []*spireTypes.Selector{
+		Selectors: []*types.Selector{
 			{Type: "k8s", Value: fmt.Sprintf("ns:%s", namespace)},
 			{Type: "k8s", Value: fmt.Sprintf("pod-label:%s=%s", ServiceNamePodLabel, serviceName)},
 		},
@@ -45,7 +47,7 @@ func (m *Manager) RegisterK8SPodEntry(ctx context.Context, namespace string, ser
 
 	log.Info("Creating SPIRE server entry")
 	entryClient := m.SpireClient.NewEntryClient()
-	batchCreateEntryRequest := entryv1.BatchCreateEntryRequest{Entries: []*spireTypes.Entry{&entry}}
+	batchCreateEntryRequest := entryv1.BatchCreateEntryRequest{Entries: []*types.Entry{&entry}}
 
 	resp, err := entryClient.BatchCreateEntry(ctx, &batchCreateEntryRequest)
 	if err != nil {
