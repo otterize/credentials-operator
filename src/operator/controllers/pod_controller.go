@@ -30,7 +30,7 @@ type PodReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=create;get;list;update;patch
 
 const (
-	bundleSecretPrefix = "spifferize-bundle"
+	tlsSecretPrefix = "spifferize-tls"
 )
 
 func (r *PodReconciler) ensureSecret(ctx context.Context, secret *corev1.Secret) error {
@@ -55,8 +55,7 @@ func (r *PodReconciler) ensureSecret(ctx context.Context, secret *corev1.Secret)
 	return nil
 }
 
-func (r *PodReconciler) ensureBundleSecret(ctx context.Context, namespace string, secretName string, spiffeID spiffeid.ID) error {
-	// create secret content
+func (r *PodReconciler) ensureTLSSecret(ctx context.Context, namespace string, secretName string, spiffeID spiffeid.ID) error {
 	trustBundle, err := r.BundlesManager.GetTrustBundle(ctx)
 	if err != nil {
 		return err
@@ -114,10 +113,9 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	secretName := fmt.Sprintf("%s-%s", bundleSecretPrefix, serviceName)
-
-	if err := r.ensureBundleSecret(ctx, pod.Namespace, secretName, spiffeID); err != nil {
-		log.Error(err, "failed to create bundle secret")
+	secretName := fmt.Sprintf("%s-%s", tlsSecretPrefix, serviceName)
+	if err := r.ensureTLSSecret(ctx, pod.Namespace, secretName, spiffeID); err != nil {
+		log.Error(err, "failed to create trust bundle & svid secret")
 		return ctrl.Result{}, err
 	}
 

@@ -19,13 +19,13 @@ spec:
           imagePullPolicy: Always
           image: public.ecr.aws/e3b4k2v5/go-spiffe-client:latest
           volumeMounts:
-            - name: spifferize-bundle
+            - name: spifferize-tls
               mountPath: /etc/spifferize
               readOnly: true
       volumes:
-        - name: spifferize-bundle
+        - name: spifferize-tls
           secret:
-            secretName: spifferize-bundle-go-spiffe-tls-client
+            secretName: spifferize-tls-go-spiffe-tls-client
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -50,13 +50,13 @@ spec:
           imagePullPolicy: Always
           image: public.ecr.aws/e3b4k2v5/go-spiffe-server:latest
           volumeMounts:
-            - name: spifferize-bundle
+            - name: spifferize-tls
               mountPath: /etc/spifferize
               readOnly: true
       volumes:
-        - name: spifferize-bundle
+        - name: spifferize-tls
           secret:
-            secretName: spifferize-bundle-go-spiffe-tls-server
+            secretName: spifferize-tls-go-spiffe-tls-server
 ---
 apiVersion: v1
 kind: Service
