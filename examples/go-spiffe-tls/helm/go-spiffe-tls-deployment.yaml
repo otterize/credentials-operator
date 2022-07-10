@@ -19,9 +19,6 @@ spec:
           imagePullPolicy: Always
           image: public.ecr.aws/e3b4k2v5/go-spiffe-client:latest
           volumeMounts:
-            - name: spire-agent-socket
-              mountPath: /run/spire/sockets
-              readOnly: true
             - name: spifferize-trust-bundle
               mountPath: /etc/spifferize/trust-bundle
               readOnly: true
@@ -29,10 +26,6 @@ spec:
               mountPath: /etc/spifferize/svid
               readOnly: true
       volumes:
-        - name: spire-agent-socket
-          hostPath:
-            path: /run/spire/sockets
-            type: Directory
         - name: spifferize-trust-bundle
           secret:
             secretName: spifferize-trust-bundle
@@ -63,9 +56,6 @@ spec:
           imagePullPolicy: Always
           image: public.ecr.aws/e3b4k2v5/go-spiffe-server:latest
           volumeMounts:
-            - name: spire-agent-socket
-              mountPath: /run/spire/sockets
-              readOnly: true
             - name: spifferize-trust-bundle
               mountPath: /etc/spifferize/trust-bundle
               readOnly: true
@@ -73,10 +63,6 @@ spec:
               mountPath: /etc/spifferize/svid
               readOnly: true
       volumes:
-        - name: spire-agent-socket
-          hostPath:
-            path: /run/spire/sockets
-            type: Directory
         - name: spifferize-trust-bundle
           secret:
             secretName: spifferize-trust-bundle

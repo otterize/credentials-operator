@@ -69,7 +69,7 @@ func (r *PodReconciler) ensureTrustBundleSecret(ctx context.Context, namespace s
 			Namespace: namespace,
 		},
 		Data: map[string][]byte{
-			"trust-bundle-pem": trustBundle.BundlePEM,
+			"bundle.pem": trustBundle.BundlePEM,
 		},
 	}
 
@@ -91,8 +91,8 @@ func (r *PodReconciler) ensureSVIDSecret(ctx context.Context, namespace string, 
 			},
 		},
 		Data: map[string][]byte{
-			"key-pem":  svid.KeyPEM,
-			"svid-pem": svid.SVIDPEM,
+			"key.pem":  svid.KeyPEM,
+			"svid.pem": svid.SVIDPEM,
 		},
 	}
 
@@ -134,7 +134,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	if err := r.ensureSVIDSecret(ctx, pod.Namespace, serviceName, spiffeID); err != nil {
-		log.Error(err, "failed to create trust bundle secret")
+		log.Error(err, "failed to create svid secret")
 		return ctrl.Result{}, err
 	}
 
