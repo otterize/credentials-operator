@@ -25,8 +25,9 @@ type EncodedTrustBundle struct {
 }
 
 type EncodedX509SVID struct {
-	SVIDPEM []byte
-	KeyPEM  []byte
+	SVIDPEM   []byte
+	KeyPEM    []byte
+	ExpiresAt int64
 }
 
 func NewBundlesManager(spireClient spire_client.ServerClient) *Manager {
@@ -99,5 +100,5 @@ func (m *Manager) GetX509SVID(ctx context.Context, spiffeID spiffeid.ID) (Encode
 		return EncodedX509SVID{}, fmt.Errorf("failed encoding private key: %w", err)
 	}
 
-	return EncodedX509SVID{SVIDPEM: svidPEM.Bytes(), KeyPEM: keyPEM.Bytes()}, nil
+	return EncodedX509SVID{SVIDPEM: svidPEM.Bytes(), KeyPEM: keyPEM.Bytes(), ExpiresAt: resp.Svid.ExpiresAt}, nil
 }

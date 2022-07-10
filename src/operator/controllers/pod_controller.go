@@ -86,6 +86,9 @@ func (r *PodReconciler) ensureSVIDSecret(ctx context.Context, namespace string, 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-%s", svidSecretName, serviceName),
 			Namespace: namespace,
+			Annotations: map[string]string{
+				"expires-at": fmt.Sprintf("%d", svid.ExpiresAt),
+			},
 		},
 		Data: map[string][]byte{
 			"key-pem":  svid.KeyPEM,
