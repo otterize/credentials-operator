@@ -35,10 +35,10 @@ const (
 )
 
 func (r *PodReconciler) ensureSecret(ctx context.Context, secret *corev1.Secret) error {
-	found := &corev1.Secret{}
 	log := logrus.WithFields(logrus.Fields{"secret.namespace": secret.Namespace, "secret.name": secret.Name})
 
-	if err := r.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, found); err != nil && apierrors.IsNotFound(err) {
+	found := corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, &found); err != nil && apierrors.IsNotFound(err) {
 		log.Info("Creating a new secret")
 		if err := r.Create(ctx, secret); err != nil {
 			return err
@@ -63,7 +63,7 @@ func (r *PodReconciler) ensureTrustBundleSecret(ctx context.Context, namespace s
 		return err
 	}
 
-	secret := &corev1.Secret{
+	secret := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      trustBundleSecretName,
 			Namespace: namespace,
@@ -73,7 +73,7 @@ func (r *PodReconciler) ensureTrustBundleSecret(ctx context.Context, namespace s
 		},
 	}
 
-	return r.ensureSecret(ctx, secret)
+	return r.ensureSecret(ctx, &secret)
 }
 
 func (r *PodReconciler) ensureSVIDSecret(ctx context.Context, namespace string, serviceName string, spiffeID spiffeid.ID) error {
@@ -82,7 +82,7 @@ func (r *PodReconciler) ensureSVIDSecret(ctx context.Context, namespace string, 
 		return err
 	}
 
-	secret := &corev1.Secret{
+	secret := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-%s", svidSecretName, serviceName),
 			Namespace: namespace,
@@ -96,7 +96,7 @@ func (r *PodReconciler) ensureSVIDSecret(ctx context.Context, namespace string, 
 		},
 	}
 
-	return r.ensureSecret(ctx, secret)
+	return r.ensureSecret(ctx, &secret)
 }
 
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

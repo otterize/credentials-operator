@@ -44,10 +44,12 @@ func (m *Manager) GetTrustBundle(ctx context.Context) (EncodedTrustBundle, error
 
 	bundlePEM := new(bytes.Buffer)
 	for _, rootCA := range bundle.X509Authorities {
-		_ = pem.Encode(bundlePEM, &pem.Block{
+		if err := pem.Encode(bundlePEM, &pem.Block{
 			Type:  "CERTIFICATE",
 			Bytes: rootCA.Asn1,
-		})
+		}); err != nil {
+			return EncodedTrustBundle{}, err
+		}
 	}
 
 	return EncodedTrustBundle{BundlePEM: bundlePEM.Bytes()}, nil
