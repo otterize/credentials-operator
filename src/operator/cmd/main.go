@@ -6,6 +6,8 @@ import (
 	"github.com/bombsimon/logrusr/v3"
 	"github.com/otterize/spifferize/src/operator/controllers"
 	spire_client "github.com/otterize/spifferize/src/spire-client"
+	"github.com/otterize/spifferize/src/spire-client/bundles"
+	"github.com/otterize/spifferize/src/spire-client/entries"
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 	"os"
@@ -101,10 +103,15 @@ func main() {
 	}
 	defer spireClient.Close()
 
+	bundlesManager := bundles.NewBundlesManager(spireClient)
+	entriesManager := entries.NewEntriesManager(spireClient)
+
 	podReconciler := &controllers.PodReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		SpireClient: spireClient,
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		SpireClient:    spireClient,
+		BundlesManager: bundlesManager,
+		EntriesManager: entriesManager,
 	}
 
 	if err = podReconciler.SetupWithManager(mgr); err != nil {
