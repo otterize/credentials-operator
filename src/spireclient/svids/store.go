@@ -9,14 +9,14 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	spire_client "github.com/otterize/spifferize/src/spire-client"
+	"github.com/otterize/spifferize/src/spireclient"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	svidv1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/svid/v1"
 	"net/url"
 )
 
 type Store struct {
-	SpireClient spire_client.ServerClient
+	SpireClient spireclient.ServerClient
 }
 
 type EncodedX509SVID struct {
@@ -25,7 +25,7 @@ type EncodedX509SVID struct {
 	ExpiresAt int64
 }
 
-func NewSVIDsStore(spireClient spire_client.ServerClient) *Store {
+func NewSVIDsStore(spireClient spireclient.ServerClient) *Store {
 	return &Store{SpireClient: spireClient}
 }
 

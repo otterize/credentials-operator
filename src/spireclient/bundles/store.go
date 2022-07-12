@@ -4,19 +4,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/pem"
-	spire_client "github.com/otterize/spifferize/src/spire-client"
+	"github.com/otterize/spifferize/src/spireclient"
 	bundlev1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/bundle/v1"
 )
 
 type Store struct {
-	SpireClient spire_client.ServerClient
+	SpireClient spireclient.ServerClient
 }
 
 type EncodedTrustBundle struct {
 	BundlePEM []byte
 }
 
-func NewBundlesStore(spireClient spire_client.ServerClient) *Store {
+func NewBundlesStore(spireClient spireclient.ServerClient) *Store {
 	return &Store{SpireClient: spireClient}
 }
 

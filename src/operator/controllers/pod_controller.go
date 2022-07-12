@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"github.com/otterize/spifferize/src/operator/secrets"
-	spire_client "github.com/otterize/spifferize/src/spire-client"
-	"github.com/otterize/spifferize/src/spire-client/entries"
+	"github.com/otterize/spifferize/src/spireclient"
+	"github.com/otterize/spifferize/src/spireclient/entries"
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	appsv1 "k8s.io/api/apps/v1"
@@ -29,7 +29,7 @@ const (
 type PodReconciler struct {
 	client.Client
 	Scheme          *runtime.Scheme
-	SpireClient     spire_client.ServerClient
+	SpireClient     spireclient.ServerClient
 	EntriesRegistry *entries.Registry
 	SecretsManager  *secrets.Manager
 }

@@ -2,8 +2,8 @@ package secrets
 
 import (
 	"context"
-	"github.com/otterize/spifferize/src/spire-client/bundles"
-	"github.com/otterize/spifferize/src/spire-client/svids"
+	"github.com/otterize/spifferize/src/spireclient/bundles"
+	"github.com/otterize/spifferize/src/spireclient/svids"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"

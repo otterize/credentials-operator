@@ -1,4 +1,4 @@
-package spire_client
+package spireclient
 
 import (
 	"context"

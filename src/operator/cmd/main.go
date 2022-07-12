@@ -6,10 +6,10 @@ import (
 	"github.com/bombsimon/logrusr/v3"
 	"github.com/otterize/spifferize/src/operator/controllers"
 	"github.com/otterize/spifferize/src/operator/secrets"
-	spire_client "github.com/otterize/spifferize/src/spire-client"
-	"github.com/otterize/spifferize/src/spire-client/bundles"
-	"github.com/otterize/spifferize/src/spire-client/entries"
-	"github.com/otterize/spifferize/src/spire-client/svids"
+	"github.com/otterize/spifferize/src/spireclient"
+	"github.com/otterize/spifferize/src/spireclient/bundles"
+	"github.com/otterize/spifferize/src/spireclient/entries"
+	"github.com/otterize/spifferize/src/spireclient/svids"
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 	"os"
@@ -40,14 +40,14 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 }
 
-func initSpireClient(ctx context.Context, spireServerAddr string) (spire_client.ServerClient, error) {
+func initSpireClient(ctx context.Context, spireServerAddr string) (spireclient.ServerClient, error) {
 	// fetch SVID & bundle through spire-agent API
 	source, err := workloadapi.NewX509Source(ctx, workloadapi.WithClientOptions(workloadapi.WithAddr(socketPath)))
 	if err != nil {
 		return nil, err
 	}
 
-	serverClient, err := spire_client.NewServerClient(ctx, spireServerAddr, source)
+	serverClient, err := spireclient.NewServerClient(ctx, spireServerAddr, source)
 	if err != nil {
 		return nil, err
 	}

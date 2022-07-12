@@ -3,7 +3,7 @@ package entries
 import (
 	"context"
 	"fmt"
-	spire_client "github.com/otterize/spifferize/src/spire-client"
+	"github.com/otterize/spifferize/src/spireclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	entryv1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/entry/v1"
@@ -12,10 +12,10 @@ import (
 )
 
 type Registry struct {
-	SpireClient spire_client.ServerClient
+	SpireClient spireclient.ServerClient
 }
 
-func NewEntriesRegistry(spireClient spire_client.ServerClient) *Registry {
+func NewEntriesRegistry(spireClient spireclient.ServerClient) *Registry {
 	return &Registry{SpireClient: spireClient}
 }
 
