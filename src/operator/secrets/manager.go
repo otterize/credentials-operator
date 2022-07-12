@@ -169,15 +169,18 @@ func (m *Manager) RefreshTLSSecrets(ctx context.Context) error {
 		return err
 	}
 
-	logrus.WithField("secrets_count", len(secrets.Items)).Info("secrets listed")
+	secretsNeedingRefresh := lo.Filter(
+		secrets.Items,
+		func(secret corev1.Secret, _ int) bool { return m.isRefreshNeeded(&secret) },
+	)
 
-	secretsNeedingRefresh := lo.Filter(secrets.Items, func(secret corev1.Secret, _ int) bool { return m.isRefreshNeeded(&secret) })
-	logrus.WithField("refresh_count", len(secretsNeedingRefresh)).Info("secrets needing refresh")
+	log := logrus.WithFields(logrus.Fields{"refresh_count": len(secretsNeedingRefresh), "secrets_count": len(secrets.Items)})
+	log.Info("finished listing secrets")
 
 	for _, secret := range secretsNeedingRefresh {
 		_ = m.refreshTLSSecret(ctx, &secret)
 	}
 
-	logrus.WithField("refresh_count", len(secretsNeedingRefresh)).Info("finished refreshing secrets")
+	log.Info("finished refreshing secrets")
 	return nil
 }
