@@ -11,10 +11,6 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-const (
-	ServiceNamePodLabel = "otterize/service-name"
-)
-
 type Manager struct {
 	SpireClient spire_client.ServerClient
 }
@@ -23,7 +19,7 @@ func NewEntriesManager(spireClient spire_client.ServerClient) *Manager {
 	return &Manager{SpireClient: spireClient}
 }
 
-func (m *Manager) RegisterK8SPodEntry(ctx context.Context, namespace string, serviceName string) (spiffeid.ID, error) {
+func (m *Manager) RegisterK8SPodEntry(ctx context.Context, namespace string, ServiceNameLabel string, serviceName string) (spiffeid.ID, error) {
 	log := logrus.WithFields(logrus.Fields{"namespace": namespace, "service_name": serviceName})
 
 	trustDomain := m.SpireClient.GetSpiffeID().TrustDomain()
@@ -41,7 +37,7 @@ func (m *Manager) RegisterK8SPodEntry(ctx context.Context, namespace string, ser
 		},
 		Selectors: []*types.Selector{
 			{Type: "k8s", Value: fmt.Sprintf("ns:%s", namespace)},
-			{Type: "k8s", Value: fmt.Sprintf("pod-label:%s=%s", ServiceNamePodLabel, serviceName)},
+			{Type: "k8s", Value: fmt.Sprintf("pod-label:%s=%s", ServiceNameLabel, serviceName)},
 		},
 	}
 

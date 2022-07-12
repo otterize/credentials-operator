@@ -13,6 +13,7 @@ spec:
       labels:
         app: client
         otterize/service-name: go-spiffe-tls-client
+        otterize/tls-secret-name: spifferize-tls-go-spiffe-tls-client
     spec:
       containers:
         - name: client
@@ -42,6 +43,7 @@ spec:
       labels:
         app: server
         otterize/service-name: go-spiffe-tls-server
+        otterize/tls-secret-name: spifferize-tls-go-spiffe-tls-server
     spec:
       containers:
         - name: server

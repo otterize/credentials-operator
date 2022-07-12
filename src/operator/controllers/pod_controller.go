@@ -17,7 +17,8 @@ import (
 
 const (
 	refreshSecretsLoopTick = 10 * time.Minute
-	tlsSecretPrefix        = "spifferize-tls"
+	ServiceNamePodLabel    = "otterize/service-name"
+	TLSSecretNamePodLabel  = "otterize/tls-secret-name"
 )
 
 // PodReconciler reconciles a Pod object
@@ -49,21 +50,26 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	// Add spire-server entry for pod
-	if pod.Labels == nil || pod.Labels[entries.ServiceNamePodLabel] == "" {
+	if pod.Labels == nil || pod.Labels[ServiceNamePodLabel] == "" {
 		log.Info("no update required - service name label not found")
 		return ctrl.Result{}, nil
 	}
 
-	serviceName := pod.Labels[entries.ServiceNamePodLabel]
-	spiffeID, err := r.EntriesManager.RegisterK8SPodEntry(ctx, pod.Namespace, serviceName)
+	serviceName := pod.Labels[ServiceNamePodLabel]
+	spiffeID, err := r.EntriesManager.RegisterK8SPodEntry(ctx, pod.Namespace, ServiceNamePodLabel, serviceName)
 	if err != nil {
 		log.WithError(err).Error("failed registering SPIRE entry for pod")
 		return ctrl.Result{}, err
 	}
 
-	secretName := fmt.Sprintf("%s-%s", tlsSecretPrefix, serviceName)
+	secretName := pod.Labels[TLSSecretNamePodLabel]
+	if secretName == "" {
+		err := fmt.Errorf("%s label missing", TLSSecretNamePodLabel)
+		log.WithError(err).Error("failed creating TLS secret")
+		return ctrl.Result{}, err
+	}
 	if err := r.SecretsManager.EnsureTLSSecret(ctx, pod.Namespace, secretName, serviceName, spiffeID); err != nil {
-		log.WithError(err).Error("failed to create trust bundle & svid secret")
+		log.WithError(err).Error("failed creating TLS secret")
 		return ctrl.Result{}, err
 	}
 
