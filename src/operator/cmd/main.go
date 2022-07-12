@@ -5,6 +5,7 @@ import (
 	"flag"
 	"github.com/bombsimon/logrusr/v3"
 	"github.com/otterize/spifferize/src/operator/controllers"
+	"github.com/otterize/spifferize/src/operator/secrets"
 	spire_client "github.com/otterize/spifferize/src/spire-client"
 	"github.com/otterize/spifferize/src/spire-client/bundles"
 	"github.com/otterize/spifferize/src/spire-client/entries"
@@ -76,46 +77,50 @@ func main() {
 		LeaderElectionID:       "spifferize-operator.otterize.com",
 	})
 	if err != nil {
-		logrus.Error(err, "unable to start manager")
+		logrus.WithError(err).Error("unable to start manager")
 		os.Exit(1)
 	}
 
 	spireClient, err := initSpireClient(context.TODO(), spireServerAddr)
 	if err != nil {
-		logrus.Error(err, "failed to connect to spire server")
+		logrus.WithError(err).Error("failed to connect to spire server")
 		os.Exit(1)
 	}
 	defer spireClient.Close()
 
 	bundlesManager := bundles.NewBundlesManager(spireClient)
 	entriesManager := entries.NewEntriesManager(spireClient)
+	secretsManager := secrets.NewSecretsManager(mgr.GetClient(), bundlesManager)
 
 	podReconciler := &controllers.PodReconciler{
 		Client:         mgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
 		SpireClient:    spireClient,
-		BundlesManager: bundlesManager,
 		EntriesManager: entriesManager,
+		SecretsManager: secretsManager,
 	}
 
 	if err = podReconciler.SetupWithManager(mgr); err != nil {
-		logrus.WithField("controller", "Pod").Error(err, "unable to create controller")
+		logrus.WithField("controller", "Pod").WithError(err).Error("unable to create controller")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
-		logrus.Error(err, "unable to set up health check")
+		logrus.WithError(err).Error("unable to set up health check")
 		os.Exit(1)
 	}
 	if err := mgr.AddReadyzCheck("check", healthz.Ping); err != nil {
-		logrus.Error(err, "unable to set up ready check")
+		logrus.WithError(err).Error("unable to set up ready check")
 		os.Exit(1)
 	}
 
 	logrus.Info("starting manager")
+
+	go podReconciler.RefreshSecretsLoop()
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		logrus.Error(err, "problem running manager")
+		logrus.WithError(err).Error("problem running manager")
 		os.Exit(1)
 	}
 }
