@@ -11,15 +11,15 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-type Manager struct {
+type Registry struct {
 	SpireClient spire_client.ServerClient
 }
 
-func NewEntriesManager(spireClient spire_client.ServerClient) *Manager {
-	return &Manager{SpireClient: spireClient}
+func NewEntriesRegistry(spireClient spire_client.ServerClient) *Registry {
+	return &Registry{SpireClient: spireClient}
 }
 
-func (m *Manager) RegisterK8SPodEntry(ctx context.Context, namespace string, ServiceNameLabel string, serviceName string) (spiffeid.ID, error) {
+func (m *Registry) RegisterK8SPodEntry(ctx context.Context, namespace string, ServiceNameLabel string, serviceName string) (spiffeid.ID, error) {
 	log := logrus.WithFields(logrus.Fields{"namespace": namespace, "service_name": serviceName})
 
 	trustDomain := m.SpireClient.GetSpiffeID().TrustDomain()

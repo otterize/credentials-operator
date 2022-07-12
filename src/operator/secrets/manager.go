@@ -31,12 +31,12 @@ const (
 
 type Manager struct {
 	client.Client
-	BundlesManager *bundles.Manager
-	SVIDsManager   *svids.Manager
+	bundlesStore *bundles.Store
+	svidsStore   *svids.Store
 }
 
-func NewSecretsManager(c client.Client, bundlesManager *bundles.Manager, svidsManager *svids.Manager) *Manager {
-	return &Manager{Client: c, BundlesManager: bundlesManager, SVIDsManager: svidsManager}
+func NewSecretsManager(c client.Client, bundlesStore *bundles.Store, svidsStore *svids.Store) *Manager {
+	return &Manager{Client: c, bundlesStore: bundlesStore, svidsStore: svidsStore}
 }
 
 func (m *Manager) isRefreshNeeded(secret *corev1.Secret) bool {
@@ -77,12 +77,12 @@ func (m *Manager) getExistingSecret(ctx context.Context, namespace string, name 
 }
 
 func (m *Manager) createTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID) (*corev1.Secret, error) {
-	trustBundle, err := m.BundlesManager.GetTrustBundle(ctx)
+	trustBundle, err := m.bundlesStore.GetTrustBundle(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	svid, err := m.SVIDsManager.GetX509SVID(ctx, spiffeID)
+	svid, err := m.svidsStore.GetX509SVID(ctx, spiffeID)
 	if err != nil {
 		return nil, err
 	}

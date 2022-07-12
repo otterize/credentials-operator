@@ -15,7 +15,7 @@ import (
 	"net/url"
 )
 
-type Manager struct {
+type Store struct {
 	SpireClient spire_client.ServerClient
 }
 
@@ -25,12 +25,12 @@ type EncodedX509SVID struct {
 	ExpiresAt int64
 }
 
-func NewSVIDsManager(spireClient spire_client.ServerClient) *Manager {
-	return &Manager{SpireClient: spireClient}
+func NewSVIDsStore(spireClient spire_client.ServerClient) *Store {
+	return &Store{SpireClient: spireClient}
 }
 
-func (m *Manager) GetX509SVID(ctx context.Context, spiffeID spiffeid.ID) (EncodedX509SVID, error) {
-	svidClient := m.SpireClient.NewSVIDClient()
+func (s *Store) GetX509SVID(ctx context.Context, spiffeID spiffeid.ID) (EncodedX509SVID, error) {
+	svidClient := s.SpireClient.NewSVIDClient()
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

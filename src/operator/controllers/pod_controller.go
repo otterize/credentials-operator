@@ -23,10 +23,10 @@ const (
 // PodReconciler reconciles a Pod object
 type PodReconciler struct {
 	client.Client
-	Scheme         *runtime.Scheme
-	SpireClient    spire_client.ServerClient
-	EntriesManager *entries.Manager
-	SecretsManager *secrets.Manager
+	Scheme          *runtime.Scheme
+	SpireClient     spire_client.ServerClient
+	EntriesRegistry *entries.Registry
+	SecretsManager  *secrets.Manager
 }
 
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;patch
@@ -55,7 +55,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	serviceName := pod.Labels[ServiceNameLabel]
-	spiffeID, err := r.EntriesManager.RegisterK8SPodEntry(ctx, pod.Namespace, ServiceNameLabel, serviceName)
+	spiffeID, err := r.EntriesRegistry.RegisterK8SPodEntry(ctx, pod.Namespace, ServiceNameLabel, serviceName)
 	if err != nil {
 		log.WithError(err).Error("failed registering SPIRE entry for pod")
 		return ctrl.Result{}, err

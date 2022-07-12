@@ -89,17 +89,17 @@ func main() {
 	}
 	defer spireClient.Close()
 
-	bundlesManager := bundles.NewBundlesManager(spireClient)
-	svidsManager := svids.NewSVIDsManager(spireClient)
-	entriesManager := entries.NewEntriesManager(spireClient)
-	secretsManager := secrets.NewSecretsManager(mgr.GetClient(), bundlesManager, svidsManager)
+	bundlesStore := bundles.NewBundlesStore(spireClient)
+	svidsStore := svids.NewSVIDsStore(spireClient)
+	entriesRegistry := entries.NewEntriesRegistry(spireClient)
+	secretsManager := secrets.NewSecretsManager(mgr.GetClient(), bundlesStore, svidsStore)
 
 	podReconciler := &controllers.PodReconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		SpireClient:    spireClient,
-		EntriesManager: entriesManager,
-		SecretsManager: secretsManager,
+		Client:          mgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		SpireClient:     spireClient,
+		EntriesRegistry: entriesRegistry,
+		SecretsManager:  secretsManager,
 	}
 
 	if err = podReconciler.SetupWithManager(mgr); err != nil {
