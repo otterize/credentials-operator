@@ -2,22 +2,26 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"github.com/otterize/spifferize/src/operator/secrets"
 	spire_client "github.com/otterize/spifferize/src/spire-client"
 	"github.com/otterize/spifferize/src/spire-client/entries"
 	"github.com/sirupsen/logrus"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
 )
 
 const (
-	refreshSecretsLoopTick = time.Minute
-	ServiceNameLabel       = "otterize/service-name"
-	TLSSecretNameLabel     = "otterize/tls-secret-name"
+	refreshSecretsLoopTick   = time.Minute
+	ServiceNameInputLabel    = "otterize/service-name"
+	TLSSecretNameLabel       = "otterize/tls-secret-name"
+	ServiceNameSelectorLabel = "spifferize/selector-service-name"
 )
 
 // PodReconciler reconciles a Pod object
@@ -31,6 +35,73 @@ type PodReconciler struct {
 
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=create;get;list;update;patch
+// +kubebuilder:rbac:groups=apps,resources=replicasets,deamonsets,statefulsets,verbs=get;list;watch
+
+func (r *PodReconciler) resolvePodToOwnerName(ctx context.Context, pod *corev1.Pod) (string, error) {
+	for _, owner := range pod.OwnerReferences {
+		namespacedName := types.NamespacedName{Name: owner.Name, Namespace: pod.Namespace}
+		switch owner.Kind {
+		case "ReplicaSet":
+			rs := &appsv1.ReplicaSet{}
+			err := r.Get(ctx, namespacedName, rs)
+			if err != nil {
+				return "", err
+			}
+			return rs.OwnerReferences[0].Name, nil
+		case "DaemonSet":
+			ds := &appsv1.DaemonSet{}
+			err := r.Get(ctx, namespacedName, ds)
+			if err != nil {
+				return "", err
+			}
+			return ds.Name, nil
+		case "StatefulSet":
+			ss := &appsv1.StatefulSet{}
+			err := r.Get(ctx, namespacedName, ss)
+			if err != nil {
+				return "", err
+			}
+			return ss.Name, nil
+		default:
+			logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace, "owner.kind": owner.Kind}).Warn("Unknown owner kind")
+		}
+	}
+	return "", errors.New("pod has no known owners")
+}
+
+func (r *PodReconciler) updatePodLabel(ctx context.Context, pod *corev1.Pod, labelKey string, labelValue string) (ctrl.Result, error) {
+	log := logrus.WithFields(logrus.Fields{"pod": pod.Name, "label.key": labelKey, "label.value": labelValue})
+
+	if pod.Labels != nil && pod.Labels[labelKey] == labelValue {
+		log.Info("no updates required - label already exists")
+		return ctrl.Result{}, nil
+	}
+
+	log.Info("updating pod label")
+
+	if pod.Labels == nil {
+		pod.Labels = map[string]string{}
+	}
+
+	pod.Labels[labelKey] = labelValue
+
+	if err := r.Update(ctx, pod); err != nil {
+		if apierrors.IsConflict(err) {
+			// The Pod has been updated since we read it.
+			// Requeue the Pod to try to reconciliate again.
+			return ctrl.Result{Requeue: true}, nil
+		}
+		if apierrors.IsNotFound(err) {
+			// The Pod has been deleted since we read it.
+			// Requeue the Pod to try to reconciliate again.
+			return ctrl.Result{Requeue: true}, nil
+		}
+		log.WithError(err).Error("failed updating Pod")
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
 
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logrus.WithField("pod", req.NamespacedName)
@@ -48,29 +119,48 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	// Add spire-server entry for pod
-	if pod.Labels == nil || pod.Labels[ServiceNameLabel] == "" {
-		log.Info("no update required - service name label not found")
-		return ctrl.Result{}, nil
+	log.Info("updating SPIRE entries & secrets for pod")
+
+	// resolve pod to service name
+	var serviceName string
+	if pod.Labels != nil && pod.Labels[ServiceNameInputLabel] != "" {
+		serviceName = pod.Labels[ServiceNameInputLabel]
+		log.WithFields(logrus.Fields{"label.key": ServiceNameInputLabel, "label.value": serviceName}).Info("using service name from pod label")
+	} else {
+		ownerName, err := r.resolvePodToOwnerName(ctx, &pod)
+		if err != nil {
+			log.WithError(err).Error("failed resolving pod owner")
+			return ctrl.Result{}, err
+		}
+		log.WithField("ownerName", ownerName).Info("using service name from pod owner")
+		serviceName = ownerName
 	}
 
-	log.Info("Updating SPIRE entries & secrets for pod")
+	// Ensure the ServiceNameSelectorLabel is set
+	result, err := r.updatePodLabel(ctx, &pod, ServiceNameSelectorLabel, serviceName)
+	if err != nil {
+		return ctrl.Result{}, err
+	} else if !result.IsZero() {
+		return result, nil
+	}
 
-	serviceName := pod.Labels[ServiceNameLabel]
-	spiffeID, err := r.EntriesRegistry.RegisterK8SPodEntry(ctx, pod.Namespace, ServiceNameLabel, serviceName)
+	// Add spire-server entry for pod
+	spiffeID, err := r.EntriesRegistry.RegisterK8SPodEntry(ctx, pod.Namespace, ServiceNameSelectorLabel, serviceName)
 	if err != nil {
 		log.WithError(err).Error("failed registering SPIRE entry for pod")
 		return ctrl.Result{}, err
 	}
 
-	secretName := pod.Labels[TLSSecretNameLabel]
-	if secretName != "" {
+	// generate TLS secret for pod
+	if pod.Labels != nil && pod.Labels[TLSSecretNameLabel] != "" {
+		secretName := pod.Labels[TLSSecretNameLabel]
+		log.WithFields(logrus.Fields{"label.key": TLSSecretNameLabel, "label.value": secretName}).Info("ensuring TLS secret")
 		if err := r.SecretsManager.EnsureTLSSecret(ctx, pod.Namespace, secretName, serviceName, spiffeID); err != nil {
 			log.WithError(err).Error("failed creating TLS secret")
 			return ctrl.Result{}, err
 		}
 	} else {
-		log.Infof("skipping secrets creation - %s label not found", TLSSecretNameLabel)
+		log.WithField("label.key", TLSSecretNameLabel).Info("skipping secrets creation - label not found")
 	}
 
 	return ctrl.Result{}, nil
