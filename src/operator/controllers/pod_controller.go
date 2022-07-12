@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"github.com/otterize/spifferize/src/operator/secrets"
 	spire_client "github.com/otterize/spifferize/src/spire-client"
 	"github.com/otterize/spifferize/src/spire-client/entries"
@@ -63,14 +62,11 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	secretName := pod.Labels[TLSSecretNamePodLabel]
-	if secretName == "" {
-		err := fmt.Errorf("%s label missing", TLSSecretNamePodLabel)
-		log.WithError(err).Error("failed creating TLS secret")
-		return ctrl.Result{}, err
-	}
-	if err := r.SecretsManager.EnsureTLSSecret(ctx, pod.Namespace, secretName, serviceName, spiffeID); err != nil {
-		log.WithError(err).Error("failed creating TLS secret")
-		return ctrl.Result{}, err
+	if secretName != "" {
+		if err := r.SecretsManager.EnsureTLSSecret(ctx, pod.Namespace, secretName, serviceName, spiffeID); err != nil {
+			log.WithError(err).Error("failed creating TLS secret")
+			return ctrl.Result{}, err
+		}
 	}
 
 	return ctrl.Result{}, nil
