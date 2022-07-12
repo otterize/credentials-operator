@@ -3,6 +3,7 @@ package secrets
 import (
 	"context"
 	"github.com/otterize/spifferize/src/spire-client/bundles"
+	"github.com/otterize/spifferize/src/spire-client/svids"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
@@ -31,10 +32,11 @@ const (
 type Manager struct {
 	client.Client
 	BundlesManager *bundles.Manager
+	SVIDsManager   *svids.Manager
 }
 
-func NewSecretsManager(c client.Client, bundlesManager *bundles.Manager) *Manager {
-	return &Manager{Client: c, BundlesManager: bundlesManager}
+func NewSecretsManager(c client.Client, bundlesManager *bundles.Manager, svidsManager *svids.Manager) *Manager {
+	return &Manager{Client: c, BundlesManager: bundlesManager, SVIDsManager: svidsManager}
 }
 
 func (m *Manager) isRefreshNeeded(secret *corev1.Secret) bool {
@@ -80,7 +82,7 @@ func (m *Manager) createTLSSecret(ctx context.Context, namespace string, secretN
 		return nil, err
 	}
 
-	svid, err := m.BundlesManager.GetX509SVID(ctx, spiffeID)
+	svid, err := m.SVIDsManager.GetX509SVID(ctx, spiffeID)
 	if err != nil {
 		return nil, err
 	}

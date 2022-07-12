@@ -9,6 +9,7 @@ import (
 	spire_client "github.com/otterize/spifferize/src/spire-client"
 	"github.com/otterize/spifferize/src/spire-client/bundles"
 	"github.com/otterize/spifferize/src/spire-client/entries"
+	"github.com/otterize/spifferize/src/spire-client/svids"
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 	"os"
@@ -89,8 +90,9 @@ func main() {
 	defer spireClient.Close()
 
 	bundlesManager := bundles.NewBundlesManager(spireClient)
+	svidsManager := svids.NewSVIDsManager(spireClient)
 	entriesManager := entries.NewEntriesManager(spireClient)
-	secretsManager := secrets.NewSecretsManager(mgr.GetClient(), bundlesManager)
+	secretsManager := secrets.NewSecretsManager(mgr.GetClient(), bundlesManager, svidsManager)
 
 	podReconciler := &controllers.PodReconciler{
 		Client:         mgr.GetClient(),
