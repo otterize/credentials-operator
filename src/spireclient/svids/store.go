@@ -16,7 +16,7 @@ import (
 )
 
 type Store struct {
-	SpireClient spireclient.ServerClient
+	spireClient spireclient.ServerClient
 }
 
 type EncodedX509SVID struct {
@@ -26,11 +26,11 @@ type EncodedX509SVID struct {
 }
 
 func NewSVIDsStore(spireClient spireclient.ServerClient) *Store {
-	return &Store{SpireClient: spireClient}
+	return &Store{spireClient: spireClient}
 }
 
 func (s *Store) GetX509SVID(ctx context.Context, spiffeID spiffeid.ID) (EncodedX509SVID, error) {
-	svidClient := s.SpireClient.NewSVIDClient()
+	svidClient := s.spireClient.NewSVIDClient()
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

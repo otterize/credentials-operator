@@ -12,19 +12,19 @@ import (
 )
 
 type Registry struct {
-	SpireClient spireclient.ServerClient
+	spireClient spireclient.ServerClient
 }
 
 func NewEntriesRegistry(spireClient spireclient.ServerClient) *Registry {
-	return &Registry{SpireClient: spireClient}
+	return &Registry{spireClient: spireClient}
 }
 
 func (m *Registry) RegisterK8SPodEntry(ctx context.Context, namespace string, ServiceNameLabel string, serviceName string) (spiffeid.ID, error) {
 	log := logrus.WithFields(logrus.Fields{"namespace": namespace, "service_name": serviceName})
 
-	trustDomain := m.SpireClient.GetSpiffeID().TrustDomain()
+	trustDomain := m.spireClient.GetSpiffeID().TrustDomain()
 	podSpiffeIDPath := fmt.Sprintf("/otterize/namespace/%s/service/%s", namespace, serviceName)
-	parentSpiffeIDPath := m.SpireClient.GetSpiffeID().Path()
+	parentSpiffeIDPath := m.spireClient.GetSpiffeID().Path()
 
 	entry := types.Entry{
 		SpiffeId: &types.SPIFFEID{
@@ -42,7 +42,7 @@ func (m *Registry) RegisterK8SPodEntry(ctx context.Context, namespace string, Se
 	}
 
 	log.Info("Creating SPIRE server entry")
-	entryClient := m.SpireClient.NewEntryClient()
+	entryClient := m.spireClient.NewEntryClient()
 	batchCreateEntryRequest := entryv1.BatchCreateEntryRequest{Entries: []*types.Entry{&entry}}
 
 	resp, err := entryClient.BatchCreateEntry(ctx, &batchCreateEntryRequest)

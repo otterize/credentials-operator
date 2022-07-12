@@ -9,7 +9,7 @@ import (
 )
 
 type Store struct {
-	SpireClient spireclient.ServerClient
+	spireClient spireclient.ServerClient
 }
 
 type EncodedTrustBundle struct {
@@ -17,11 +17,11 @@ type EncodedTrustBundle struct {
 }
 
 func NewBundlesStore(spireClient spireclient.ServerClient) *Store {
-	return &Store{SpireClient: spireClient}
+	return &Store{spireClient: spireClient}
 }
 
 func (s *Store) GetTrustBundle(ctx context.Context) (EncodedTrustBundle, error) {
-	bundleClient := s.SpireClient.NewBundleClient()
+	bundleClient := s.spireClient.NewBundleClient()
 
 	bundle, err := bundleClient.GetBundle(ctx, &bundlev1.GetBundleRequest{})
 	if err != nil {
