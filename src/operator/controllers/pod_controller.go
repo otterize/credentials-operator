@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	refreshSecretsLoopTick = 10 * time.Minute
+	refreshSecretsLoopTick = time.Minute
 	ServiceNamePodLabel    = "otterize/service-name"
 	TLSSecretNamePodLabel  = "otterize/tls-secret-name"
 )

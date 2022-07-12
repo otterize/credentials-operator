@@ -20,7 +20,7 @@ const (
 	tlsSecretServiceNameAnnotation = "spifferize/service-name"
 	tlsSecretSPIFFEIDAnnotation    = "spifferize/spiffeid"
 	svidExpiryAnnotation           = "spifferize/svid-expires-at"
-	secretExpiryDelta              = time.Minute
+	secretExpiryDelta              = 10 * time.Minute
 )
 
 type Manager struct {
