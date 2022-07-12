@@ -174,7 +174,7 @@ func (m *Manager) RefreshTLSSecrets(ctx context.Context) error {
 		func(secret corev1.Secret, _ int) bool { return m.isRefreshNeeded(&secret) },
 	)
 
-	log := logrus.WithFields(logrus.Fields{"refresh_count": len(secretsNeedingRefresh), "secrets_count": len(secrets.Items)})
+	log := logrus.WithFields(logrus.Fields{"secrets_count": len(secrets.Items), "refresh_count": len(secretsNeedingRefresh)})
 	log.Info("finished listing secrets")
 
 	for _, secret := range secretsNeedingRefresh {

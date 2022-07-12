@@ -54,6 +54,8 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, nil
 	}
 
+	log.Info("Updating SPIRE entries & secrets for pod")
+
 	serviceName := pod.Labels[ServiceNameLabel]
 	spiffeID, err := r.EntriesRegistry.RegisterK8SPodEntry(ctx, pod.Namespace, ServiceNameLabel, serviceName)
 	if err != nil {
