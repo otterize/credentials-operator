@@ -14,13 +14,18 @@ import (
 	"time"
 )
 
+type SecretType string
+
 const (
-	markerSecretLabel              = "spifferize/secret-type"
-	tlsSecretLabelValue            = "TLS"
+	secretTypeLabel                = "spifferize/secret-type"
 	tlsSecretServiceNameAnnotation = "spifferize/service-name"
 	tlsSecretSPIFFEIDAnnotation    = "spifferize/spiffeid"
 	svidExpiryAnnotation           = "spifferize/svid-expires-at"
 	secretExpiryDelta              = 10 * time.Minute
+)
+
+const (
+	tlsSecretType = SecretType("TLS")
 )
 
 type Manager struct {
@@ -88,7 +93,7 @@ func (m *Manager) createTLSSecret(ctx context.Context, namespace string, secretN
 			Name:      secretName,
 			Namespace: namespace,
 			Labels: map[string]string{
-				markerSecretLabel: tlsSecretLabelValue,
+				secretTypeLabel: string(tlsSecretType),
 			},
 			Annotations: map[string]string{
 				svidExpiryAnnotation:           expiryStr,
@@ -157,7 +162,7 @@ func (m *Manager) refreshTLSSecret(ctx context.Context, secret *corev1.Secret) e
 func (m *Manager) RefreshTLSSecrets(ctx context.Context) error {
 	logrus.Info("refreshing TLS secrets")
 	secrets := corev1.SecretList{}
-	if err := m.List(ctx, &secrets, &client.MatchingLabels{markerSecretLabel: tlsSecretLabelValue}); err != nil {
+	if err := m.List(ctx, &secrets, &client.MatchingLabels{secretTypeLabel: string(tlsSecretType)}); err != nil {
 		logrus.WithError(err).Error("failed listing TLS secrets")
 		return err
 	}
