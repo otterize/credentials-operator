@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-type SecretType string
-
 const (
 	secretTypeLabel                = "spifferize/secret-type"
 	tlsSecretServiceNameAnnotation = "spifferize/service-name"
@@ -23,6 +21,8 @@ const (
 	svidExpiryAnnotation           = "spifferize/svid-expires-at"
 	secretExpiryDelta              = 10 * time.Minute
 )
+
+type SecretType string
 
 const (
 	tlsSecretType = SecretType("TLS")
