@@ -195,7 +195,7 @@ func (r *PodReconciler) RefreshSecretsLoop(ctx context.Context) {
 	for {
 		select {
 		case <-time.After(refreshSecretsLoopTick):
-			err := r.SecretsManager.RefreshTLSSecrets(context.Background())
+			err := r.SecretsManager.RefreshTLSSecrets(ctx)
 			if err != nil {
 				logrus.WithError(err).Error("failed refreshing TLS secrets")
 			}
