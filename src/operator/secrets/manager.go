@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"context"
+	"errors"
 	"github.com/otterize/spifferize/src/spireclient/bundles"
 	"github.com/otterize/spifferize/src/spireclient/svids"
 	"github.com/samber/lo"
@@ -65,15 +66,15 @@ func (m *Manager) isRefreshNeeded(secret *corev1.Secret) bool {
 	return false
 }
 
-func (m *Manager) getExistingSecret(ctx context.Context, namespace string, name string) (*corev1.Secret, error) {
+func (m *Manager) getExistingSecret(ctx context.Context, namespace string, name string) (*corev1.Secret, bool, error) {
 	found := corev1.Secret{}
 	if err := m.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &found); err != nil && apierrors.IsNotFound(err) {
-		return nil, nil
+		return nil, false, nil
 	} else if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	return &found, nil
+	return &found, true, nil
 }
 
 func (m *Manager) createTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID) (*corev1.Secret, error) {
@@ -116,13 +117,13 @@ func (m *Manager) createTLSSecret(ctx context.Context, namespace string, secretN
 func (m *Manager) EnsureTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID) error {
 	log := logrus.WithFields(logrus.Fields{"secret.namespace": namespace, "secret.name": secretName})
 
-	found, err := m.getExistingSecret(ctx, namespace, secretName)
+	existingSecret, isExistingSecret, err := m.getExistingSecret(ctx, namespace, secretName)
 	if err != nil {
 		log.WithError(err).Error("failed querying for secret")
 		return err
 	}
 
-	if found != nil && !m.isRefreshNeeded(found) {
+	if isExistingSecret && !m.isRefreshNeeded(existingSecret) {
 		log.Info("secret already exists and does not require refreshing")
 		return nil
 	}
@@ -133,7 +134,7 @@ func (m *Manager) EnsureTLSSecret(ctx context.Context, namespace string, secretN
 		return err
 	}
 
-	if found != nil {
+	if isExistingSecret {
 		log.Info("Updating existing secret")
 		return m.Update(ctx, secret)
 	} else {
@@ -143,9 +144,17 @@ func (m *Manager) EnsureTLSSecret(ctx context.Context, namespace string, secretN
 }
 
 func (m *Manager) refreshTLSSecret(ctx context.Context, secret *corev1.Secret) error {
-	log := logrus.WithField("secret", secret.Name)
-	serviceName := secret.Annotations[tlsSecretServiceNameAnnotation]
-	spiffeIDStr := secret.Annotations[tlsSecretSPIFFEIDAnnotation]
+	log := logrus.WithFields(logrus.Fields{"secret.namespace": secret.Namespace, "secret.name": secret.Name})
+	serviceName, ok := secret.Annotations[tlsSecretServiceNameAnnotation]
+	if !ok {
+		return errors.New("service name annotation is missing")
+	}
+
+	spiffeIDStr, ok := secret.Annotations[tlsSecretSPIFFEIDAnnotation]
+	if !ok {
+		return errors.New("spiffe ID annotation is missing")
+	}
+
 	spiffeID, err := spiffeid.FromString(spiffeIDStr)
 	if err != nil {
 		log.WithField("spiffeid", spiffeID).WithError(err).Error("failed parsing spiffeid")
@@ -178,7 +187,10 @@ func (m *Manager) RefreshTLSSecrets(ctx context.Context) error {
 	log.Info("finished listing secrets")
 
 	for _, secret := range secretsNeedingRefresh {
-		_ = m.refreshTLSSecret(ctx, &secret)
+		log := logrus.WithFields(logrus.Fields{"secret.namespace": secret.Namespace, "secret.name": secret.Name})
+		if err := m.refreshTLSSecret(ctx, &secret); err != nil {
+			log.WithError(err).Error("failed refreshing TLS secret")
+		}
 	}
 
 	log.Info("finished refreshing secrets")

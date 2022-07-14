@@ -191,13 +191,16 @@ func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *PodReconciler) RefreshSecretsLoop() {
-	ticker := time.NewTicker(refreshSecretsLoopTick)
-
+func (r *PodReconciler) RefreshSecretsLoop(ctx context.Context) {
 	for {
 		select {
-		case <-ticker.C:
-			_ = r.SecretsManager.RefreshTLSSecrets(context.Background())
+		case <-time.After(refreshSecretsLoopTick):
+			err := r.SecretsManager.RefreshTLSSecrets(context.Background())
+			if err != nil {
+				logrus.WithError(err).Error("failed refreshing TLS secrets")
+			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
