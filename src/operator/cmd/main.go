@@ -68,8 +68,6 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 
 	ctrl.SetLogger(logrusr.New(logrus.StandardLogger()))
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
@@ -83,6 +81,8 @@ func main() {
 		logrus.WithError(err).Error("unable to start manager")
 		os.Exit(1)
 	}
+
+	ctx := ctrl.SetupSignalHandler()
 
 	spireClient, err := initSpireClient(ctx, spireServerAddr)
 	if err != nil {
@@ -122,8 +122,7 @@ func main() {
 	logrus.Info("starting manager")
 
 	go podReconciler.RefreshSecretsLoop(ctx)
-
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		logrus.WithError(err).Error("problem running manager")
 		os.Exit(1)
 	}
