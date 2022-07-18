@@ -5,7 +5,7 @@ import (
 	"crypto/x509"
 	"github.com/golang/mock/gomock"
 	mock_bundlev1 "github.com/otterize/spifferize/src/mocks/bundlev1"
-	"github.com/otterize/spifferize/src/mocks/client"
+	mock_spireclient "github.com/otterize/spifferize/src/mocks/spireclient"
 	"github.com/otterize/spifferize/src/testdata"
 	"github.com/samber/lo"
 	"github.com/spiffe/go-spiffe/v2/bundle/x509bundle"

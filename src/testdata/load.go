@@ -6,6 +6,8 @@ type TestData struct {
 	SVIDPEM   []byte
 }
 
+// data generated using: `bin/spire-server x509 mint -spiffeID spiffe://example.org/client`
+
 const bundlePEM = `-----BEGIN CERTIFICATE-----
 MIIBzDCCAVOgAwIBAgIJAJM4DhRH0vmuMAoGCCqGSM49BAMEMB4xCzAJBgNVBAYT
 AlVTMQ8wDQYDVQQKDAZTUElGRkUwHhcNMTgwNTEzMTkzMzQ3WhcNMjMwNTEyMTkz
