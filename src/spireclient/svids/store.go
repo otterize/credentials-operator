@@ -16,7 +16,12 @@ import (
 	"net/url"
 )
 
-type Store struct {
+type Store interface {
+	GeneratePrivateKey() (crypto.PrivateKey, error)
+	GetX509SVID(ctx context.Context, spiffeID spiffeid.ID, privateKey crypto.PrivateKey) (EncodedX509SVID, error)
+}
+
+type store struct {
 	svidClient svidv1.SVIDClient
 }
 
@@ -26,15 +31,15 @@ type EncodedX509SVID struct {
 	ExpiresAt int64
 }
 
-func NewSVIDsStore(spireClient spireclient.ServerClient) *Store {
-	return &Store{svidClient: spireClient.NewSVIDClient()}
+func NewSVIDsStore(spireClient spireclient.ServerClient) Store {
+	return &store{svidClient: spireClient.NewSVIDClient()}
 }
 
-func (s *Store) GeneratePrivateKey() (crypto.PrivateKey, error) {
+func (s *store) GeneratePrivateKey() (crypto.PrivateKey, error) {
 	return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 }
 
-func (s *Store) GetX509SVID(ctx context.Context, spiffeID spiffeid.ID, privateKey crypto.PrivateKey) (EncodedX509SVID, error) {
+func (s *store) GetX509SVID(ctx context.Context, spiffeID spiffeid.ID, privateKey crypto.PrivateKey) (EncodedX509SVID, error) {
 	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
 		URIs: []*url.URL{spiffeID.URL()},
 	}, privateKey)

@@ -24,7 +24,7 @@ type StoreSuite struct {
 	controller   *gomock.Controller
 	spireClient  *mock_spireclient.MockServerClient
 	bundleClient *mock_bundlev1.MockBundleClient
-	store        *Store
+	store        Store
 }
 
 func (s *StoreSuite) SetupTest() {

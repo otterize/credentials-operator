@@ -11,19 +11,23 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-type Registry struct {
+type Registry interface {
+	RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string) (spiffeid.ID, error)
+}
+
+type registry struct {
 	parentSpiffeID spiffeid.ID
 	entryClient    entryv1.EntryClient
 }
 
-func NewEntriesRegistry(spireClient spireclient.ServerClient) *Registry {
-	return &Registry{
+func NewEntriesRegistry(spireClient spireclient.ServerClient) Registry {
+	return &registry{
 		parentSpiffeID: spireClient.GetSpiffeID(),
 		entryClient:    spireClient.NewEntryClient(),
 	}
 }
 
-func (m *Registry) RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string) (spiffeid.ID, error) {
+func (m *registry) RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string) (spiffeid.ID, error) {
 	log := logrus.WithFields(logrus.Fields{"namespace": namespace, "service_name": serviceName})
 
 	trustDomain := m.parentSpiffeID.TrustDomain()

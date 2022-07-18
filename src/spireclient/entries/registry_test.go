@@ -23,7 +23,7 @@ type RegistrySuite struct {
 	controller  *gomock.Controller
 	spireClient *mock_spireclient.MockServerClient
 	entryClient *mock_entryv1.MockEntryClient
-	registry    *Registry
+	registry    Registry
 }
 
 func (s *RegistrySuite) SetupTest() {
