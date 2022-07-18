@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 	"github.com/golang/mock/gomock"
-	mock_client "github.com/otterize/spifferize/src/operator/mocks/controller-runtime/client"
-	mock_bundles "github.com/otterize/spifferize/src/operator/mocks/spireclient/bundles"
-	mock_svids "github.com/otterize/spifferize/src/operator/mocks/spireclient/svids"
+	mock_client "github.com/otterize/spifferize/src/mocks/controller-runtime/client"
+	mock_bundles "github.com/otterize/spifferize/src/mocks/spireclient/bundles"
+	mock_svids "github.com/otterize/spifferize/src/mocks/spireclient/svids"
 	"github.com/otterize/spifferize/src/spireclient/bundles"
 	"github.com/otterize/spifferize/src/spireclient/svids"
+	"github.com/otterize/spifferize/src/testdata"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/spire/pkg/common/pemutil"
 	"github.com/stretchr/testify/suite"
-	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,17 +43,6 @@ func (s *ManagerSuite) SetupTest() {
 	s.bundlesStore = mock_bundles.NewMockStore(s.controller)
 	s.svidsStore = mock_svids.NewMockStore(s.controller)
 	s.manager = NewSecretsManager(s.client, s.bundlesStore, s.svidsStore)
-}
-
-type IsAContext struct{}
-
-func (m *IsAContext) Matches(x interface{}) bool {
-	_, ok := x.(context.Context)
-	return ok
-}
-
-func (m *IsAContext) String() string {
-	return fmt.Sprintf("is a context object")
 }
 
 type TLSSecretMatcher struct {
@@ -87,41 +76,20 @@ func (m *TLSSecretMatcher) String() string {
 	return fmt.Sprintf("TLSSecretsMatcher(name=%s, namespace=%s)", m.name, m.namespace)
 }
 
-type TestData struct {
-	bundlePEM []byte
-	keyPEM    []byte
-	svidPEM   []byte
-}
+func (s *ManagerSuite) mockTLSStores(spiffeID spiffeid.ID, testData testdata.TestData) {
+	encodedBundle := bundles.EncodedTrustBundle{BundlePEM: testData.BundlePEM}
+	s.bundlesStore.EXPECT().GetTrustBundle(gomock.Any()).Return(encodedBundle, nil)
 
-func (s *ManagerSuite) loadTestData() TestData {
-	bundlePEM, err := ioutil.ReadFile("testdata/bundle.pem")
-	s.Require().NoError(err)
-	keyPEM, err := ioutil.ReadFile("testdata/key.pem")
-	s.Require().NoError(err)
-	svidPEM, err := ioutil.ReadFile("testdata/svid.pem")
-	s.Require().NoError(err)
-
-	return TestData{
-		bundlePEM: bundlePEM,
-		keyPEM:    keyPEM,
-		svidPEM:   svidPEM,
-	}
-}
-
-func (s *ManagerSuite) mockTLSStores(spiffeID spiffeid.ID, testData TestData) {
-	encodedBundle := bundles.EncodedTrustBundle{BundlePEM: testData.bundlePEM}
-	s.bundlesStore.EXPECT().GetTrustBundle(&IsAContext{}).Return(encodedBundle, nil)
-
-	privateKey, err := pemutil.ParseECPrivateKey(testData.keyPEM)
+	privateKey, err := pemutil.ParseECPrivateKey(testData.KeyPEM)
 	s.Require().NoError(err)
 	s.svidsStore.EXPECT().GeneratePrivateKey().Return(privateKey, nil)
 
 	encodedX509SVID := svids.EncodedX509SVID{
-		SVIDPEM: testData.svidPEM,
-		KeyPEM:  testData.keyPEM,
+		SVIDPEM: testData.SVIDPEM,
+		KeyPEM:  testData.KeyPEM,
 	}
 	s.svidsStore.EXPECT().GetX509SVID(
-		&IsAContext{}, spiffeID, privateKey,
+		gomock.Any(), spiffeID, privateKey,
 	).Return(encodedX509SVID, nil)
 }
 
@@ -131,26 +99,27 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_NoExistingSecret() {
 	serviceName := "test_servicename"
 
 	s.client.EXPECT().Get(
-		&IsAContext{},
+		gomock.Any(),
 		types.NamespacedName{Name: secretName, Namespace: namespace},
 		gomock.Any(),
 	).Return(errors.NewNotFound(schema.GroupResource{}, ""))
 
-	testData := s.loadTestData()
+	testData, err := testdata.LoadTestData()
+	s.Require().NoError(err)
 	spiffeID, err := spiffeid.FromPath(trustDomain, "/test")
 	s.Require().NoError(err)
 
 	s.mockTLSStores(spiffeID, testData)
 
 	s.client.EXPECT().Create(
-		&IsAContext{},
+		gomock.Any(),
 		&TLSSecretMatcher{
 			namespace: namespace,
 			name:      secretName,
 			tlsData: map[string][]byte{
-				"bundle.pem": testData.bundlePEM,
-				"key.pem":    testData.keyPEM,
-				"svid.pem":   testData.svidPEM,
+				"bundle.pem": testData.BundlePEM,
+				"key.pem":    testData.KeyPEM,
+				"svid.pem":   testData.SVIDPEM,
 			},
 		},
 	).Return(nil)
@@ -165,7 +134,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NeedsRefr
 	serviceName := "test_servicename"
 
 	s.client.EXPECT().Get(
-		&IsAContext{},
+		gomock.Any(),
 		types.NamespacedName{Name: secretName, Namespace: namespace},
 		gomock.Any(),
 	).Return(nil).Do(func(ctx context.Context, key client.ObjectKey, found *corev1.Secret) {
@@ -180,21 +149,22 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NeedsRefr
 		}
 	})
 
-	testData := s.loadTestData()
+	testData, err := testdata.LoadTestData()
+	s.Require().NoError(err)
 	spiffeID, err := spiffeid.FromPath(trustDomain, "/test")
 	s.Require().NoError(err)
 
 	s.mockTLSStores(spiffeID, testData)
 
 	s.client.EXPECT().Update(
-		&IsAContext{},
+		gomock.Any(),
 		&TLSSecretMatcher{
 			namespace: namespace,
 			name:      secretName,
 			tlsData: map[string][]byte{
-				"bundle.pem": testData.bundlePEM,
-				"key.pem":    testData.keyPEM,
-				"svid.pem":   testData.svidPEM,
+				"bundle.pem": testData.BundlePEM,
+				"key.pem":    testData.KeyPEM,
+				"svid.pem":   testData.SVIDPEM,
 			},
 		},
 	).Return(nil)
@@ -209,7 +179,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NoRefresh
 	serviceName := "test_servicename"
 
 	s.client.EXPECT().Get(
-		&IsAContext{},
+		gomock.Any(),
 		types.NamespacedName{Name: secretName, Namespace: namespace},
 		gomock.Any(),
 	).Return(nil).Do(func(ctx context.Context, key client.ObjectKey, found *corev1.Secret) {
@@ -239,7 +209,7 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded() {
 	s.Require().NoError(err)
 
 	s.client.EXPECT().List(
-		&IsAContext{},
+		gomock.Any(),
 		gomock.AssignableToTypeOf(&corev1.SecretList{}),
 		gomock.AssignableToTypeOf(&client.MatchingLabels{}),
 	).Do(func(ctx context.Context, list *corev1.SecretList, opts ...client.ListOption) {
@@ -260,18 +230,19 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded() {
 		}
 	})
 
-	testData := s.loadTestData()
+	testData, err := testdata.LoadTestData()
+	s.Require().NoError(err)
 	s.mockTLSStores(spiffeID, testData)
 
 	s.client.EXPECT().Update(
-		&IsAContext{},
+		gomock.Any(),
 		&TLSSecretMatcher{
 			namespace: namespace,
 			name:      secretName,
 			tlsData: map[string][]byte{
-				"bundle.pem": testData.bundlePEM,
-				"key.pem":    testData.keyPEM,
-				"svid.pem":   testData.svidPEM,
+				"bundle.pem": testData.BundlePEM,
+				"key.pem":    testData.KeyPEM,
+				"svid.pem":   testData.SVIDPEM,
 			},
 		},
 	).Return(nil)
@@ -288,7 +259,7 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_NoRefreshNeeded() {
 	s.Require().NoError(err)
 
 	s.client.EXPECT().List(
-		&IsAContext{},
+		gomock.Any(),
 		gomock.AssignableToTypeOf(&corev1.SecretList{}),
 		gomock.AssignableToTypeOf(&client.MatchingLabels{}),
 	).Do(func(ctx context.Context, list *corev1.SecretList, opts ...client.ListOption) {
