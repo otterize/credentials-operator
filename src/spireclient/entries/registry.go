@@ -27,12 +27,12 @@ func NewEntriesRegistry(spireClient spireclient.ServerClient) Registry {
 	}
 }
 
-func (m *registry) RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string) (spiffeid.ID, error) {
+func (r *registry) RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string) (spiffeid.ID, error) {
 	log := logrus.WithFields(logrus.Fields{"namespace": namespace, "service_name": serviceName})
 
-	trustDomain := m.parentSpiffeID.TrustDomain()
+	trustDomain := r.parentSpiffeID.TrustDomain()
 	podSpiffeIDPath := fmt.Sprintf("/otterize/namespace/%s/service/%s", namespace, serviceName)
-	parentSpiffeIDPath := m.parentSpiffeID.Path()
+	parentSpiffeIDPath := r.parentSpiffeID.Path()
 
 	entry := types.Entry{
 		SpiffeId: &types.SPIFFEID{
@@ -52,7 +52,7 @@ func (m *registry) RegisterK8SPodEntry(ctx context.Context, namespace string, se
 	log.Info("Creating SPIRE server entry")
 	batchCreateEntryRequest := entryv1.BatchCreateEntryRequest{Entries: []*types.Entry{&entry}}
 
-	resp, err := m.entryClient.BatchCreateEntry(ctx, &batchCreateEntryRequest)
+	resp, err := r.entryClient.BatchCreateEntry(ctx, &batchCreateEntryRequest)
 	if err != nil {
 		return spiffeid.ID{}, err
 	}
