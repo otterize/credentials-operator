@@ -12,7 +12,7 @@ type Store interface {
 	GetTrustBundle(ctx context.Context) (EncodedTrustBundle, error)
 }
 
-type store struct {
+type storeImpl struct {
 	bundleClient bundlev1.BundleClient
 }
 
@@ -21,10 +21,10 @@ type EncodedTrustBundle struct {
 }
 
 func NewBundlesStore(spireClient spireclient.ServerClient) Store {
-	return &store{bundleClient: spireClient.NewBundleClient()}
+	return &storeImpl{bundleClient: spireClient.NewBundleClient()}
 }
 
-func (s *store) GetTrustBundle(ctx context.Context) (EncodedTrustBundle, error) {
+func (s *storeImpl) GetTrustBundle(ctx context.Context) (EncodedTrustBundle, error) {
 	bundle, err := s.bundleClient.GetBundle(ctx, &bundlev1.GetBundleRequest{})
 	if err != nil {
 		return EncodedTrustBundle{}, err

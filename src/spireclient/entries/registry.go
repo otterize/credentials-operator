@@ -15,19 +15,19 @@ type Registry interface {
 	RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string) (spiffeid.ID, error)
 }
 
-type registry struct {
+type registryImpl struct {
 	parentSpiffeID spiffeid.ID
 	entryClient    entryv1.EntryClient
 }
 
 func NewEntriesRegistry(spireClient spireclient.ServerClient) Registry {
-	return &registry{
+	return &registryImpl{
 		parentSpiffeID: spireClient.GetSpiffeID(),
 		entryClient:    spireClient.NewEntryClient(),
 	}
 }
 
-func (r *registry) RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string) (spiffeid.ID, error) {
+func (r *registryImpl) RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string) (spiffeid.ID, error) {
 	log := logrus.WithFields(logrus.Fields{"namespace": namespace, "service_name": serviceName})
 
 	trustDomain := r.parentSpiffeID.TrustDomain()

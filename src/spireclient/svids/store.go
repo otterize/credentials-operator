@@ -21,7 +21,7 @@ type Store interface {
 	GetX509SVID(ctx context.Context, spiffeID spiffeid.ID, privateKey crypto.PrivateKey) (EncodedX509SVID, error)
 }
 
-type store struct {
+type storeImpl struct {
 	svidClient svidv1.SVIDClient
 }
 
@@ -32,14 +32,14 @@ type EncodedX509SVID struct {
 }
 
 func NewSVIDsStore(spireClient spireclient.ServerClient) Store {
-	return &store{svidClient: spireClient.NewSVIDClient()}
+	return &storeImpl{svidClient: spireClient.NewSVIDClient()}
 }
 
-func (s *store) GeneratePrivateKey() (crypto.PrivateKey, error) {
+func (s *storeImpl) GeneratePrivateKey() (crypto.PrivateKey, error) {
 	return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 }
 
-func (s *store) GetX509SVID(ctx context.Context, spiffeID spiffeid.ID, privateKey crypto.PrivateKey) (EncodedX509SVID, error) {
+func (s *storeImpl) GetX509SVID(ctx context.Context, spiffeID spiffeid.ID, privateKey crypto.PrivateKey) (EncodedX509SVID, error) {
 	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
 		URIs: []*url.URL{spiffeID.URL()},
 	}, privateKey)

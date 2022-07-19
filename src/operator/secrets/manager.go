@@ -35,17 +35,17 @@ type Manager interface {
 	RefreshTLSSecrets(ctx context.Context) error
 }
 
-type manager struct {
+type managerImpl struct {
 	client.Client
 	bundlesStore bundles.Store
 	svidsStore   svids.Store
 }
 
 func NewSecretsManager(c client.Client, bundlesStore bundles.Store, svidsStore svids.Store) Manager {
-	return &manager{Client: c, bundlesStore: bundlesStore, svidsStore: svidsStore}
+	return &managerImpl{Client: c, bundlesStore: bundlesStore, svidsStore: svidsStore}
 }
 
-func (m *manager) isRefreshNeeded(secret *corev1.Secret) bool {
+func (m *managerImpl) isRefreshNeeded(secret *corev1.Secret) bool {
 	log := logrus.WithFields(logrus.Fields{"secret.namespace": secret.Namespace, "secret.name": secret.Name})
 	expiryBaseline := time.Now().Add(secretExpiryDelta)
 	expiryStr, ok := secret.Annotations[svidExpiryAnnotation]
@@ -71,7 +71,7 @@ func (m *manager) isRefreshNeeded(secret *corev1.Secret) bool {
 	return false
 }
 
-func (m *manager) getExistingSecret(ctx context.Context, namespace string, name string) (*corev1.Secret, bool, error) {
+func (m *managerImpl) getExistingSecret(ctx context.Context, namespace string, name string) (*corev1.Secret, bool, error) {
 	found := corev1.Secret{}
 	if err := m.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &found); err != nil && apierrors.IsNotFound(err) {
 		return nil, false, nil
@@ -82,7 +82,7 @@ func (m *manager) getExistingSecret(ctx context.Context, namespace string, name 
 	return &found, true, nil
 }
 
-func (m *manager) createTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID) (*corev1.Secret, error) {
+func (m *managerImpl) createTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID) (*corev1.Secret, error) {
 	trustBundle, err := m.bundlesStore.GetTrustBundle(ctx)
 	if err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ func (m *manager) createTLSSecret(ctx context.Context, namespace string, secretN
 	return &secret, nil
 }
 
-func (m *manager) EnsureTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID) error {
+func (m *managerImpl) EnsureTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID) error {
 	log := logrus.WithFields(logrus.Fields{"secret.namespace": namespace, "secret.name": secretName})
 
 	existingSecret, isExistingSecret, err := m.getExistingSecret(ctx, namespace, secretName)
@@ -153,7 +153,7 @@ func (m *manager) EnsureTLSSecret(ctx context.Context, namespace string, secretN
 	}
 }
 
-func (m *manager) refreshTLSSecret(ctx context.Context, secret *corev1.Secret) error {
+func (m *managerImpl) refreshTLSSecret(ctx context.Context, secret *corev1.Secret) error {
 	log := logrus.WithFields(logrus.Fields{"secret.namespace": secret.Namespace, "secret.name": secret.Name})
 	serviceName, ok := secret.Annotations[tlsSecretServiceNameAnnotation]
 	if !ok {
@@ -180,7 +180,7 @@ func (m *manager) refreshTLSSecret(ctx context.Context, secret *corev1.Secret) e
 	return m.Update(ctx, newSecret)
 }
 
-func (m *manager) RefreshTLSSecrets(ctx context.Context) error {
+func (m *managerImpl) RefreshTLSSecrets(ctx context.Context) error {
 	logrus.Info("refreshing TLS secrets")
 	secrets := corev1.SecretList{}
 	if err := m.List(ctx, &secrets, &client.MatchingLabels{secretTypeLabel: string(tlsSecretType)}); err != nil {
