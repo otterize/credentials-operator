@@ -68,7 +68,9 @@ func (s *RegistrySuite) TestRegistry_RegisterK8SPodEntry() {
 			retSpiffeID, err := s.registry.RegisterK8SPodEntry(context.Background(),
 				namespace,
 				serviceNameLabel,
-				serviceName)
+				serviceName,
+				0,
+				[]string{})
 			s.Require().NoError(err)
 			s.Require().Equal(retSpiffeID.String(), spiffeID.String())
 		})

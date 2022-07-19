@@ -21,6 +21,9 @@ const (
 	tlsSecretServiceNameAnnotation = "spifferize/service-name"
 	tlsSecretSPIFFEIDAnnotation    = "spifferize/spiffeid"
 	svidExpiryAnnotation           = "spifferize/svid-expires-at"
+	SVIDFileNameAnnotation         = "otterize/svid-file-name"
+	BundleFileNameAnnotation       = "otterize/bundle-file-name"
+	KeyFileNameAnnotation          = "otterize/key-file-name"
 	secretExpiryDelta              = 10 * time.Minute
 )
 
@@ -29,6 +32,20 @@ type SecretType string
 const (
 	tlsSecretType = SecretType("TLS")
 )
+
+type SecretFileNames struct {
+	SvidFileName   string
+	BundleFileName string
+	KeyFileName    string
+}
+
+func NewSecretFilesNames(svidFileName string, bundleFileName string, keyFileName string) SecretFileNames {
+	newFileNames := SecretFileNames{}
+	newFileNames.SvidFileName, _ = lo.Coalesce(svidFileName, "svid.pem")
+	newFileNames.KeyFileName, _ = lo.Coalesce(keyFileName, "key.pem")
+	newFileNames.BundleFileName, _ = lo.Coalesce(bundleFileName, "bundle.pem")
+	return newFileNames
+}
 
 type Manager struct {
 	client.Client
@@ -77,7 +94,7 @@ func (m *Manager) getExistingSecret(ctx context.Context, namespace string, name 
 	return &found, true, nil
 }
 
-func (m *Manager) createTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID) (*corev1.Secret, error) {
+func (m *Manager) createTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID, secretFileNames SecretFileNames) (*corev1.Secret, error) {
 	trustBundle, err := m.bundlesStore.GetTrustBundle(ctx)
 	if err != nil {
 		return nil, err
@@ -107,19 +124,22 @@ func (m *Manager) createTLSSecret(ctx context.Context, namespace string, secretN
 				svidExpiryAnnotation:           expiryStr,
 				tlsSecretServiceNameAnnotation: serviceName,
 				tlsSecretSPIFFEIDAnnotation:    spiffeID.String(),
+				SVIDFileNameAnnotation:         secretFileNames.SvidFileName,
+				BundleFileNameAnnotation:       secretFileNames.BundleFileName,
+				KeyFileNameAnnotation:          secretFileNames.KeyFileName,
 			},
 		},
 		Data: map[string][]byte{
-			"bundle.pem": trustBundle.BundlePEM,
-			"key.pem":    svid.KeyPEM,
-			"svid.pem":   svid.SVIDPEM,
+			secretFileNames.BundleFileName: trustBundle.BundlePEM,
+			secretFileNames.KeyFileName:    svid.KeyPEM,
+			secretFileNames.SvidFileName:   svid.SVIDPEM,
 		},
 	}
 
 	return &secret, nil
 }
 
-func (m *Manager) EnsureTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID) error {
+func (m *Manager) EnsureTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID, secretFileNames SecretFileNames) error {
 	log := logrus.WithFields(logrus.Fields{"secret.namespace": namespace, "secret.name": secretName})
 
 	existingSecret, isExistingSecret, err := m.getExistingSecret(ctx, namespace, secretName)
@@ -133,7 +153,7 @@ func (m *Manager) EnsureTLSSecret(ctx context.Context, namespace string, secretN
 		return nil
 	}
 
-	secret, err := m.createTLSSecret(ctx, namespace, secretName, serviceName, spiffeID)
+	secret, err := m.createTLSSecret(ctx, namespace, secretName, serviceName, spiffeID, secretFileNames)
 	if err != nil {
 		log.WithError(err).Error("failed creating TLS secret")
 		return err
@@ -166,7 +186,9 @@ func (m *Manager) refreshTLSSecret(ctx context.Context, secret *corev1.Secret) e
 		return err
 	}
 
-	newSecret, err := m.createTLSSecret(ctx, secret.Namespace, secret.Name, serviceName, spiffeID)
+	secretFileNamesFromAnnotations := NewSecretFilesNames(secret.Annotations[SVIDFileNameAnnotation], secret.Annotations[BundleFileNameAnnotation], secret.Annotations[KeyFileNameAnnotation])
+
+	newSecret, err := m.createTLSSecret(ctx, secret.Namespace, secret.Name, serviceName, spiffeID, secretFileNamesFromAnnotations)
 	if err != nil {
 		return err
 	}

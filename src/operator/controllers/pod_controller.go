@@ -15,6 +15,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -22,6 +24,11 @@ const (
 	refreshSecretsLoopTick   = time.Minute
 	ServiceNameInputLabel    = "otterize/service-name"
 	TLSSecretNameLabel       = "otterize/tls-secret-name"
+	SVIDFileNameLabel        = "otterize/svid-file-name"
+	BundleFileNameLabel      = "otterize/bundle-file-name"
+	KeyFileNameLabel         = "otterize/key-file-name"
+	DNSNamesLabel            = "otterize/dns-names"
+	CertTTLLabel             = "otterize/cert-ttl"
 	ServiceNameSelectorLabel = "spifferize/selector-service-name"
 )
 
@@ -130,8 +137,9 @@ func (r *PodReconciler) generatePodTLSSecret(ctx context.Context, pod *corev1.Po
 	}
 
 	secretName := pod.Labels[TLSSecretNameLabel]
-	log.WithFields(logrus.Fields{"label.key": TLSSecretNameLabel, "label.value": secretName}).Info("ensuring TLS secret")
-	if err := r.SecretsManager.EnsureTLSSecret(ctx, pod.Namespace, secretName, serviceName, spiffeID); err != nil {
+	secretNames := secrets.NewSecretFilesNames(pod.Labels[SVIDFileNameLabel], pod.Labels[BundleFileNameLabel], pod.Labels[KeyFileNameLabel])
+	log.WithFields(logrus.Fields{"label.key": TLSSecretNameLabel, "label.value": secretName, "secret_names": secretNames}).Info("ensuring TLS secret")
+	if err := r.SecretsManager.EnsureTLSSecret(ctx, pod.Namespace, secretName, serviceName, spiffeID, secretNames); err != nil {
 		log.WithError(err).Error("failed creating TLS secret")
 		return err
 	}
@@ -169,8 +177,11 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return result, err
 	}
 
+	dnsNames := r.resolvePodToCertDNSNames(pod)
+	ttl := r.resolvePodToCertTTl(pod)
+
 	// Add spire-server entry for pod
-	spiffeID, err := r.EntriesRegistry.RegisterK8SPodEntry(ctx, pod.Namespace, ServiceNameSelectorLabel, serviceName)
+	spiffeID, err := r.EntriesRegistry.RegisterK8SPodEntry(ctx, pod.Namespace, ServiceNameSelectorLabel, serviceName, ttl, dnsNames)
 	if err != nil {
 		log.WithError(err).Error("failed registering SPIRE entry for pod")
 		return ctrl.Result{}, err
@@ -182,6 +193,24 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *PodReconciler) resolvePodToCertDNSNames(pod corev1.Pod) []string {
+	return strings.Split(pod.Labels[DNSNamesLabel], ",")
+}
+
+func (r *PodReconciler) resolvePodToCertTTl(pod corev1.Pod) int32 {
+	var ttl int32
+	ttlString := pod.Labels[CertTTLLabel]
+	if len(ttlString) != 0 {
+		ttl64, err := strconv.ParseInt(ttlString, 0, 32)
+		if err != nil {
+			logrus.Warningf("Failed converting ttl Label to int: %s", err)
+		} else {
+			ttl = int32(ttl64)
+		}
+	}
+	return ttl
 }
 
 // SetupWithManager sets up the controller with the Manager.

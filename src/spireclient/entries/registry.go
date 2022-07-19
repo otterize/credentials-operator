@@ -9,6 +9,7 @@ import (
 	entryv1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/entry/v1"
 	"github.com/spiffe/spire-api-sdk/proto/spire/api/types"
 	"google.golang.org/grpc/codes"
+	"strings"
 )
 
 type Registry struct {
@@ -23,14 +24,22 @@ func NewEntriesRegistry(spireClient spireclient.ServerClient) *Registry {
 	}
 }
 
-func (m *Registry) RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string) (spiffeid.ID, error) {
+func (m *Registry) RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string, ttl int32, dnsNames []string) (spiffeid.ID, error) {
 	log := logrus.WithFields(logrus.Fields{"namespace": namespace, "service_name": serviceName})
 
 	trustDomain := m.parentSpiffeID.TrustDomain()
 	podSpiffeIDPath := fmt.Sprintf("/otterize/namespace/%s/service/%s", namespace, serviceName)
+
 	parentSpiffeIDPath := m.parentSpiffeID.Path()
 
+	// Kafka will use certificate's CN to enforce ACL Rules
+	commonName := []string{strings.Join([]string{serviceName, namespace}, ".")}
+	// Spire uses the first DNS name as CN. CN should be a valid dns name.
+	dnsNames = append(commonName, dnsNames...)
+
 	entry := types.Entry{
+		Ttl:      ttl,
+		DnsNames: dnsNames,
 		SpiffeId: &types.SPIFFEID{
 			TrustDomain: trustDomain.String(),
 			Path:        podSpiffeIDPath,
