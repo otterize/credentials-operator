@@ -12,25 +12,28 @@ import (
 	"strings"
 )
 
-type Registry struct {
+type Registry interface {
+	RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string, ttl int32, dnsNames []string) (spiffeid.ID, error)
+}
+
+type registryImpl struct {
 	parentSpiffeID spiffeid.ID
 	entryClient    entryv1.EntryClient
 }
 
-func NewEntriesRegistry(spireClient spireclient.ServerClient) *Registry {
-	return &Registry{
+func NewEntriesRegistry(spireClient spireclient.ServerClient) Registry {
+	return &registryImpl{
 		parentSpiffeID: spireClient.GetSpiffeID(),
 		entryClient:    spireClient.NewEntryClient(),
 	}
 }
 
-func (m *Registry) RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string, ttl int32, dnsNames []string) (spiffeid.ID, error) {
+func (r *registryImpl) RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string, ttl int32, dnsNames []string) (spiffeid.ID, error) {
 	log := logrus.WithFields(logrus.Fields{"namespace": namespace, "service_name": serviceName})
 
-	trustDomain := m.parentSpiffeID.TrustDomain()
+	trustDomain := r.parentSpiffeID.TrustDomain()
 	podSpiffeIDPath := fmt.Sprintf("/otterize/namespace/%s/service/%s", namespace, serviceName)
-
-	parentSpiffeIDPath := m.parentSpiffeID.Path()
+	parentSpiffeIDPath := r.parentSpiffeID.Path()
 
 	// Kafka will use certificate's CN to enforce ACL Rules
 	commonName := []string{strings.Join([]string{serviceName, namespace}, ".")}
@@ -57,7 +60,7 @@ func (m *Registry) RegisterK8SPodEntry(ctx context.Context, namespace string, se
 	log.Info("Creating SPIRE server entry")
 	batchCreateEntryRequest := entryv1.BatchCreateEntryRequest{Entries: []*types.Entry{&entry}}
 
-	resp, err := m.entryClient.BatchCreateEntry(ctx, &batchCreateEntryRequest)
+	resp, err := r.entryClient.BatchCreateEntry(ctx, &batchCreateEntryRequest)
 	if err != nil {
 		return spiffeid.ID{}, err
 	}
