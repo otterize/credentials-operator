@@ -3,11 +3,12 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
+	"github.com/THREATINT/go-net"
 	"github.com/otterize/spifferize/src/operator/secrets"
 	"github.com/otterize/spifferize/src/spireclient"
 	"github.com/otterize/spifferize/src/spireclient/entries"
 	"github.com/sirupsen/logrus"
-	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,15 +22,15 @@ import (
 )
 
 const (
-	refreshSecretsLoopTick   = time.Minute
-	ServiceNameInputLabel    = "otterize/service-name"
-	TLSSecretNameLabel       = "otterize/tls-secret-name"
-	SVIDFileNameLabel        = "otterize/svid-file-name"
-	BundleFileNameLabel      = "otterize/bundle-file-name"
-	KeyFileNameLabel         = "otterize/key-file-name"
-	DNSNamesLabel            = "otterize/dns-names"
-	CertTTLLabel             = "otterize/cert-ttl"
-	ServiceNameSelectorLabel = "spifferize/selector-service-name"
+	refreshSecretsLoopTick     = time.Minute
+	ServiceNameInputAnnotation = "otterize/service-name"
+	TLSSecretNameAnnotation    = "otterize/tls-secret-name"
+	SVIDFileNameAnnotation     = "otterize/svid-file-name"
+	BundleFileNameAnnotation   = "otterize/bundle-file-name"
+	KeyFileNameAnnotation      = "otterize/key-file-name"
+	DNSNamesAnnotation         = "otterize/dns-names"
+	CertTTLAnnotation          = "otterize/cert-ttl"
+	ServiceNameSelectorLabel   = "spifferize/selector-service-name"
 )
 
 // PodReconciler reconciles a Pod object
@@ -79,9 +80,9 @@ func (r *PodReconciler) resolvePodToOwnerName(ctx context.Context, pod *corev1.P
 
 func (r *PodReconciler) resolvePodToServiceName(ctx context.Context, pod *corev1.Pod) (string, error) {
 	log := logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace})
-	if pod.Labels != nil && pod.Labels[ServiceNameInputLabel] != "" {
-		serviceName := pod.Labels[ServiceNameInputLabel]
-		log.WithFields(logrus.Fields{"label.key": ServiceNameInputLabel, "label.value": serviceName}).Info("using service name from pod label")
+	if pod.Annotations != nil && pod.Annotations[ServiceNameInputAnnotation] != "" {
+		serviceName := pod.Annotations[ServiceNameInputAnnotation]
+		log.WithFields(logrus.Fields{"annotation.key": ServiceNameInputAnnotation, "annotation.value": serviceName}).Info("using service name from pod annotation")
 		return serviceName, nil
 	}
 
@@ -129,17 +130,17 @@ func (r *PodReconciler) updatePodLabel(ctx context.Context, pod *corev1.Pod, lab
 	return ctrl.Result{}, nil
 }
 
-func (r *PodReconciler) generatePodTLSSecret(ctx context.Context, pod *corev1.Pod, serviceName string, spiffeID spiffeid.ID) error {
+func (r *PodReconciler) generatePodTLSSecret(ctx context.Context, pod *corev1.Pod, serviceName string, entryID string) error {
 	log := logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace})
-	if pod.Labels == nil || pod.Labels[TLSSecretNameLabel] == "" {
-		log.WithField("label.key", TLSSecretNameLabel).Info("skipping TLS secrets creation - label not found")
+	if pod.Annotations == nil || pod.Annotations[TLSSecretNameAnnotation] == "" {
+		log.WithField("annotation.key", TLSSecretNameAnnotation).Info("skipping TLS secrets creation - annotation not found")
 		return nil
 	}
 
-	secretName := pod.Labels[TLSSecretNameLabel]
-	secretNames := secrets.NewSecretFilesNames(pod.Labels[SVIDFileNameLabel], pod.Labels[BundleFileNameLabel], pod.Labels[KeyFileNameLabel])
-	log.WithFields(logrus.Fields{"label.key": TLSSecretNameLabel, "label.value": secretName, "secret_names": secretNames}).Info("ensuring TLS secret")
-	if err := r.SecretsManager.EnsureTLSSecret(ctx, pod.Namespace, secretName, serviceName, spiffeID, secretNames); err != nil {
+	secretName := pod.Annotations[TLSSecretNameAnnotation]
+	secretNames := secrets.NewSecretFilesNames(pod.Annotations[SVIDFileNameAnnotation], pod.Annotations[BundleFileNameAnnotation], pod.Annotations[KeyFileNameAnnotation])
+	log.WithFields(logrus.Fields{"annotation.key": TLSSecretNameAnnotation, "annotation.value": secretName, "secret_names": secretNames}).Info("ensuring TLS secret")
+	if err := r.SecretsManager.EnsureTLSSecret(ctx, pod.Namespace, secretName, serviceName, entryID, secretNames); err != nil {
 		log.WithError(err).Error("failed creating TLS secret")
 		return err
 	}
@@ -177,31 +178,45 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return result, err
 	}
 
-	dnsNames := r.resolvePodToCertDNSNames(pod)
+	dnsNames, err := r.resolvePodToCertDNSNames(pod)
+	// if somehow we got invalid dns name, we will move on with an Empty DNS name list
+	if err != nil {
+		log.Warnf("%s", err)
+	}
+
 	ttl := r.resolvePodToCertTTl(pod)
 
 	// Add spire-server entry for pod
-	spiffeID, err := r.EntriesRegistry.RegisterK8SPodEntry(ctx, pod.Namespace, ServiceNameSelectorLabel, serviceName, ttl, dnsNames)
+	entryID, err := r.EntriesRegistry.RegisterK8SPodEntry(ctx, pod.Namespace, ServiceNameSelectorLabel, serviceName, ttl, dnsNames)
 	if err != nil {
 		log.WithError(err).Error("failed registering SPIRE entry for pod")
 		return ctrl.Result{}, err
 	}
 
 	// generate TLS secret for pod
-	if err := r.generatePodTLSSecret(ctx, &pod, serviceName, spiffeID); err != nil {
+	if err := r.generatePodTLSSecret(ctx, &pod, serviceName, entryID); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
 }
 
-func (r *PodReconciler) resolvePodToCertDNSNames(pod corev1.Pod) []string {
-	return strings.Split(pod.Labels[DNSNamesLabel], ",")
+func (r *PodReconciler) resolvePodToCertDNSNames(pod corev1.Pod) ([]string, error) {
+	if len(pod.Annotations[DNSNamesAnnotation]) != 0 {
+		dnsNames := strings.Split(pod.Annotations[DNSNamesAnnotation], ",")
+		for _, name := range dnsNames {
+			if !net.IsFQDN(name) {
+				return nil, fmt.Errorf("invalid DNS name: %s", name)
+			}
+		}
+		return dnsNames, nil
+	}
+	return nil, nil
 }
 
 func (r *PodReconciler) resolvePodToCertTTl(pod corev1.Pod) int32 {
 	var ttl int32
-	ttlString := pod.Labels[CertTTLLabel]
+	ttlString := pod.Annotations[CertTTLAnnotation]
 	if len(ttlString) != 0 {
 		ttl64, err := strconv.ParseInt(ttlString, 0, 32)
 		if err != nil {

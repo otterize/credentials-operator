@@ -10,7 +10,6 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	spiffeid "github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
 // MockManager is a mock of Manager interface.
@@ -37,7 +36,7 @@ func (m *MockManager) EXPECT() *MockManagerMockRecorder {
 }
 
 // EnsureTLSSecret mocks base method.
-func (m *MockManager) EnsureTLSSecret(arg0 context.Context, arg1, arg2, arg3 string, arg4 spiffeid.ID, arg5 secrets.SecretFileNames) error {
+func (m *MockManager) EnsureTLSSecret(arg0 context.Context, arg1, arg2, arg3, arg4 string, arg5 secrets.SecretFileNames) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "EnsureTLSSecret", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)

@@ -7,7 +7,6 @@ import (
 	"github.com/otterize/spifferize/src/spireclient/svids"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
-	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +18,7 @@ import (
 const (
 	secretTypeLabel                = "spifferize/secret-type"
 	tlsSecretServiceNameAnnotation = "spifferize/service-name"
-	tlsSecretSPIFFEIDAnnotation    = "spifferize/spiffeid"
+	tlsSecretEntryIDAnnotation     = "spifferize/entry-id"
 	svidExpiryAnnotation           = "spifferize/svid-expires-at"
 	SVIDFileNameAnnotation         = "otterize/svid-file-name"
 	BundleFileNameAnnotation       = "otterize/bundle-file-name"
@@ -48,7 +47,7 @@ func NewSecretFilesNames(svidFileName string, bundleFileName string, keyFileName
 }
 
 type Manager interface {
-	EnsureTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID, secretFileNames SecretFileNames) error
+	EnsureTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, entryID string, secretFileNames SecretFileNames) error
 	RefreshTLSSecrets(ctx context.Context) error
 }
 
@@ -84,7 +83,7 @@ func (m *managerImpl) isRefreshNeeded(secret *corev1.Secret) bool {
 		return true
 	}
 
-	log.Info("secret expiry is far enough, not re-creating it")
+	log.Info("secret expiry is far enough")
 	return false
 }
 
@@ -99,7 +98,7 @@ func (m *managerImpl) getExistingSecret(ctx context.Context, namespace string, n
 	return &found, true, nil
 }
 
-func (m *managerImpl) createTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID, secretFileNames SecretFileNames) (*corev1.Secret, error) {
+func (m *managerImpl) createTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, entryID string, secretFileNames SecretFileNames) (*corev1.Secret, error) {
 	trustBundle, err := m.bundlesStore.GetTrustBundle(ctx)
 	if err != nil {
 		return nil, err
@@ -110,7 +109,7 @@ func (m *managerImpl) createTLSSecret(ctx context.Context, namespace string, sec
 		return nil, err
 	}
 
-	svid, err := m.svidsStore.GetX509SVID(ctx, spiffeID, privateKey)
+	svid, err := m.svidsStore.GetX509SVID(ctx, entryID, privateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +127,7 @@ func (m *managerImpl) createTLSSecret(ctx context.Context, namespace string, sec
 			Annotations: map[string]string{
 				svidExpiryAnnotation:           expiryStr,
 				tlsSecretServiceNameAnnotation: serviceName,
-				tlsSecretSPIFFEIDAnnotation:    spiffeID.String(),
+				tlsSecretEntryIDAnnotation:     entryID,
 				SVIDFileNameAnnotation:         secretFileNames.SvidFileName,
 				BundleFileNameAnnotation:       secretFileNames.BundleFileName,
 				KeyFileNameAnnotation:          secretFileNames.KeyFileName,
@@ -144,7 +143,7 @@ func (m *managerImpl) createTLSSecret(ctx context.Context, namespace string, sec
 	return &secret, nil
 }
 
-func (m *managerImpl) EnsureTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, spiffeID spiffeid.ID, secretFileNames SecretFileNames) error {
+func (m *managerImpl) EnsureTLSSecret(ctx context.Context, namespace string, secretName string, serviceName string, entryID string, secretFileNames SecretFileNames) error {
 	log := logrus.WithFields(logrus.Fields{"secret.namespace": namespace, "secret.name": secretName})
 
 	existingSecret, isExistingSecret, err := m.getExistingSecret(ctx, namespace, secretName)
@@ -153,12 +152,12 @@ func (m *managerImpl) EnsureTLSSecret(ctx context.Context, namespace string, sec
 		return err
 	}
 
-	if isExistingSecret && !m.isRefreshNeeded(existingSecret) {
-		log.Info("secret already exists and does not require refreshing")
+	if isExistingSecret && !m.isRefreshNeeded(existingSecret) && !m.isUpdateNeeded(existingSecret, serviceName, entryID, secretFileNames) {
+		log.Info("secret already exists and does not require refreshing or updating")
 		return nil
 	}
 
-	secret, err := m.createTLSSecret(ctx, namespace, secretName, serviceName, spiffeID, secretFileNames)
+	secret, err := m.createTLSSecret(ctx, namespace, secretName, serviceName, entryID, secretFileNames)
 	if err != nil {
 		log.WithError(err).Error("failed creating TLS secret")
 		return err
@@ -180,20 +179,15 @@ func (m *managerImpl) refreshTLSSecret(ctx context.Context, secret *corev1.Secre
 		return errors.New("service name annotation is missing")
 	}
 
-	spiffeIDStr, ok := secret.Annotations[tlsSecretSPIFFEIDAnnotation]
-	if !ok {
-		return errors.New("spiffe ID annotation is missing")
-	}
+	entryId, ok := secret.Annotations[tlsSecretEntryIDAnnotation]
 
-	spiffeID, err := spiffeid.FromString(spiffeIDStr)
-	if err != nil {
-		log.WithField("spiffeid", spiffeID).WithError(err).Error("failed parsing spiffeid")
-		return err
+	if !ok {
+		return errors.New("entry ID annotation is missing")
 	}
 
 	secretFileNamesFromAnnotations := NewSecretFilesNames(secret.Annotations[SVIDFileNameAnnotation], secret.Annotations[BundleFileNameAnnotation], secret.Annotations[KeyFileNameAnnotation])
 
-	newSecret, err := m.createTLSSecret(ctx, secret.Namespace, secret.Name, serviceName, spiffeID, secretFileNamesFromAnnotations)
+	newSecret, err := m.createTLSSecret(ctx, secret.Namespace, secret.Name, serviceName, entryId, secretFileNamesFromAnnotations)
 	if err != nil {
 		return err
 	}
@@ -227,4 +221,17 @@ func (m *managerImpl) RefreshTLSSecrets(ctx context.Context) error {
 
 	log.Info("finished refreshing secrets")
 	return nil
+}
+
+func (m *managerImpl) isUpdateNeeded(existingSecret *corev1.Secret, serviceName string, entryID string, secretFileNames SecretFileNames) bool {
+	log := logrus.WithFields(logrus.Fields{"secret.namespace": existingSecret.Namespace, "secret.name": existingSecret.Name})
+	serviceNameCheck := existingSecret.Annotations[tlsSecretServiceNameAnnotation] == serviceName
+	EntryIDCheck := existingSecret.Annotations[tlsSecretEntryIDAnnotation] == entryID
+	SVIDFileNameCheck := existingSecret.Annotations[SVIDFileNameAnnotation] == secretFileNames.SvidFileName
+	BundleFileNameCheck := existingSecret.Annotations[BundleFileNameAnnotation] == secretFileNames.BundleFileName
+	KeyFileNameCheck := existingSecret.Annotations[KeyFileNameAnnotation] == secretFileNames.KeyFileName
+
+	log.Info("One or more annotations have changed. update is needed")
+
+	return !(serviceNameCheck && EntryIDCheck && SVIDFileNameCheck && BundleFileNameCheck && KeyFileNameCheck)
 }
