@@ -21,12 +21,13 @@ kafka:
   allowEveryoneIfNoAclFound: true
   podLabels:
     app: lab-kafka
+  podAnnotations:
     otterize/service-name: kafka
     otterize/tls-secret-name: spifferize-tls-go-spiffe-tls-kafka
     otterize/bundle-file-name: ca.crt
     otterize/svid-file-name: tls.crt
     otterize/key-file-name: tls.key
-    otterize/dns-names: "kafka-tls-0.kafka-tls-headless.default.svc.cluster.local"
+    otterize/dns-names: "kafka-tls-0.kafka-tls-headless.default.svc.cluster.local, kafka-tls.default.svc.cluster.local"
   zookeeper:
     podLabels:
       app: lab-zookeeper

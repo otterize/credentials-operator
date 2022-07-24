@@ -205,7 +205,7 @@ func (r *PodReconciler) resolvePodToCertDNSNames(pod corev1.Pod) ([]string, erro
 	if len(pod.Annotations[DNSNamesAnnotation]) != 0 {
 		dnsNames := strings.Split(pod.Annotations[DNSNamesAnnotation], ",")
 		for _, name := range dnsNames {
-			if !net.IsFQDN(name) {
+			if !net.IsDomain(name) {
 				return nil, fmt.Errorf("invalid DNS name: %s", name)
 			}
 		}
