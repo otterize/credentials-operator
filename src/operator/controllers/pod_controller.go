@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/THREATINT/go-net"
+	"github.com/asaskevich/govalidator"
 	"github.com/otterize/spifferize/src/operator/secrets"
 	"github.com/otterize/spifferize/src/spireclient"
 	"github.com/otterize/spifferize/src/spireclient/entries"
 	"github.com/sirupsen/logrus"
+	"hash/fnv"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -130,7 +131,7 @@ func (r *PodReconciler) updatePodLabel(ctx context.Context, pod *corev1.Pod, lab
 	return ctrl.Result{}, nil
 }
 
-func (r *PodReconciler) generatePodTLSSecret(ctx context.Context, pod *corev1.Pod, serviceName string, entryID string) error {
+func (r *PodReconciler) generatePodTLSSecret(ctx context.Context, pod *corev1.Pod, serviceName string, entryID string, entryHash string) error {
 	log := logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace})
 	if pod.Annotations == nil || pod.Annotations[TLSSecretNameAnnotation] == "" {
 		log.WithField("annotation.key", TLSSecretNameAnnotation).Info("skipping TLS secrets creation - annotation not found")
@@ -140,7 +141,7 @@ func (r *PodReconciler) generatePodTLSSecret(ctx context.Context, pod *corev1.Po
 	secretName := pod.Annotations[TLSSecretNameAnnotation]
 	secretNames := secrets.NewSecretFilesNames(pod.Annotations[SVIDFileNameAnnotation], pod.Annotations[BundleFileNameAnnotation], pod.Annotations[KeyFileNameAnnotation])
 	log.WithFields(logrus.Fields{"annotation.key": TLSSecretNameAnnotation, "annotation.value": secretName, "secret_names": secretNames}).Info("ensuring TLS secret")
-	if err := r.SecretsManager.EnsureTLSSecret(ctx, pod.Namespace, secretName, serviceName, entryID, secretNames); err != nil {
+	if err := r.SecretsManager.EnsureTLSSecret(ctx, pod.Namespace, secretName, serviceName, entryID, entryHash, secretNames); err != nil {
 		log.WithError(err).Error("failed creating TLS secret")
 		return err
 	}
@@ -193,8 +194,15 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	entryPropertiesHashMaker := fnv.New32a()
+	_, err = entryPropertiesHashMaker.Write([]byte(pod.Namespace + ServiceNameSelectorLabel + serviceName + string(ttl) + strings.Join(dnsNames, "")))
+	if err != nil {
+		log.WithError(err).Error("failed hashing SPIRE entry properties")
+		return ctrl.Result{}, err
+	}
+
 	// generate TLS secret for pod
-	if err := r.generatePodTLSSecret(ctx, &pod, serviceName, entryID); err != nil {
+	if err := r.generatePodTLSSecret(ctx, &pod, serviceName, entryID, strconv.Itoa(int(entryPropertiesHashMaker.Sum32()))); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -205,7 +213,7 @@ func (r *PodReconciler) resolvePodToCertDNSNames(pod corev1.Pod) ([]string, erro
 	if len(pod.Annotations[DNSNamesAnnotation]) != 0 {
 		dnsNames := strings.Split(pod.Annotations[DNSNamesAnnotation], ",")
 		for _, name := range dnsNames {
-			if !net.IsDomain(name) {
+			if !govalidator.IsDNSName(name) {
 				return nil, fmt.Errorf("invalid DNS name: %s", name)
 			}
 		}

@@ -3,7 +3,7 @@ module github.com/otterize/spifferize/src
 go 1.18
 
 require (
-	github.com/THREATINT/go-net v1.2.18
+	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a
 	github.com/bombsimon/logrusr/v3 v3.0.0
 	github.com/golang/mock v1.6.0
 	github.com/samber/lo v1.25.0

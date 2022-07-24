@@ -56,6 +56,7 @@ func (s *RegistrySuite) TestRegistry_RegisterK8SPodEntry() {
 					{
 						Status: &types.Status{Code: int32(statusCode)},
 						Entry: &types.Entry{
+							Id: "test",
 							SpiffeId: &types.SPIFFEID{
 								TrustDomain: spiffeID.TrustDomain().String(),
 								Path:        spiffeID.Path(),
@@ -65,14 +66,14 @@ func (s *RegistrySuite) TestRegistry_RegisterK8SPodEntry() {
 				},
 			}
 			s.entryClient.EXPECT().BatchCreateEntry(gomock.Any(), gomock.Any()).Return(&response, nil)
-			retSpiffeID, err := s.registry.RegisterK8SPodEntry(context.Background(),
+			entryId, err := s.registry.RegisterK8SPodEntry(context.Background(),
 				namespace,
 				serviceNameLabel,
 				serviceName,
 				0,
 				[]string{})
 			s.Require().NoError(err)
-			s.Require().Equal(retSpiffeID.String(), spiffeID.String())
+			s.Require().Equal(entryId, response.Results[0].Entry.Id)
 		})
 	}
 

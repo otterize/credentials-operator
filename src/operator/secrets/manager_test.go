@@ -118,7 +118,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_NoExistingSecret() {
 		},
 	).Return(nil)
 
-	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, NewSecretFilesNames("", "", ""))
+	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", NewSecretFilesNames("", "", ""))
 	s.Require().NoError(err)
 }
 
@@ -168,7 +168,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NeedsRefr
 		},
 	).Return(nil)
 
-	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, NewSecretFilesNames("", "", ""))
+	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", NewSecretFilesNames("", "", ""))
 	s.Require().NoError(err)
 }
 
@@ -200,7 +200,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NoRefresh
 		}
 	})
 
-	err := s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, NewSecretFilesNames("", "", ""))
+	err := s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", NewSecretFilesNames("", "", ""))
 	s.Require().NoError(err)
 }
 
@@ -225,6 +225,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 					BundleFileNameAnnotation:       secretFileNames.BundleFileName,
 					KeyFileNameAnnotation:          secretFileNames.KeyFileName,
 					tlsSecretServiceNameAnnotation: serviceName,
+					entryHashAnnotation:            "",
 				},
 			},
 		}
@@ -252,7 +253,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 		},
 	).Return(nil)
 
-	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, newSecrets)
+	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", newSecrets)
 	s.Require().NoError(err)
 }
 

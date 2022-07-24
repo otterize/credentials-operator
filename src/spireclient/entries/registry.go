@@ -42,6 +42,8 @@ func (r *registryImpl) RegisterK8SPodEntry(ctx context.Context, namespace string
 	// Spire uses the first DNS name as CN. CN should be a valid dns name.
 	dnsNames = append(commonName, dnsNames...)
 
+	log.Infof("dns_names: %s", dnsNames)
+
 	entry := types.Entry{
 		Ttl:      ttl,
 		DnsNames: dnsNames,
@@ -106,5 +108,5 @@ func (r *registryImpl) updateSpireEntry(ctx context.Context, entry *types.Entry)
 }
 
 func (r *registryImpl) shouldUpdateEntry(createResult *entryv1.BatchCreateEntryResponse_Result, desiredEntry *types.Entry) bool {
-	return createResult.Entry.Ttl != desiredEntry.Ttl || slices.Equal(createResult.Entry.DnsNames, desiredEntry.DnsNames)
+	return createResult.Entry.Ttl != desiredEntry.Ttl || !slices.Equal(createResult.Entry.DnsNames, desiredEntry.DnsNames)
 }
