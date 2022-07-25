@@ -59,8 +59,8 @@ func (s *PodControllerSuite) TestController_Reconcile() {
 					Namespace: namespace,
 					Name:      podname,
 					Annotations: map[string]string{
-						ServiceNameInputAnnotation: servicename,
-						TLSSecretNameAnnotation:    secretname,
+						ServiceNameAnnotation:   servicename,
+						TLSSecretNameAnnotation: secretname,
 					},
 				},
 			}

@@ -23,15 +23,15 @@ import (
 )
 
 const (
-	refreshSecretsLoopTick     = time.Minute
-	ServiceNameInputAnnotation = "otterize/service-name"
-	TLSSecretNameAnnotation    = "otterize/tls-secret-name"
-	SVIDFileNameAnnotation     = "otterize/svid-file-name"
-	BundleFileNameAnnotation   = "otterize/bundle-file-name"
-	KeyFileNameAnnotation      = "otterize/key-file-name"
-	DNSNamesAnnotation         = "otterize/dns-names"
-	CertTTLAnnotation          = "otterize/cert-ttl"
-	ServiceNameSelectorLabel   = "spifferize/selector-service-name"
+	refreshSecretsLoopTick   = time.Minute
+	ServiceNameAnnotation    = "otterize/service-name"
+	TLSSecretNameAnnotation  = "otterize/tls-secret-name"
+	SVIDFileNameAnnotation   = "otterize/svid-file-name"
+	BundleFileNameAnnotation = "otterize/bundle-file-name"
+	KeyFileNameAnnotation    = "otterize/key-file-name"
+	DNSNamesAnnotation       = "otterize/dns-names"
+	CertTTLAnnotation        = "otterize/cert-ttl"
+	ServiceNameSelectorLabel = "spifferize/service-name"
 )
 
 // PodReconciler reconciles a Pod object
@@ -81,9 +81,9 @@ func (r *PodReconciler) resolvePodToOwnerName(ctx context.Context, pod *corev1.P
 
 func (r *PodReconciler) resolvePodToServiceName(ctx context.Context, pod *corev1.Pod) (string, error) {
 	log := logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace})
-	if pod.Annotations != nil && pod.Annotations[ServiceNameInputAnnotation] != "" {
-		serviceName := pod.Annotations[ServiceNameInputAnnotation]
-		log.WithFields(logrus.Fields{"annotation.key": ServiceNameInputAnnotation, "annotation.value": serviceName}).Info("using service name from pod annotation")
+	if pod.Annotations != nil && pod.Annotations[ServiceNameAnnotation] != "" {
+		serviceName := pod.Annotations[ServiceNameAnnotation]
+		log.WithFields(logrus.Fields{"annotation.key": ServiceNameAnnotation, "annotation.value": serviceName}).Info("using service name from pod annotation")
 		return serviceName, nil
 	}
 
@@ -139,8 +139,8 @@ func (r *PodReconciler) generatePodTLSSecret(ctx context.Context, pod *corev1.Po
 	}
 
 	secretName := pod.Annotations[TLSSecretNameAnnotation]
-	secretNames := secrets.NewSecretFilesNames(pod.Annotations[SVIDFileNameAnnotation], pod.Annotations[BundleFileNameAnnotation], pod.Annotations[KeyFileNameAnnotation])
-	log.WithFields(logrus.Fields{"annotation.key": TLSSecretNameAnnotation, "annotation.value": secretName, "secret_names": secretNames}).Info("ensuring TLS secret")
+	secretNames := secrets.NewSecretFileNames(pod.Annotations[SVIDFileNameAnnotation], pod.Annotations[BundleFileNameAnnotation], pod.Annotations[KeyFileNameAnnotation])
+	log.WithFields(logrus.Fields{"secret_name": secretName, "secret_filenames": secretNames}).Info("ensuring TLS secret")
 	if err := r.SecretsManager.EnsureTLSSecret(ctx, pod.Namespace, secretName, serviceName, entryID, entryHash, secretNames); err != nil {
 		log.WithError(err).Error("failed creating TLS secret")
 		return err
@@ -180,9 +180,8 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	dnsNames, err := r.resolvePodToCertDNSNames(pod)
-	// if somehow we got invalid dns name, we will move on with an Empty DNS name list
 	if err != nil {
-		log.Warnf("error resolving pod cert DNS names, will continue with an empty DNS names list: %s", err)
+		return ctrl.Result{}, fmt.Errorf("error resolving pod cert DNS names, will continue with an empty DNS names list: %w", err)
 	}
 
 	ttl := r.resolvePodToCertTTl(pod)
@@ -194,19 +193,27 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	entryPropertiesHashMaker := fnv.New32a()
-	_, err = entryPropertiesHashMaker.Write([]byte(pod.Namespace + ServiceNameSelectorLabel + serviceName + string(ttl) + strings.Join(dnsNames, "")))
+	hashStr, err := r.getEntryHash(pod.Namespace, serviceName, ttl, dnsNames)
 	if err != nil {
-		log.WithError(err).Error("failed hashing SPIRE entry properties")
 		return ctrl.Result{}, err
 	}
 
 	// generate TLS secret for pod
-	if err := r.generatePodTLSSecret(ctx, &pod, serviceName, entryID, strconv.Itoa(int(entryPropertiesHashMaker.Sum32()))); err != nil {
+	if err := r.generatePodTLSSecret(ctx, &pod, serviceName, entryID, hashStr); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *PodReconciler) getEntryHash(namespace string, serviceName string, ttl int32, dnsNames []string) (string, error) {
+	entryPropertiesHashMaker := fnv.New32a()
+	_, err := entryPropertiesHashMaker.Write([]byte(namespace + ServiceNameSelectorLabel + serviceName + string(ttl) + strings.Join(dnsNames, "")))
+	if err != nil {
+		return "", fmt.Errorf("failed hashing SPIRE entry properties %w", err)
+	}
+	hashStr := strconv.Itoa(int(entryPropertiesHashMaker.Sum32()))
+	return hashStr, nil
 }
 
 func (r *PodReconciler) resolvePodToCertDNSNames(pod corev1.Pod) ([]string, error) {

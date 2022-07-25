@@ -39,7 +39,7 @@ type SecretFileNames struct {
 	KeyFileName    string
 }
 
-func NewSecretFilesNames(svidFileName string, bundleFileName string, keyFileName string) SecretFileNames {
+func NewSecretFileNames(svidFileName string, bundleFileName string, keyFileName string) SecretFileNames {
 	newFileNames := SecretFileNames{}
 	newFileNames.SvidFileName, _ = lo.Coalesce(svidFileName, "svid.pem")
 	newFileNames.KeyFileName, _ = lo.Coalesce(keyFileName, "key.pem")
@@ -187,7 +187,7 @@ func (m *managerImpl) refreshTLSSecret(ctx context.Context, secret *corev1.Secre
 		return errors.New("entry ID annotation is missing")
 	}
 
-	secretFileNamesFromAnnotations := NewSecretFilesNames(secret.Annotations[SVIDFileNameAnnotation], secret.Annotations[BundleFileNameAnnotation], secret.Annotations[KeyFileNameAnnotation])
+	secretFileNamesFromAnnotations := NewSecretFileNames(secret.Annotations[SVIDFileNameAnnotation], secret.Annotations[BundleFileNameAnnotation], secret.Annotations[KeyFileNameAnnotation])
 
 	newSecret, err := m.createTLSSecret(ctx, secret.Namespace, secret.Name, serviceName, entryId, secret.Annotations[entryHashAnnotation], secretFileNamesFromAnnotations)
 	if err != nil {

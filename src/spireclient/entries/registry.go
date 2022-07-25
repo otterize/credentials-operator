@@ -100,7 +100,7 @@ func (r *registryImpl) updateSpireEntry(ctx context.Context, entry *types.Entry)
 	batchUpdateEntryRequest := entryv1.BatchUpdateEntryRequest{Entries: []*types.Entry{entry}}
 	updateResp, err := r.entryClient.BatchUpdateEntry(ctx, &batchUpdateEntryRequest)
 	if err != nil {
-		return "", fmt.Errorf("entry update failed with error %s", err)
+		return "", fmt.Errorf("entry update failed with error %w", err)
 	} else if status := updateResp.Results[0].Status; status.Code != int32(codes.OK) {
 		return "", fmt.Errorf("entry update failed with status %s", status)
 	}

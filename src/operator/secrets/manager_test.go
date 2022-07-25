@@ -118,7 +118,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_NoExistingSecret() {
 		},
 	).Return(nil)
 
-	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", NewSecretFilesNames("", "", ""))
+	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", NewSecretFileNames("", "", ""))
 	s.Require().NoError(err)
 }
 
@@ -126,7 +126,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NeedsRefr
 	namespace := "test_namespace"
 	secretName := "test_secretname"
 	serviceName := "test_servicename"
-	secretFileNames := NewSecretFilesNames("", "", "")
+	secretFileNames := NewSecretFileNames("", "", "")
 	entryId := "/test"
 
 	s.client.EXPECT().Get(
@@ -168,7 +168,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NeedsRefr
 		},
 	).Return(nil)
 
-	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", NewSecretFilesNames("", "", ""))
+	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", NewSecretFileNames("", "", ""))
 	s.Require().NoError(err)
 }
 
@@ -176,7 +176,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NoRefresh
 	namespace := "test_namespace"
 	secretName := "test_secretname"
 	serviceName := "test_servicename"
-	secretFileNames := NewSecretFilesNames("", "", "")
+	secretFileNames := NewSecretFileNames("", "", "")
 	entryId := "/test"
 
 	s.client.EXPECT().Get(
@@ -200,7 +200,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NoRefresh
 		}
 	})
 
-	err := s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", NewSecretFilesNames("", "", ""))
+	err := s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", NewSecretFileNames("", "", ""))
 	s.Require().NoError(err)
 }
 
@@ -208,7 +208,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 	namespace := "test_namespace"
 	secretName := "test_secretname"
 	serviceName := "test_servicename"
-	secretFileNames := NewSecretFilesNames("", "", "")
+	secretFileNames := NewSecretFileNames("", "", "")
 
 	s.client.EXPECT().Get(
 		gomock.Any(),
@@ -238,7 +238,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 
 	s.mockTLSStores(entryId, testData)
 
-	newSecrets := NewSecretFilesNames("different", "names", "this-time")
+	newSecrets := NewSecretFileNames("different", "names", "this-time")
 
 	s.client.EXPECT().Update(
 		gomock.Any(),
@@ -262,7 +262,7 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded() {
 	secretName := "test_secretname"
 	serviceName := "test_servicename"
 	entryId := "/test"
-	secretFileNames := NewSecretFilesNames("", "", "")
+	secretFileNames := NewSecretFileNames("", "", "")
 
 	s.client.EXPECT().List(
 		gomock.Any(),
@@ -315,7 +315,7 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_NoRefreshNeeded() {
 	secretName := "test_secretname"
 	serviceName := "test_servicename"
 	entryId := "/test"
-	secretFileNames := NewSecretFilesNames("", "", "")
+	secretFileNames := NewSecretFileNames("", "", "")
 
 	s.client.EXPECT().List(
 		gomock.Any(),

@@ -49,11 +49,11 @@ func (s *storeImpl) GetX509SVID(ctx context.Context, entryID string, privateKey 
 
 	trustDomain, err := spiffeid.TrustDomainFromString(entry.SpiffeId.GetTrustDomain())
 	if err != nil {
-		return EncodedX509SVID{}, fmt.Errorf("failed parsing trust domain: %s", err)
+		return EncodedX509SVID{}, fmt.Errorf("failed parsing trust domain: %w", err)
 	}
 	spiffeID, err := spiffeid.FromPath(trustDomain, entry.SpiffeId.Path)
 	if err != nil {
-		return EncodedX509SVID{}, fmt.Errorf("failed parsing spiffID: %s", err)
+		return EncodedX509SVID{}, fmt.Errorf("failed parsing spiffID: %w", err)
 	}
 
 	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
