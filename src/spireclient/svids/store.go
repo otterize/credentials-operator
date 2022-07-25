@@ -23,9 +23,8 @@ type Store interface {
 }
 
 type storeImpl struct {
-	svidClient     svidv1.SVIDClient
-	entryClient    entryv1.EntryClient
-	parentSpiffeId spiffeid.ID
+	svidClient  svidv1.SVIDClient
+	entryClient entryv1.EntryClient
 }
 
 type EncodedX509SVID struct {
@@ -35,7 +34,7 @@ type EncodedX509SVID struct {
 }
 
 func NewSVIDsStore(spireClient spireclient.ServerClient) Store {
-	return &storeImpl{svidClient: spireClient.NewSVIDClient(), entryClient: spireClient.NewEntryClient(), parentSpiffeId: spireClient.GetSpiffeID()}
+	return &storeImpl{svidClient: spireClient.NewSVIDClient(), entryClient: spireClient.NewEntryClient()}
 }
 
 func (s *storeImpl) GeneratePrivateKey() (crypto.PrivateKey, error) {
@@ -45,12 +44,16 @@ func (s *storeImpl) GeneratePrivateKey() (crypto.PrivateKey, error) {
 func (s *storeImpl) GetX509SVID(ctx context.Context, entryID string, privateKey crypto.PrivateKey) (EncodedX509SVID, error) {
 	entry, err := s.entryClient.GetEntry(ctx, &entryv1.GetEntryRequest{Id: entryID})
 	if err != nil {
-		return EncodedX509SVID{}, err
+		return EncodedX509SVID{}, fmt.Errorf("failed querying for entry: %w", err)
 	}
 
-	spiffeID, err := spiffeid.FromPath(s.parentSpiffeId.TrustDomain(), entry.SpiffeId.Path)
+	trustDomain, err := spiffeid.TrustDomainFromString(entry.SpiffeId.GetTrustDomain())
 	if err != nil {
-		return EncodedX509SVID{}, err
+		return EncodedX509SVID{}, fmt.Errorf("failed parsing trust domain: %s", err)
+	}
+	spiffeID, err := spiffeid.FromPath(trustDomain, entry.SpiffeId.Path)
+	if err != nil {
+		return EncodedX509SVID{}, fmt.Errorf("failed parsing spiffID: %s", err)
 	}
 
 	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
@@ -68,7 +71,7 @@ func (s *storeImpl) GetX509SVID(ctx context.Context, entryID string, privateKey 
 	})
 
 	if err != nil {
-		return EncodedX509SVID{}, fmt.Errorf("unable to creating SVID: %w", err)
+		return EncodedX509SVID{}, fmt.Errorf("unable to mint SVID: %w", err)
 	}
 
 	svidPEM := new(bytes.Buffer)

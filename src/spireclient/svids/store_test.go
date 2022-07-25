@@ -33,10 +33,8 @@ type StoreSuite struct {
 }
 
 func (s *StoreSuite) SetupTest() {
-	clientSpiffeID, _ := spiffeid.FromPath(trustDomain, "/client")
 	s.controller = gomock.NewController(s.T())
 	s.spireClient = mock_spireclient.NewMockServerClient(s.controller)
-	s.spireClient.EXPECT().GetSpiffeID().Return(clientSpiffeID)
 	s.svidClient = mock_svidv1.NewMockSVIDClient(s.controller)
 	s.spireClient.EXPECT().NewSVIDClient().Return(s.svidClient)
 	s.entryClient = mock_entryv1.NewMockEntryClient(s.controller)
@@ -73,7 +71,7 @@ func (s *StoreSuite) TestStore_GetTrustBundle() {
 	s.Require().NoError(err)
 
 	s.svidClient.EXPECT().MintX509SVID(gomock.Any(), gomock.Any()).Return(&svidv1.MintX509SVIDResponse{Svid: testSVID}, nil)
-	s.entryClient.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(&types.Entry{Id: entryID, SpiffeId: &types.SPIFFEID{Path: "/abc"}}, nil)
+	s.entryClient.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(&types.Entry{Id: entryID, SpiffeId: &types.SPIFFEID{Path: "/abc", TrustDomain: trustDomain.String()}}, nil)
 
 	retSVID, err := s.store.GetX509SVID(context.Background(), entryId, privateKey)
 	s.Require().NoError(err)

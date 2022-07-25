@@ -182,7 +182,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	dnsNames, err := r.resolvePodToCertDNSNames(pod)
 	// if somehow we got invalid dns name, we will move on with an Empty DNS name list
 	if err != nil {
-		log.Warnf("%s", err)
+		log.Warnf("error resolving pod cert DNS names, will continue with an empty DNS names list: %s", err)
 	}
 
 	ttl := r.resolvePodToCertTTl(pod)
@@ -210,30 +210,33 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 }
 
 func (r *PodReconciler) resolvePodToCertDNSNames(pod corev1.Pod) ([]string, error) {
-	if len(pod.Annotations[DNSNamesAnnotation]) != 0 {
-		dnsNames := strings.Split(pod.Annotations[DNSNamesAnnotation], ",")
-		for _, name := range dnsNames {
-			if !govalidator.IsDNSName(name) {
-				return nil, fmt.Errorf("invalid DNS name: %s", name)
-			}
-		}
-		return dnsNames, nil
+	if len(pod.Annotations[DNSNamesAnnotation]) == 0 {
+		return nil, nil
 	}
-	return nil, nil
+
+	dnsNames := strings.Split(pod.Annotations[DNSNamesAnnotation], ",")
+	for _, name := range dnsNames {
+		if !govalidator.IsDNSName(name) {
+			return nil, fmt.Errorf("invalid DNS name: %s", name)
+		}
+	}
+	return dnsNames, nil
 }
 
 func (r *PodReconciler) resolvePodToCertTTl(pod corev1.Pod) int32 {
-	var ttl int32
 	ttlString := pod.Annotations[CertTTLAnnotation]
-	if len(ttlString) != 0 {
-		ttl64, err := strconv.ParseInt(ttlString, 0, 32)
-		if err != nil {
-			logrus.Warningf("Failed converting ttl Label to int: %s", err)
-		} else {
-			ttl = int32(ttl64)
-		}
+	if len(ttlString) == 0 {
+		return 0
 	}
-	return ttl
+
+	ttl64, err := strconv.ParseInt(ttlString, 0, 32)
+
+	if err != nil {
+		logrus.Warnf("Failed cconverting ttl: %s str to Int. %s", ttlString, err)
+		return 0
+	}
+
+	return int32(ttl64)
 }
 
 // SetupWithManager sets up the controller with the Manager.
