@@ -99,6 +99,40 @@ func (s *RegistrySuite) TestRegistry_RegisterK8SPodEntry() {
 
 }
 
+func (s *RegistrySuite) TestShouldUpdateEntry() {
+	spiffeID, _ := spiffeid.FromPath(trustDomain, "/otterize/namespace/test-namespace/service/test-service-name")
+	entry1 := &types.Entry{
+		Id:       "test",
+		Ttl:      555,
+		DnsNames: []string{"hi.com"},
+		SpiffeId: &types.SPIFFEID{
+			TrustDomain: spiffeID.TrustDomain().String(),
+			Path:        spiffeID.Path(),
+		},
+	}
+	entry2 := &types.Entry{
+		Id:       "test",
+		Ttl:      555,
+		DnsNames: []string{"hi1.com"},
+		SpiffeId: &types.SPIFFEID{
+			TrustDomain: spiffeID.TrustDomain().String(),
+			Path:        spiffeID.Path(),
+		},
+	}
+	entry3 := &types.Entry{
+		Id:       "test",
+		Ttl:      666,
+		DnsNames: []string{"hi.com"},
+		SpiffeId: &types.SPIFFEID{
+			TrustDomain: spiffeID.TrustDomain().String(),
+			Path:        spiffeID.Path(),
+		},
+	}
+	s.Require().True(shouldUpdateEntry(entry1, entry2))
+	s.Require().True(shouldUpdateEntry(entry1, entry3))
+	s.Require().True(shouldUpdateEntry(entry2, entry3))
+}
+
 func TestRunRegistrySuite(t *testing.T) {
 	suite.Run(t, new(RegistrySuite))
 }

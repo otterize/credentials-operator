@@ -204,7 +204,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NoRefresh
 	s.Require().NoError(err)
 }
 
-func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNeeded() {
+func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNeeded_NewSecrets() {
 	namespace := "test_namespace"
 	secretName := "test_secretname"
 	serviceName := "test_servicename"
@@ -254,6 +254,59 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 	).Return(nil)
 
 	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", newSecrets)
+	s.Require().NoError(err)
+}
+
+func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNeeded_EntryHashChanged() {
+	namespace := "test_namespace"
+	secretName := "test_secretname"
+	serviceName := "test_servicename"
+	secretFileNames := NewSecretFileNames("", "", "")
+
+	s.client.EXPECT().Get(
+		gomock.Any(),
+		types.NamespacedName{Name: secretName, Namespace: namespace},
+		gomock.Any(),
+	).Return(nil).Do(func(ctx context.Context, key client.ObjectKey, found *corev1.Secret) {
+		*found = corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: namespace,
+				Annotations: map[string]string{
+					svidExpiryAnnotation:           time.Now().Add(2 * secretExpiryDelta).Format(time.RFC3339),
+					SVIDFileNameAnnotation:         secretFileNames.SvidFileName,
+					BundleFileNameAnnotation:       secretFileNames.BundleFileName,
+					KeyFileNameAnnotation:          secretFileNames.KeyFileName,
+					tlsSecretServiceNameAnnotation: serviceName,
+					entryHashAnnotation:            "",
+				},
+			},
+		}
+	})
+
+	testData, err := testdata.LoadTestData()
+	s.Require().NoError(err)
+
+	entryId := "/test"
+
+	s.mockTLSStores(entryId, testData)
+
+	newEntryHash := "New-Hash"
+
+	s.client.EXPECT().Update(
+		gomock.Any(),
+		&TLSSecretMatcher{
+			namespace: namespace,
+			name:      secretName,
+			tlsData: map[string][]byte{
+				secretFileNames.BundleFileName: testData.BundlePEM,
+				secretFileNames.KeyFileName:    testData.KeyPEM,
+				secretFileNames.SvidFileName:   testData.SVIDPEM,
+			},
+		},
+	).Return(nil)
+
+	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, newEntryHash, secretFileNames)
 	s.Require().NoError(err)
 }
 

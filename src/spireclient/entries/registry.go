@@ -78,7 +78,7 @@ func (r *registryImpl) RegisterK8SPodEntry(ctx context.Context, namespace string
 	case int32(codes.OK):
 		log.WithField("entry_id", result.Entry.Id).Info("SPIRE server entry created")
 	case int32(codes.AlreadyExists):
-		if r.shouldUpdateEntry(result, &entry) {
+		if shouldUpdateEntry(result.Entry, &entry) {
 			entry.Id = result.Entry.Id
 			id, err := r.updateSpireEntry(ctx, &entry)
 			if err != nil {
@@ -107,6 +107,6 @@ func (r *registryImpl) updateSpireEntry(ctx context.Context, entry *types.Entry)
 	return updateResp.Results[0].Entry.Id, nil
 }
 
-func (r *registryImpl) shouldUpdateEntry(createResult *entryv1.BatchCreateEntryResponse_Result, desiredEntry *types.Entry) bool {
-	return createResult.Entry.Ttl != desiredEntry.Ttl || !slices.Equal(createResult.Entry.DnsNames, desiredEntry.DnsNames)
+func shouldUpdateEntry(createResultEntry *types.Entry, desiredEntry *types.Entry) bool {
+	return createResultEntry.Ttl != desiredEntry.Ttl || !slices.Equal(createResultEntry.DnsNames, desiredEntry.DnsNames)
 }
