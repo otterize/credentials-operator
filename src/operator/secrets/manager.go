@@ -34,8 +34,8 @@ type CertType string
 
 const (
 	tlsSecretType = SecretType("TLS")
-	jksCertType   = CertType("jksCertType")
-	pemCertType   = CertType("pemCertType")
+	jksCertType   = CertType("jks")
+	pemCertType   = CertType("pem")
 )
 
 func strToCertType(strCertType string) CertType {
@@ -57,9 +57,9 @@ type SecretFileNames struct {
 
 func NewSecretFileNames(svidFileName string, bundleFileName string, keyFileName string) SecretFileNames {
 	newFileNames := SecretFileNames{}
-	newFileNames.SvidFileName, _ = lo.Coalesce(svidFileName, "svid.pemCertType")
-	newFileNames.KeyFileName, _ = lo.Coalesce(keyFileName, "key.pemCertType")
-	newFileNames.BundleFileName, _ = lo.Coalesce(bundleFileName, "bundle.pemCertType")
+	newFileNames.SvidFileName, _ = lo.Coalesce(svidFileName, "svid.pem")
+	newFileNames.KeyFileName, _ = lo.Coalesce(keyFileName, "key.pem")
+	newFileNames.BundleFileName, _ = lo.Coalesce(bundleFileName, "bundle.pem")
 	return newFileNames
 }
 
