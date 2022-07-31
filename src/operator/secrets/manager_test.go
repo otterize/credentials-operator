@@ -118,7 +118,9 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_NoExistingSecret() {
 		},
 	).Return(nil)
 
-	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", NewSecretFileNames("", "", ""))
+	secretConf := NewSecretConfig(entryId, "", secretName, namespace, serviceName, "", NewSecretFileNames("", "", ""))
+
+	err = s.manager.EnsureTLSSecret(context.Background(), secretConf)
 	s.Require().NoError(err)
 }
 
@@ -145,6 +147,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NeedsRefr
 					KeyFileNameAnnotation:          secretFileNames.KeyFileName,
 					tlsSecretServiceNameAnnotation: serviceName,
 					tlsSecretEntryIDAnnotation:     entryId,
+					certTypeAnnotation:             "pem",
 				},
 			},
 		}
@@ -168,7 +171,8 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NeedsRefr
 		},
 	).Return(nil)
 
-	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", NewSecretFileNames("", "", ""))
+	secretConf := NewSecretConfig(entryId, "", secretName, namespace, serviceName, "", NewSecretFileNames("", "", ""))
+	err = s.manager.EnsureTLSSecret(context.Background(), secretConf)
 	s.Require().NoError(err)
 }
 
@@ -195,12 +199,15 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NoRefresh
 					KeyFileNameAnnotation:          secretFileNames.KeyFileName,
 					tlsSecretServiceNameAnnotation: serviceName,
 					tlsSecretEntryIDAnnotation:     entryId,
+					certTypeAnnotation:             "pem",
 				},
 			},
 		}
 	})
 
-	err := s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", NewSecretFileNames("", "", ""))
+	secretConf := NewSecretConfig(entryId, "", secretName, namespace, serviceName, "", NewSecretFileNames("", "", ""))
+
+	err := s.manager.EnsureTLSSecret(context.Background(), secretConf)
 	s.Require().NoError(err)
 }
 
@@ -226,6 +233,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 					KeyFileNameAnnotation:          secretFileNames.KeyFileName,
 					tlsSecretServiceNameAnnotation: serviceName,
 					entryHashAnnotation:            "",
+					certTypeAnnotation:             "pem",
 				},
 			},
 		}
@@ -253,7 +261,9 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 		},
 	).Return(nil)
 
-	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, "", newSecrets)
+	secretConf := NewSecretConfig(entryId, "", secretName, namespace, serviceName, "", newSecrets)
+
+	err = s.manager.EnsureTLSSecret(context.Background(), secretConf)
 	s.Require().NoError(err)
 }
 
@@ -279,6 +289,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 					KeyFileNameAnnotation:          secretFileNames.KeyFileName,
 					tlsSecretServiceNameAnnotation: serviceName,
 					entryHashAnnotation:            "",
+					certTypeAnnotation:             "pem",
 				},
 			},
 		}
@@ -306,7 +317,65 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 		},
 	).Return(nil)
 
-	err = s.manager.EnsureTLSSecret(context.Background(), namespace, secretName, serviceName, entryId, newEntryHash, secretFileNames)
+	secretConf := NewSecretConfig(entryId, newEntryHash, secretName, namespace, serviceName, "", secretFileNames)
+
+	err = s.manager.EnsureTLSSecret(context.Background(), secretConf)
+	s.Require().NoError(err)
+}
+
+func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNeeded_CertTypeChanged() {
+	namespace := "test_namespace"
+	secretName := "test_secretname"
+	serviceName := "test_servicename"
+	secretFileNames := NewSecretFileNames("", "", "")
+
+	s.client.EXPECT().Get(
+		gomock.Any(),
+		types.NamespacedName{Name: secretName, Namespace: namespace},
+		gomock.Any(),
+	).Return(nil).Do(func(ctx context.Context, key client.ObjectKey, found *corev1.Secret) {
+		*found = corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: namespace,
+				Annotations: map[string]string{
+					svidExpiryAnnotation:           time.Now().Add(2 * secretExpiryDelta).Format(time.RFC3339),
+					SVIDFileNameAnnotation:         secretFileNames.SvidFileName,
+					BundleFileNameAnnotation:       secretFileNames.BundleFileName,
+					KeyFileNameAnnotation:          secretFileNames.KeyFileName,
+					tlsSecretServiceNameAnnotation: serviceName,
+					entryHashAnnotation:            "",
+					certTypeAnnotation:             "jks",
+				},
+			},
+		}
+	})
+
+	testData, err := testdata.LoadTestData()
+	s.Require().NoError(err)
+
+	entryId := "/test"
+
+	s.mockTLSStores(entryId, testData)
+
+	newCertType := "pem"
+
+	s.client.EXPECT().Update(
+		gomock.Any(),
+		&TLSSecretMatcher{
+			namespace: namespace,
+			name:      secretName,
+			tlsData: map[string][]byte{
+				secretFileNames.BundleFileName: testData.BundlePEM,
+				secretFileNames.KeyFileName:    testData.KeyPEM,
+				secretFileNames.SvidFileName:   testData.SVIDPEM,
+			},
+		},
+	).Return(nil)
+
+	secretConf := NewSecretConfig(entryId, "", secretName, namespace, serviceName, newCertType, secretFileNames)
+
+	err = s.manager.EnsureTLSSecret(context.Background(), secretConf)
 	s.Require().NoError(err)
 }
 
@@ -335,6 +404,7 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded() {
 							SVIDFileNameAnnotation:         secretFileNames.SvidFileName,
 							BundleFileNameAnnotation:       secretFileNames.BundleFileName,
 							KeyFileNameAnnotation:          secretFileNames.KeyFileName,
+							certTypeAnnotation:             "pem",
 						},
 					},
 				},
@@ -388,6 +458,7 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_NoRefreshNeeded() {
 							SVIDFileNameAnnotation:         secretFileNames.SvidFileName,
 							BundleFileNameAnnotation:       secretFileNames.BundleFileName,
 							KeyFileNameAnnotation:          secretFileNames.KeyFileName,
+							certTypeAnnotation:             "pem",
 						},
 					},
 				},
@@ -397,6 +468,24 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_NoRefreshNeeded() {
 
 	err := s.manager.RefreshTLSSecrets(context.Background())
 	s.Require().NoError(err)
+}
+
+func (s *ManagerSuite) TestJksTrustStoreCreate() {
+	testData, err := testdata.LoadTestData()
+	s.Require().NoError(err)
+	bundle := bundles.EncodedTrustBundle{BundlePEM: testData.BundlePEM}
+	trustBundle, err := trustBundleToTrustStore(bundle)
+	s.Require().NoError(err)
+	s.Require().NotNil(trustBundle)
+}
+
+func (s *ManagerSuite) TestJksKeyStoreCreate() {
+	testData, err := testdata.LoadTestData()
+	s.Require().NoError(err)
+	svid := svids.EncodedX509SVID{SVIDPEM: testData.SVIDPEM, KeyPEM: testData.KeyPEM}
+	trustBundle, err := svidToKeyStore(svid)
+	s.Require().NoError(err)
+	s.Require().NotNil(trustBundle)
 }
 
 func TestRunManagerSuite(t *testing.T) {

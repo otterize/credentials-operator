@@ -31,6 +31,7 @@ const (
 	KeyFileNameAnnotation    = "otterize/key-file-name"
 	DNSNamesAnnotation       = "otterize/dns-names"
 	CertTTLAnnotation        = "otterize/cert-ttl"
+	CertTypeAnnotation       = "otterize/cert-type"
 	ServiceNameSelectorLabel = "spire-integration-operator/service-name"
 )
 
@@ -141,7 +142,8 @@ func (r *PodReconciler) generatePodTLSSecret(ctx context.Context, pod *corev1.Po
 	secretName := pod.Annotations[TLSSecretNameAnnotation]
 	secretNames := secrets.NewSecretFileNames(pod.Annotations[SVIDFileNameAnnotation], pod.Annotations[BundleFileNameAnnotation], pod.Annotations[KeyFileNameAnnotation])
 	log.WithFields(logrus.Fields{"secret_name": secretName, "secret_filenames": secretNames}).Info("ensuring TLS secret")
-	if err := r.SecretsManager.EnsureTLSSecret(ctx, pod.Namespace, secretName, serviceName, entryID, entryHash, secretNames); err != nil {
+	secretConfig := secrets.NewSecretConfig(entryID, entryHash, secretName, pod.Namespace, serviceName, pod.Annotations[CertTypeAnnotation], secretNames)
+	if err := r.SecretsManager.EnsureTLSSecret(ctx, secretConfig); err != nil {
 		log.WithError(err).Error("failed creating TLS secret")
 		return err
 	}
