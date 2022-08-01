@@ -12,9 +12,11 @@ import (
 	"time"
 )
 
+const certificateEnd = "-----END CERTIFICATE-----\n"
+
 func svidToKeyStore(svid svids.EncodedX509SVID) ([]byte, error) {
 	var certChain []keystore.Certificate
-	for _, certPEM := range bytes.SplitAfter(svid.SVIDPEM, []byte("-----END CERTIFICATE-----\n")) {
+	for _, certPEM := range bytes.SplitAfter(svid.SVIDPEM, []byte(certificateEnd)) {
 		if len(certPEM) != 0 {
 			cert := keystore.Certificate{
 				Type:    "X509",
@@ -58,7 +60,7 @@ func svidToKeyStore(svid svids.EncodedX509SVID) ([]byte, error) {
 
 func trustBundleToTrustStore(trustBundle bundles.EncodedTrustBundle) ([]byte, error) {
 	trustStore := keystore.New()
-	for i, caPEM := range bytes.SplitAfter(trustBundle.BundlePEM, []byte("-----END CERTIFICATE-----\n")) {
+	for i, caPEM := range bytes.SplitAfter(trustBundle.BundlePEM, []byte(certificateEnd)) {
 		if len(caPEM) != 0 {
 			ca := keystore.TrustedCertificateEntry{
 				CreationTime: time.Now(),
