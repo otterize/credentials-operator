@@ -2,6 +2,9 @@ package secrets
 
 import (
 	"bytes"
+	"crypto/x509"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"github.com/otterize/spire-integration-operator/src/spireclient/bundles"
 	"github.com/otterize/spire-integration-operator/src/spireclient/svids"
@@ -21,13 +24,27 @@ func svidToKeyStore(svid svids.EncodedX509SVID) ([]byte, error) {
 		}
 	}
 	keyStore := keystore.New()
+	block, _ := pem.Decode(svid.KeyPEM)
+	if block == nil {
+		return nil, errors.New("error decoding private key PEM block")
+	}
+
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return nil, err
+	}
 
 	pk := keystore.PrivateKeyEntry{
 		CreationTime:     time.Now(),
-		PrivateKey:       svid.KeyPEM,
+		PrivateKey:       keyDER,
 		CertificateChain: certChain,
 	}
-	err := keyStore.SetPrivateKeyEntry("pkey", pk, []byte("password"))
+	err = keyStore.SetPrivateKeyEntry("pkey", pk, []byte("password"))
 	if err != nil {
 		return nil, err
 	}
@@ -41,17 +58,19 @@ func svidToKeyStore(svid svids.EncodedX509SVID) ([]byte, error) {
 
 func trustBundleToTrustStore(trustBundle bundles.EncodedTrustBundle) ([]byte, error) {
 	trustStore := keystore.New()
-	for i, caPEM := range bytes.SplitAfter(trustBundle.BundlePEM, []byte("-----END CERTIFICATE-----")) {
-		ca := keystore.TrustedCertificateEntry{
-			CreationTime: time.Now(),
-			Certificate: keystore.Certificate{
-				Type:    "X509",
-				Content: caPEM,
-			},
-		}
-		err := trustStore.SetTrustedCertificateEntry(fmt.Sprintf("ca-%d", i), ca)
-		if err != nil {
-			return nil, err
+	for i, caPEM := range bytes.SplitAfter(trustBundle.BundlePEM, []byte("-----END CERTIFICATE-----\n")) {
+		if len(caPEM) != 0 {
+			ca := keystore.TrustedCertificateEntry{
+				CreationTime: time.Now(),
+				Certificate: keystore.Certificate{
+					Type:    "X509",
+					Content: caPEM,
+				},
+			}
+			err := trustStore.SetTrustedCertificateEntry(fmt.Sprintf("ca-%d", i), ca)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	trustStoreBytesBuffer := new(bytes.Buffer)
