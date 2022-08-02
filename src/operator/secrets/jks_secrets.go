@@ -9,22 +9,21 @@ import (
 	"github.com/otterize/spire-integration-operator/src/spireclient/bundles"
 	"github.com/otterize/spire-integration-operator/src/spireclient/svids"
 	"github.com/pavlo-v-chernykh/keystore-go/v4"
+	"github.com/samber/lo"
 	"time"
 )
 
 const certificateEnd = "-----END CERTIFICATE-----\n"
 
-func svidToKeyStore(svid svids.EncodedX509SVID) ([]byte, error) {
-	var certChain []keystore.Certificate
-	for _, certPEM := range bytes.SplitAfter(svid.SVIDPEM, []byte(certificateEnd)) {
-		if len(certPEM) != 0 {
-			cert := keystore.Certificate{
-				Type:    "X509",
-				Content: certPEM,
-			}
-			certChain = append(certChain, cert)
+func svidToKeyStore(svid svids.EncodedX509SVID, password string) ([]byte, error) {
+	notEmptyCertPems := lo.Filter(bytes.SplitAfter(svid.SVIDPEM, []byte(certificateEnd)), func(pem []byte, _ int) bool { return len(pem) != 0 })
+	certChain := lo.Map(notEmptyCertPems, func(certPem []byte, _ int) keystore.Certificate {
+		return keystore.Certificate{
+			Type:    "X509",
+			Content: certPem,
 		}
-	}
+	})
+
 	keyStore := keystore.New()
 	block, _ := pem.Decode(svid.KeyPEM)
 	if block == nil {
@@ -46,37 +45,36 @@ func svidToKeyStore(svid svids.EncodedX509SVID) ([]byte, error) {
 		PrivateKey:       keyDER,
 		CertificateChain: certChain,
 	}
-	err = keyStore.SetPrivateKeyEntry("pkey", pk, []byte("password"))
+	err = keyStore.SetPrivateKeyEntry("pkey", pk, []byte(password))
 	if err != nil {
 		return nil, err
 	}
 	keyStoreBytesBuffer := new(bytes.Buffer)
-	err = keyStore.Store(keyStoreBytesBuffer, []byte("password"))
+	err = keyStore.Store(keyStoreBytesBuffer, []byte(password))
 	if err != nil {
 		return nil, err
 	}
 	return keyStoreBytesBuffer.Bytes(), nil
 }
 
-func trustBundleToTrustStore(trustBundle bundles.EncodedTrustBundle) ([]byte, error) {
+func trustBundleToTrustStore(trustBundle bundles.EncodedTrustBundle, password string) ([]byte, error) {
 	trustStore := keystore.New()
-	for i, caPEM := range bytes.SplitAfter(trustBundle.BundlePEM, []byte(certificateEnd)) {
-		if len(caPEM) != 0 {
-			ca := keystore.TrustedCertificateEntry{
-				CreationTime: time.Now(),
-				Certificate: keystore.Certificate{
-					Type:    "X509",
-					Content: caPEM,
-				},
-			}
-			err := trustStore.SetTrustedCertificateEntry(fmt.Sprintf("ca-%d", i), ca)
-			if err != nil {
-				return nil, err
-			}
+	notEmptyCaPems := lo.Filter(bytes.SplitAfter(trustBundle.BundlePEM, []byte(certificateEnd)), func(pem []byte, _ int) bool { return len(pem) != 0 })
+	for i, caPEM := range notEmptyCaPems {
+		ca := keystore.TrustedCertificateEntry{
+			CreationTime: time.Now(),
+			Certificate: keystore.Certificate{
+				Type:    "X509",
+				Content: caPEM,
+			},
+		}
+		err := trustStore.SetTrustedCertificateEntry(fmt.Sprintf("ca-%d", i), ca)
+		if err != nil {
+			return nil, err
 		}
 	}
 	trustStoreBytesBuffer := new(bytes.Buffer)
-	err := trustStore.Store(trustStoreBytesBuffer, []byte("password"))
+	err := trustStore.Store(trustStoreBytesBuffer, []byte(password))
 	if err != nil {
 		return nil, err
 	}

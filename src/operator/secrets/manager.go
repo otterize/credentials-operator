@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strings"
 	"time"
 )
 
@@ -26,6 +27,9 @@ const (
 	KeyFileNameAnnotation          = "otterize/key-file-name"
 	entryHashAnnotation            = "otterize/entry-hash"
 	certTypeAnnotation             = "otterize/cert-type"
+	KeystoreAnnotation             = "otterize/keystore-file-name"
+	TruststoreAnnotation           = "otterize/truststore-file-name"
+	JksPasswordAnnotation          = "otterize/jks-password"
 	secretExpiryDelta              = 10 * time.Minute
 )
 
@@ -34,54 +38,72 @@ type CertType string
 
 const (
 	tlsSecretType = SecretType("TLS")
-	jksCertType   = CertType("jks")
-	pemCertType   = CertType("pem")
+	JksCertType   = CertType("jks")
+	PemCertType   = CertType("pem")
 )
 
-func strToCertType(strCertType string) CertType {
-	switch CertType(strCertType) {
-	case jksCertType:
-		return jksCertType
-	case pemCertType:
-		return pemCertType
+func StrToCertType(strCertType string) CertType {
+	switch CertType(strings.ToLower(strCertType)) {
+	case JksCertType:
+		return JksCertType
+	case PemCertType:
+		return PemCertType
 	default:
-		return pemCertType
+		return PemCertType
 	}
 }
 
-type SecretFileNames struct {
+type PemConfig struct {
 	SvidFileName   string
 	BundleFileName string
 	KeyFileName    string
 }
 
-func NewSecretFileNames(svidFileName string, bundleFileName string, keyFileName string) SecretFileNames {
-	newFileNames := SecretFileNames{}
+func NewPemConfig(svidFileName string, bundleFileName string, keyFileName string) PemConfig {
+	newFileNames := PemConfig{}
 	newFileNames.SvidFileName, _ = lo.Coalesce(svidFileName, "svid.pem")
 	newFileNames.KeyFileName, _ = lo.Coalesce(keyFileName, "key.pem")
 	newFileNames.BundleFileName, _ = lo.Coalesce(bundleFileName, "bundle.pem")
 	return newFileNames
 }
 
-type SecretConfig struct {
-	EntryID         string
-	EntryHash       string
-	SecretName      string
-	Namespace       string
-	ServiceName     string
-	CertType        CertType
-	SecretFileNames SecretFileNames
+type JksConfig struct {
+	KeyStoreFileName   string
+	TrustStoreFileName string
+	Password           string
 }
 
-func NewSecretConfig(entryID string, entryHash string, secretName string, namespace string, serviceName string, certType string, secretFileNames SecretFileNames) SecretConfig {
+func NewJksConfig(keystoreFileName string, truststoreFileName string, password string) JksConfig {
+	newFileNames := JksConfig{}
+	newFileNames.KeyStoreFileName, _ = lo.Coalesce(keystoreFileName, "keystore.jks")
+	newFileNames.TrustStoreFileName, _ = lo.Coalesce(truststoreFileName, "truststore.jks")
+	newFileNames.Password, _ = lo.Coalesce(password, "password")
+	return newFileNames
+}
+
+type CertConfig struct {
+	CertType  CertType
+	JksConfig JksConfig
+	PemConfig PemConfig
+}
+
+type SecretConfig struct {
+	EntryID     string
+	EntryHash   string
+	SecretName  string
+	Namespace   string
+	ServiceName string
+	CertConfig  CertConfig
+}
+
+func NewSecretConfig(entryID string, entryHash string, secretName string, namespace string, serviceName string, certConfig CertConfig) SecretConfig {
 	return SecretConfig{
-		EntryID:         entryID,
-		EntryHash:       entryHash,
-		SecretName:      secretName,
-		Namespace:       namespace,
-		ServiceName:     serviceName,
-		CertType:        strToCertType(certType),
-		SecretFileNames: secretFileNames,
+		EntryID:     entryID,
+		EntryHash:   entryHash,
+		SecretName:  secretName,
+		Namespace:   namespace,
+		ServiceName: serviceName,
+		CertConfig:  certConfig,
 	}
 }
 
@@ -92,11 +114,18 @@ func SecretConfigFromExistingSecret(secret *corev1.Secret) SecretConfig {
 		EntryID:     secret.Annotations[tlsSecretEntryIDAnnotation],
 		EntryHash:   secret.Annotations[entryHashAnnotation],
 		Namespace:   secret.Namespace,
-		CertType:    CertType(secret.Annotations[certTypeAnnotation]),
-		SecretFileNames: SecretFileNames{
-			SvidFileName:   secret.Annotations[SVIDFileNameAnnotation],
-			BundleFileName: secret.Annotations[BundleFileNameAnnotation],
-			KeyFileName:    secret.Annotations[KeyFileNameAnnotation],
+		CertConfig: CertConfig{
+			CertType: CertType(secret.Annotations[certTypeAnnotation]),
+			PemConfig: PemConfig{
+				SvidFileName:   secret.Annotations[SVIDFileNameAnnotation],
+				BundleFileName: secret.Annotations[BundleFileNameAnnotation],
+				KeyFileName:    secret.Annotations[KeyFileNameAnnotation],
+			},
+			JksConfig: JksConfig{
+				KeyStoreFileName:   secret.Annotations[KeystoreAnnotation],
+				TrustStoreFileName: secret.Annotations[TruststoreAnnotation],
+				Password:           secret.Annotations[JksPasswordAnnotation],
+			},
 		},
 	}
 }
@@ -172,7 +201,7 @@ func (m *managerImpl) createTLSSecret(ctx context.Context, config SecretConfig) 
 	expiry := time.Unix(svid.ExpiresAt, 0)
 	expiryStr := expiry.Format(time.RFC3339)
 
-	secretData, err := m.generateSecretData(trustBundle, svid, config.SecretFileNames, config.CertType)
+	secretData, err := m.generateSecretData(trustBundle, svid, config.CertConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -188,10 +217,13 @@ func (m *managerImpl) createTLSSecret(ctx context.Context, config SecretConfig) 
 				svidExpiryAnnotation:           expiryStr,
 				tlsSecretServiceNameAnnotation: config.ServiceName,
 				tlsSecretEntryIDAnnotation:     config.EntryID,
-				SVIDFileNameAnnotation:         config.SecretFileNames.SvidFileName,
-				BundleFileNameAnnotation:       config.SecretFileNames.BundleFileName,
-				KeyFileNameAnnotation:          config.SecretFileNames.KeyFileName,
+				SVIDFileNameAnnotation:         config.CertConfig.PemConfig.SvidFileName,
+				BundleFileNameAnnotation:       config.CertConfig.PemConfig.BundleFileName,
+				KeyFileNameAnnotation:          config.CertConfig.PemConfig.KeyFileName,
 				entryHashAnnotation:            config.EntryHash,
+				KeystoreAnnotation:             config.CertConfig.JksConfig.KeyStoreFileName,
+				TruststoreAnnotation:           config.CertConfig.JksConfig.TrustStoreFileName,
+				JksPasswordAnnotation:          config.CertConfig.JksConfig.Password,
 			},
 		},
 		Data: secretData,
@@ -200,30 +232,30 @@ func (m *managerImpl) createTLSSecret(ctx context.Context, config SecretConfig) 
 	return &secret, nil
 }
 
-func (m *managerImpl) generateSecretData(trustBundle bundles.EncodedTrustBundle, svid svids.EncodedX509SVID, secretFileNames SecretFileNames, certType CertType) (map[string][]byte, error) {
-	switch certType {
-	case jksCertType:
-		trustStoreBytes, err := trustBundleToTrustStore(trustBundle)
+func (m *managerImpl) generateSecretData(trustBundle bundles.EncodedTrustBundle, svid svids.EncodedX509SVID, certConfig CertConfig) (map[string][]byte, error) {
+	switch certConfig.CertType {
+	case JksCertType:
+		trustStoreBytes, err := trustBundleToTrustStore(trustBundle, certConfig.JksConfig.Password)
 		if err != nil {
 			return nil, err
 		}
 
-		keyStoreBytes, err := svidToKeyStore(svid)
+		keyStoreBytes, err := svidToKeyStore(svid, certConfig.JksConfig.Password)
 		if err != nil {
 			return nil, err
 		}
 		return map[string][]byte{
-			secretFileNames.BundleFileName: trustStoreBytes,
-			secretFileNames.SvidFileName:   keyStoreBytes,
+			certConfig.JksConfig.TrustStoreFileName: trustStoreBytes,
+			certConfig.JksConfig.KeyStoreFileName:   keyStoreBytes,
 		}, nil
-	case pemCertType:
+	case PemCertType:
 		return map[string][]byte{
-			secretFileNames.BundleFileName: trustBundle.BundlePEM,
-			secretFileNames.KeyFileName:    svid.KeyPEM,
-			secretFileNames.SvidFileName:   svid.SVIDPEM,
+			certConfig.PemConfig.BundleFileName: trustBundle.BundlePEM,
+			certConfig.PemConfig.KeyFileName:    svid.KeyPEM,
+			certConfig.PemConfig.SvidFileName:   svid.SVIDPEM,
 		}, nil
 	default:
-		return nil, fmt.Errorf("failed generating secret data. unsupported cert type %s", certType)
+		return nil, fmt.Errorf("failed generating secret data. unsupported cert type %s", certConfig.CertType)
 	}
 }
 
