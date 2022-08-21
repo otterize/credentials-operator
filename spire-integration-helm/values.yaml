@@ -1,0 +1,10 @@
+
+spireIntegration:
+  image:
+    repository: 353146681200.dkr.ecr.us-east-1.amazonaws.com/otterize-tools:spire-integration-operator-latest
+    pullPolicy: Always
+
+spire:
+  clusterName: "example-cluster"
+  trustDomain: "example.org"
+  socketsPath: "/run/spire/sockets"
