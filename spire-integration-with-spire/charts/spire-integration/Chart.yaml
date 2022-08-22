@@ -1,0 +1,10 @@
+apiVersion: v1
+name: spire-integration-operator
+description: spire-integration-operator
+type: application
+version: 0.0.1
+appVersion: "1.0.2"
+home: https://github.com/otterize/spire-integration-operator
+sources:
+  - https://github.com/otterize/spire-integration-operator/helm
+

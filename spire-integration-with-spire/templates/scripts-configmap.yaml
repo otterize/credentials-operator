@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spire-scripts
+  namespace: {{ .Release.Namespace }}
+data:
+  init_entries.sh: |-
+    set -e
+    echo "checking spire-server status"
+    while ! /opt/spire/bin/spire-server entry show &> /dev/null; do
+      echo "server seems to be down"
+      sleep 2
+    done
+    echo "server is up!"
+
+    # create spire entries for the agent and integration
+    AGENT_SPIFFE_ID="spiffe://{{ .Values.spire.trustDomain }}/ns/{{ .Release.Namespace }}/sa/spire-agent"
+    INTEGRATION_SPIFFE_ID="spiffe://{{ .Values.spire.trustDomain }}/{{ .Release.Namespace }}/spire-integration-operator-system"
+
+    echo "ensuring agent entry"
+    if ! /opt/spire/bin/spire-server entry show -spiffeID $AGENT_SPIFFE_ID &> /dev/null; then
+      /opt/spire/bin/spire-server entry create -spiffeID $AGENT_SPIFFE_ID -selector k8s_psat:agent_ns:{{ .Release.Namespace }} -selector k8s_psat:agent_sa:spire-agent -node
+    fi
+
+    echo "ensuring integration entry"
+    if ! /opt/spire/bin/spire-server entry show -spiffeID $INTEGRATION_SPIFFE_ID -parentID $AGENT_SPIFFE_ID &> /dev/null; then
+      /opt/spire/bin/spire-server entry create -spiffeID $INTEGRATION_SPIFFE_ID -parentID $AGENT_SPIFFE_ID -selector k8s:ns:{{ .Release.Namespace }} -selector k8s:pod-label:app:spire-integration -admin
+    fi
