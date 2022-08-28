@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 const (
@@ -108,5 +111,10 @@ func main() {
 
 	if err := ensureKafkaTopic(a, testTopicName); err != nil {
 		logrus.WithError(err).Panic()
-	}
+	}	
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	<-ctx.Done()
+
 }

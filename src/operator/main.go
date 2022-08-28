@@ -42,7 +42,7 @@ func init() {
 
 func initSpireClient(ctx context.Context, spireServerAddr string) (spireclient.ServerClient, error) {
 	// fetch SVID & bundle through spire-agent API
-	source, err := workloadapi.NewX509Source(ctx, workloadapi.WithClientOptions(workloadapi.WithAddr(socketPath)))
+	source, err := workloadapi.NewX509Source(ctx, workloadapi.WithClientOptions(workloadapi.WithAddr(socketPath), workloadapi.WithLogger(logrus.StandardLogger())))
 	if err != nil {
 		return nil, err
 	}
@@ -66,6 +66,7 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.Parse()
 
 	ctrl.SetLogger(logrusr.New(logrus.StandardLogger()))
 
