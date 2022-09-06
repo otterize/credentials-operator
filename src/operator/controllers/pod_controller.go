@@ -7,6 +7,7 @@ import (
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/spire-integration-operator/src/operator/secrets"
 	"github.com/otterize/spire-integration-operator/src/spireclient/entries"
+	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 	"hash/fnv"
 	corev1 "k8s.io/api/core/v1"
@@ -15,6 +16,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"strconv"
 	"strings"
 	"time"
@@ -33,6 +35,8 @@ const (
 	TrustStoreNameAnnotation    = "otterize/truststore-file-name"
 	JksStoresPasswordAnnotation = "otterize/jks-password"
 	ServiceNameSelectorLabel    = "otterize/spire-integration-operator.service-name"
+
+	FinalizerName = "spire-integration-operator.otterize/finalizer"
 )
 
 // PodReconciler reconciles a Pod object
@@ -129,21 +133,8 @@ func certConfigFromPod(pod *corev1.Pod) secrets.CertConfig {
 	return certConfig
 }
 
-func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := logrus.WithField("pod", req.NamespacedName)
-
-	// Fetch the Pod from the Kubernetes API.
-	pod := &corev1.Pod{}
-	if err := r.Get(ctx, req.NamespacedName, pod); err != nil {
-		if apierrors.IsNotFound(err) {
-			// we'll ignore not-found errors, since they can't be fixed by an immediate
-			// requeue (we'll need to wait for a new notification), and we can get them
-			// on deleted requests.
-			return ctrl.Result{}, nil
-		}
-		log.WithError(err).Error("unable to fetch Pod")
-		return ctrl.Result{}, err
-	}
+func (r *PodReconciler) ensureSpireEntryAndSecret(ctx context.Context, pod *corev1.Pod) (ctrl.Result, error) {
+	log := logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace})
 
 	log.Info("updating SPIRE entries & secrets for pod")
 
@@ -199,6 +190,88 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *PodReconciler) cleanupOrphanSpireEntries(ctx context.Context, pod *corev1.Pod) error {
+	serviceNameLabelValue, ok := pod.Labels[ServiceNameSelectorLabel]
+	if !ok {
+		return nil
+	}
+
+	log := logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace, "service": serviceNameLabelValue})
+
+	var podList corev1.PodList
+
+	if err := r.List(ctx, &podList,
+		&client.ListOptions{Namespace: pod.Namespace},
+		client.MatchingLabels{ServiceNameSelectorLabel: serviceNameLabelValue}); err != nil {
+		r.eventRecorder.Eventf(pod, corev1.EventTypeWarning, "Failed listing pods with label %s=%s in namespace %s: %w",
+			ServiceNameSelectorLabel, serviceNameLabelValue, pod.Namespace, err.Error(),
+		)
+		return err
+	}
+
+	otherPods := lo.Filter(podList.Items, func(otherPod corev1.Pod, _ int) bool { return otherPod.UID != pod.UID })
+	if len(otherPods) > 0 {
+		// still some pods referencing spire entry
+		log.Infof("%d pods in namespace still belong to this service - keeping spire entry", len(otherPods))
+		return nil
+	}
+
+	log.Infof("No remaining pods in this namespace and service - deleting spire entry")
+
+	if err := r.entriesRegistry.DeleteK8SPodEntry(ctx, pod.Namespace, ServiceNameSelectorLabel, serviceNameLabelValue); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := logrus.WithField("pod", req.NamespacedName)
+
+	// Fetch the Pod from the Kubernetes API.
+	pod := &corev1.Pod{}
+	if err := r.Get(ctx, req.NamespacedName, pod); err != nil {
+		if apierrors.IsNotFound(err) {
+			// we'll ignore not-found errors, since they can't be fixed by an immediate
+			// requeue (we'll need to wait for a new notification), and we can get them
+			// on deleted requests.
+			return ctrl.Result{}, nil
+		}
+		log.WithError(err).Error("unable to fetch Pod")
+		return ctrl.Result{}, err
+	}
+
+	// examine DeletionTimestamp to determine if object is under deletion
+	if pod.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !controllerutil.ContainsFinalizer(pod, FinalizerName) {
+			log.Infof("Adding finalizer %s", FinalizerName)
+			controllerutil.AddFinalizer(pod, FinalizerName)
+			if err := r.Update(ctx, pod); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		// The object is being deleted
+		if controllerutil.ContainsFinalizer(pod, FinalizerName) {
+			if err := r.cleanupOrphanSpireEntries(ctx, pod); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			controllerutil.RemoveFinalizer(pod, FinalizerName)
+			if err := r.Update(ctx, pod); err != nil {
+				if apierrors.IsConflict(err) {
+					return ctrl.Result{Requeue: true}, nil
+				}
+				return ctrl.Result{}, err
+			}
+		}
+
+		return ctrl.Result{}, nil
+	}
+
+	return r.ensureSpireEntryAndSecret(ctx, pod)
 }
 
 func (r *PodReconciler) getEntryHash(namespace string, serviceName string, ttl int32, dnsNames []string) (string, error) {

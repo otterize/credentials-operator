@@ -34,6 +34,20 @@ func (m *MockRegistry) EXPECT() *MockRegistryMockRecorder {
 	return m.recorder
 }
 
+// DeleteK8SPodEntry mocks base method.
+func (m *MockRegistry) DeleteK8SPodEntry(arg0 context.Context, arg1, arg2, arg3 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteK8SPodEntry", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteK8SPodEntry indicates an expected call of DeleteK8SPodEntry.
+func (mr *MockRegistryMockRecorder) DeleteK8SPodEntry(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteK8SPodEntry", reflect.TypeOf((*MockRegistry)(nil).DeleteK8SPodEntry), arg0, arg1, arg2, arg3)
+}
+
 // RegisterK8SPodEntry mocks base method.
 func (m *MockRegistry) RegisterK8SPodEntry(arg0 context.Context, arg1, arg2, arg3 string, arg4 int32, arg5 []string) (string, error) {
 	m.ctrl.T.Helper()

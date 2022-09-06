@@ -169,6 +169,73 @@ func (s *RegistrySuite) TestRegistry_RegisterK8SPodEntry_DedupDnsNames() {
 	s.Require().Equal(entryId, response.Results[0].Entry.Id)
 }
 
+type batchDeleteEntryRequestMatcher struct {
+	entryIDs *[]string
+}
+
+func (m *batchDeleteEntryRequestMatcher) Matches(x interface{}) bool {
+	request, ok := x.(*entryv1.BatchDeleteEntryRequest)
+	if !ok {
+		return false
+	}
+
+	if len(request.Ids) != 1 {
+		return false
+	}
+
+	if m.entryIDs != nil && !slices.Equal(request.Ids, *m.entryIDs) {
+		return false
+	}
+
+	return true
+}
+
+func (m *batchDeleteEntryRequestMatcher) String() string {
+	return fmt.Sprintf("is a BatchDeleteEntryRequest")
+}
+
+func (s *RegistrySuite) TestRegistry_DeleteK8SPodEntry() {
+	namespace := "test-namespace"
+	serviceNameLabel := "test/service-name"
+	serviceName := "test-service-name"
+	entryId := "test-entryid"
+	spiffeID, err := spiffeid.FromPath(trustDomain, "/otterize/namespace/test-namespace/service/test-service-name")
+	s.Require().NoError(err)
+
+	listEntriesResponse := entryv1.ListEntriesResponse{
+		Entries: []*types.Entry{
+			{
+				Id: entryId,
+				SpiffeId: &types.SPIFFEID{
+					TrustDomain: spiffeID.TrustDomain().String(),
+					Path:        spiffeID.Path(),
+				},
+			},
+		},
+	}
+
+	s.entryClient.EXPECT().ListEntries(gomock.Any(), gomock.Any()).Return(&listEntriesResponse, nil)
+
+	deleteEntriesResponse := entryv1.BatchDeleteEntryResponse{
+		Results: []*entryv1.BatchDeleteEntryResponse_Result{
+			{Id: entryId},
+		},
+	}
+
+	m := batchDeleteEntryRequestMatcher{
+		entryIDs: lo.ToPtr([]string{entryId}),
+	}
+
+	s.entryClient.EXPECT().BatchDeleteEntry(gomock.Any(), &m).Return(&deleteEntriesResponse, nil)
+
+	err = s.registry.DeleteK8SPodEntry(context.Background(),
+		namespace,
+		serviceNameLabel,
+		serviceName)
+
+	s.Require().NoError(err)
+}
+
 func (s *RegistrySuite) TestShouldUpdateEntry() {
 	spiffeID, _ := spiffeid.FromPath(trustDomain, "/otterize/namespace/test-namespace/service/test-service-name")
 	entry1 := &types.Entry{

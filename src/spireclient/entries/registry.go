@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/otterize/spire-integration-operator/src/spireclient"
+	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	entryv1 "github.com/spiffe/spire-api-sdk/proto/spire/api/server/entry/v1"
@@ -15,6 +16,7 @@ import (
 
 type Registry interface {
 	RegisterK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string, ttl int32, dnsNames []string) (string, error)
+	DeleteK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string) error
 }
 
 type registryImpl struct {
@@ -109,6 +111,86 @@ func (r *registryImpl) updateSpireEntry(ctx context.Context, entry *types.Entry)
 		return "", fmt.Errorf("entry update failed with status %s", status)
 	}
 	return updateResp.Results[0].Entry.Id, nil
+}
+
+func (r *registryImpl) paginateDeleteK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string, pageToken string) (string, error) {
+	log := logrus.WithFields(logrus.Fields{"namespace": namespace, "service_name": serviceName})
+
+	trustDomain := r.parentSpiffeID.TrustDomain()
+	parentSpiffeIDPath := r.parentSpiffeID.Path()
+
+	listEntriesRequest := entryv1.ListEntriesRequest{
+		PageToken: pageToken,
+		Filter: &entryv1.ListEntriesRequest_Filter{
+			ByParentId: &types.SPIFFEID{
+				TrustDomain: trustDomain.String(),
+				Path:        parentSpiffeIDPath,
+			},
+			BySelectors: &types.SelectorMatch{
+				Selectors: []*types.Selector{
+					{Type: "k8s", Value: fmt.Sprintf("ns:%s", namespace)},
+					{Type: "k8s", Value: fmt.Sprintf("pod-label:%s=%s", serviceNameLabel, serviceName)},
+				},
+				Match: types.SelectorMatch_MATCH_EXACT,
+			},
+		},
+	}
+
+	listResp, err := r.entryClient.ListEntries(ctx, &listEntriesRequest)
+	if err != nil {
+		return "", fmt.Errorf("list entries failed with error %w", err)
+	}
+
+	if len(listResp.Entries) > 0 {
+		log.Infof("Deleting %d entries", len(listResp.Entries))
+		entryIds := lo.Map(listResp.Entries, func(entry *types.Entry, _ int) string { return entry.Id })
+		batchDeleteEntriesRequest := entryv1.BatchDeleteEntryRequest{
+			Ids: entryIds,
+		}
+
+		deleteResp, err := r.entryClient.BatchDeleteEntry(ctx, &batchDeleteEntriesRequest)
+		if err != nil {
+			return "", fmt.Errorf("entry delete failed with error %w", err)
+		}
+
+		errStatuses := lo.Filter(deleteResp.Results, func(res *entryv1.BatchDeleteEntryResponse_Result, _ int) bool {
+			if res.Status == nil {
+				return false
+			}
+
+			switch res.Status.Code {
+			case int32(codes.OK), int32(codes.NotFound):
+				return false
+			default:
+				return true
+			}
+		})
+
+		if len(errStatuses) != 0 {
+			return "", fmt.Errorf("entry delete failed with statuses %v", errStatuses)
+		}
+	} else {
+		log.Info("No entries to delete in this page")
+	}
+
+	return listResp.NextPageToken, nil
+}
+
+func (r *registryImpl) DeleteK8SPodEntry(ctx context.Context, namespace string, serviceNameLabel string, serviceName string) error {
+	log := logrus.WithFields(logrus.Fields{"namespace": namespace, "service_name": serviceName})
+	pageToken := ""
+	pages := 0
+	for pages == 0 || pageToken != "" {
+		log.Infof("Iterating over paginated list request, page number %d", pages+1)
+		nextPageToken, err := r.paginateDeleteK8SPodEntry(ctx, namespace, serviceNameLabel, serviceName, pageToken)
+		if err != nil {
+			return err
+		}
+		pages++
+		pageToken = nextPageToken
+	}
+
+	return nil
 }
 
 func shouldUpdateEntry(createResultEntry *types.Entry, desiredEntry *types.Entry) bool {
