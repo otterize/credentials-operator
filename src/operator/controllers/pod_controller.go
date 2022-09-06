@@ -32,7 +32,7 @@ const (
 	KeyStoreNameAnnotation      = "otterize/keystore-file-name"
 	TrustStoreNameAnnotation    = "otterize/truststore-file-name"
 	JksStoresPasswordAnnotation = "otterize/jks-password"
-	ServiceNameSelectorLabel    = "otterize/spire-integration-operator/service-name"
+	ServiceNameSelectorLabel    = "otterize/spire-integration-operator.service-name"
 )
 
 // PodReconciler reconciles a Pod object
