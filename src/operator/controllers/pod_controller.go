@@ -252,7 +252,7 @@ func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *PodReconciler) cleanupOrphanEntries(ctx context.Context) error {
 	podsList := corev1.PodList{}
 	if err := r.Client.List(ctx, &podsList, client.HasLabels{ServiceNameSelectorLabel}); err != nil {
-		return fmt.Errorf("error listing pods with servic ename labels: %w", err)
+		return fmt.Errorf("error listing pods with service name labels: %w", err)
 	}
 
 	existingServicesByNamespace := map[string]*goset.Set[string]{}
