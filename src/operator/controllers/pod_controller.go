@@ -154,7 +154,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	// Ensure the metadata.ServiceNameLabel is set
+	// Ensure the ServiceNameLabel is set
 	result, err := r.updatePodLabel(ctx, pod, metadata.ServiceNameLabel, serviceID)
 	if err != nil {
 		r.eventRecorder.Event(pod, corev1.EventTypeWarning, "Pod label update failed", err.Error())
