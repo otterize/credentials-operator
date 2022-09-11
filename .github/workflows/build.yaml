@@ -77,7 +77,7 @@ jobs:
       - name: Build & Test
         uses: docker/build-push-action@v2
         with:
-          context: src/
+          context: src/operator
           file: src/operator/Dockerfile
           tags: ${{ env.REGISTRY }}:spire-integration-operator-${{ github.sha }}
           push: true
