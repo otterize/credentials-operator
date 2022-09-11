@@ -15,7 +15,7 @@ RUN --mount=type=secret,id=github_token \
     git config --global --unset url."https://$GITHUB_TOKEN@github.com/".insteadOf
 
 COPY main.go main.go
-COPY controllers/ controllers/
+COPY controllers controllers
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
 
