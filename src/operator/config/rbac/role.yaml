@@ -6,9 +6,21 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - apps
   resources:
-  - deamonsets
+  - daemonsets
+  - deployments
   - replicasets
   - statefulsets
   verbs:
@@ -35,3 +47,4 @@ rules:
   - list
   - patch
   - update
+  - watch
