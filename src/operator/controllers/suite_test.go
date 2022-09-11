@@ -16,6 +16,8 @@ limitations under the License.
 
 package controllers
 
+// TODO: implement suite-test
+
 //import (
 //	"path/filepath"
 //	"testing"
