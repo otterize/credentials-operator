@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"github.com/amit7itz/goset"
 	"github.com/golang/mock/gomock"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/spire-integration-operator/src/controllers/metadata"
@@ -13,6 +14,7 @@ import (
 	mock_spireclient "github.com/otterize/spire-integration-operator/src/mocks/spireclient"
 	mock_entries "github.com/otterize/spire-integration-operator/src/mocks/spireclient/entries"
 	"github.com/stretchr/testify/suite"
+	"golang.org/x/exp/maps"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -132,6 +134,71 @@ func (s *PodControllerSuite) TestController_Reconcile() {
 	s.Require().NoError(err)
 	s.Require().True(result.IsZero())
 	s.Require().Equal(update.Labels[metadata.RegisteredServiceNameLabel], servicename)
+}
+
+func (s *PodControllerSuite) TestController_cleanupOrphanEntries() {
+	existingPods := corev1.PodList{
+		Items: []corev1.Pod{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "namespace1",
+					Name:      "pod1-1",
+					Labels: map[string]string{
+						metadata.RegisteredServiceNameLabel: "service1",
+					},
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "namespace1",
+					Name:      "pod1-2",
+					Labels: map[string]string{
+						metadata.RegisteredServiceNameLabel: "service2",
+					},
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "namespace2",
+					Name:      "pod2-1",
+					Labels: map[string]string{
+						metadata.RegisteredServiceNameLabel: "service1",
+					},
+				},
+			},
+		},
+	}
+
+	s.client.EXPECT().List(
+		gomock.Any(),
+		gomock.AssignableToTypeOf(&corev1.PodList{}),
+		client.HasLabels{metadata.RegisteredServiceNameLabel},
+	).Return(nil).Do(
+		func(ctx context.Context, returnedPods *corev1.PodList, opts ...client.ListOption) {
+			*returnedPods = existingPods
+		})
+
+	var receivedExistingServicesByNamespace map[string]*goset.Set[string]
+
+	s.entriesRegistry.EXPECT().CleanupOrphanK8SPodEntries(
+		gomock.Any(),
+		metadata.RegisteredServiceNameLabel,
+		gomock.Any(),
+	).Do(func(ctx context.Context, serviceNameLabel string, existingServicesByNamespace map[string]*goset.Set[string]) error {
+		receivedExistingServicesByNamespace = existingServicesByNamespace
+		return nil
+	})
+
+	err := s.podReconciler.cleanupOrphanEntries(context.Background())
+	s.Require().NoError(err)
+	expectedExistingServicesByNamespace := map[string]*goset.Set[string]{
+		"namespace1": goset.NewSet[string]("service1", "service2"),
+		"namespace2": goset.NewSet[string]("service1"),
+	}
+	s.Require().ElementsMatch(maps.Keys(receivedExistingServicesByNamespace), maps.Keys(expectedExistingServicesByNamespace))
+	for namespace, services := range expectedExistingServicesByNamespace {
+		s.Require().ElementsMatch(services.Items(), receivedExistingServicesByNamespace[namespace].Items())
+	}
 }
 
 func TestRunPodControllerSuite(t *testing.T) {
