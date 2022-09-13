@@ -2,9 +2,11 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"github.com/golang/mock/gomock"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/spire-integration-operator/src/controllers/metadata"
+	"github.com/otterize/spire-integration-operator/src/controllers/secrets"
 	"github.com/otterize/spire-integration-operator/src/mocks/controller-runtime/client"
 	mock_secrets "github.com/otterize/spire-integration-operator/src/mocks/controllers/secrets"
 	mock_record "github.com/otterize/spire-integration-operator/src/mocks/eventrecorder"
@@ -19,6 +21,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strings"
 	"testing"
 )
 
@@ -50,29 +53,52 @@ func (s *PodControllerSuite) SetupTest() {
 		serviceIdResolver, eventRecorder)
 }
 
+type ObjectNameMatcher struct {
+	name      string
+	namespace string
+}
+
+func (m *ObjectNameMatcher) Matches(x interface{}) bool {
+	obj, ok := x.(metav1.Object)
+	if !ok {
+		return false
+	}
+
+	return obj.GetName() == m.name && obj.GetNamespace() == m.namespace
+}
+
+func (m *ObjectNameMatcher) String() string {
+	return fmt.Sprintf("%T(name=%s, namespace=%s)", m, m.name, m.namespace)
+}
+
 func (s *PodControllerSuite) TestController_Reconcile() {
 	namespace := "test_namespace"
 	podname := "test_podname"
 	servicename := "test_servicename"
 	secretname := "test_secretname"
 	entryID := "test"
+	ttl := int32(99999)
+	extraDnsNames := []string{"asd.com", "bla.org"}
+	pod := corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      podname,
+			Annotations: map[string]string{
+				serviceidresolver.ServiceNameAnnotation: servicename,
+				metadata.TLSSecretNameAnnotation:        secretname,
+				metadata.CertTTLAnnotation:              fmt.Sprintf("%d", ttl),
+				metadata.DNSNamesAnnotation:             strings.Join(extraDnsNames, ","),
+			},
+		},
+	}
 
 	s.client.EXPECT().Get(
 		gomock.Any(),
 		types.NamespacedName{Namespace: namespace, Name: podname},
 		gomock.AssignableToTypeOf(&corev1.Pod{}),
 	).Return(nil).Do(
-		func(ctx context.Context, key client.ObjectKey, pod *corev1.Pod) {
-			*pod = corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: namespace,
-					Name:      podname,
-					Annotations: map[string]string{
-						serviceidresolver.ServiceNameAnnotation: servicename,
-						metadata.TLSSecretNameAnnotation:        secretname,
-					},
-				},
-			}
+		func(ctx context.Context, key client.ObjectKey, returnedPod *corev1.Pod) {
+			*returnedPod = pod
 		})
 
 	// expect update pod labels
@@ -83,11 +109,23 @@ func (s *PodControllerSuite) TestController_Reconcile() {
 	})
 
 	// expect spire entry registration
-	s.entriesRegistry.EXPECT().RegisterK8SPodEntry(gomock.Any(), namespace, metadata.RegisteredServiceNameLabel, servicename, int32(0), nil).
+	s.entriesRegistry.EXPECT().RegisterK8SPodEntry(gomock.Any(), namespace, metadata.RegisteredServiceNameLabel, servicename, ttl, extraDnsNames).
 		Return(entryID, nil)
 
 	// expect TLS secret creation
-	s.secretsManager.EXPECT().EnsureTLSSecret(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	entryHash, err := getEntryHash(namespace, servicename, ttl, extraDnsNames)
+	s.NoError(err)
+	s.secretsManager.EXPECT().EnsureTLSSecret(
+		gomock.Any(),
+		secrets.NewSecretConfig(
+			entryID,
+			entryHash,
+			secretname,
+			namespace,
+			servicename,
+			certConfigFromPod(&pod),
+		),
+		&ObjectNameMatcher{name: podname, namespace: namespace}).Return(nil)
 
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: namespace, Name: podname}}
 	result, err := s.podReconciler.Reconcile(context.Background(), request)
