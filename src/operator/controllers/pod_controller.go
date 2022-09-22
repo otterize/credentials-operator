@@ -25,15 +25,15 @@ import (
 const (
 	refreshSecretsLoopTick                = time.Minute
 	cleanupOrphanEntriesLoopTick          = 10 * time.Minute
-	ReasonPodTLSEnsured                   = "PodTLSEnsured"
+	ReasonEnsuredPodTLS                   = "EnsuredPodTLS"
+	ReasonEnsuringPodTLSFailed            = "EnsuringPodTLSFailed"
 	ReasonPodOwnerResolutionFailed        = "PodOwnerResolutionFailed"
 	ReasonPodLabelUpdateFailed            = "PodLabelUpdateFailed"
 	ReasonCertDNSResolutionFailed         = "CertDNSResolutionFailed"
 	ReasonCertTTLError                    = "CertTTLError"
 	ReasonSpireEntryRegistrationFailed    = "SpireEntryRegistrationFailed"
 	ReasonPodRegistered                   = "PodRegistered"
-	ReasonSpireEntryHashCalculationFailed = "SpireEntryHashCalculationFailed"
-	ReasonTLSCreationFailed               = "TLSCreationFailed"
+	ReasonSPIREEntryHashCalculationFailed = "SPIREEntryHashCalculationFailed"
 )
 
 // PodReconciler reconciles a Pod object
@@ -113,7 +113,7 @@ func (r *PodReconciler) ensurePodTLSSecret(ctx context.Context, pod *corev1.Pod,
 		return err
 	}
 
-	r.eventRecorder.Eventf(pod, corev1.EventTypeNormal, ReasonPodTLSEnsured, "Successfully ensured secret under name '%s'", secretName)
+	r.eventRecorder.Eventf(pod, corev1.EventTypeNormal, ReasonEnsuredPodTLS, "Successfully ensured secret under name '%s'", secretName)
 
 	return nil
 }
@@ -198,13 +198,13 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	hashStr, err := getEntryHash(pod.Namespace, serviceID, ttl, dnsNames)
 	if err != nil {
-		r.eventRecorder.Eventf(pod, corev1.EventTypeWarning, ReasonSpireEntryHashCalculationFailed, "Failed calculating SPIRE entry hash: %s", err.Error())
+		r.eventRecorder.Eventf(pod, corev1.EventTypeWarning, ReasonSPIREEntryHashCalculationFailed, "Failed calculating SPIRE entry hash: %s", err.Error())
 		return ctrl.Result{}, err
 	}
 
 	// generate TLS secret for pod
 	if err := r.ensurePodTLSSecret(ctx, pod, serviceID, entryID, hashStr); err != nil {
-		r.eventRecorder.Eventf(pod, corev1.EventTypeWarning, ReasonTLSCreationFailed, "Failed creating TLS secret for pod: %s", err.Error())
+		r.eventRecorder.Eventf(pod, corev1.EventTypeWarning, ReasonEnsuringPodTLSFailed, "Failed creating TLS secret for pod: %s", err.Error())
 		return ctrl.Result{}, err
 	}
 
