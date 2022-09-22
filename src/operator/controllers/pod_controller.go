@@ -31,7 +31,7 @@ const (
 	ReasonPodLabelUpdateFailed            = "PodLabelUpdateFailed"
 	ReasonCertDNSResolutionFailed         = "CertDNSResolutionFailed"
 	ReasonCertTTLError                    = "CertTTLError"
-	ReasonSpireEntryRegistrationFailed    = "SpireEntryRegistrationFailed"
+	ReasonSPIREEntryRegistrationFailed    = "SPIREEntryRegistrationFailed"
 	ReasonPodRegistered                   = "PodRegistered"
 	ReasonSPIREEntryHashCalculationFailed = "SPIREEntryHashCalculationFailed"
 )
@@ -191,7 +191,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	entryID, err := r.entriesRegistry.RegisterK8SPodEntry(ctx, pod.Namespace, metadata.RegisteredServiceNameLabel, serviceID, ttl, dnsNames)
 	if err != nil {
 		log.WithError(err).Error("failed registering SPIRE entry for pod")
-		r.eventRecorder.Eventf(pod, corev1.EventTypeWarning, ReasonSpireEntryRegistrationFailed, "Failed registering SPIRE entry: %s", err.Error())
+		r.eventRecorder.Eventf(pod, corev1.EventTypeWarning, ReasonSPIREEntryRegistrationFailed, "Failed registering SPIRE entry: %s", err.Error())
 		return ctrl.Result{}, err
 	}
 	r.eventRecorder.Eventf(pod, corev1.EventTypeNormal, ReasonPodRegistered, "Successfully registered pod under SPIRE with entry ID '%s'", entryID)
