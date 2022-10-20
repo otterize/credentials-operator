@@ -9,7 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	secrets "github.com/otterize/spire-integration-operator/src/controllers/secrets"
+	secrets "github.com/otterize/spire-integration-operator/src/operator/controllers/secrets"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

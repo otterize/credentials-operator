@@ -7,7 +7,7 @@ package mock_svids
 import (
 	context "context"
 	crypto "crypto"
-	"github.com/otterize/spire-integration-operator/src/controllers/spireclient/svids"
+	"github.com/otterize/spire-integration-operator/src/operator/controllers/spireclient/svids"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"

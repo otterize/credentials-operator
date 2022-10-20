@@ -6,9 +6,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/otterize/spire-integration-operator/src/controllers/spireclient/bundles"
-	"github.com/otterize/spire-integration-operator/src/controllers/spireclient/svids"
-	"github.com/pavlo-v-chernykh/keystore-go/v4"
+	"github.com/otterize/spire-integration-operator/src/operator/controllers/spireclient/bundles"
+	"github.com/otterize/spire-integration-operator/src/operator/controllers/spireclient/svids"
 	"github.com/samber/lo"
 	"time"
 )

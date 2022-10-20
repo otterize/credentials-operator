@@ -1,4 +1,4 @@
-module github.com/otterize/spire-integration-operator/src
+module github.com/otterize/spire-integration-operator/src/operator
 
 go 1.18
 
@@ -8,7 +8,6 @@ require (
 	github.com/bombsimon/logrusr/v3 v3.0.0
 	github.com/golang/mock v1.6.0
 	github.com/otterize/intents-operator/src v0.0.0-20220908093359-0838c363d68c
-	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.0
 	github.com/samber/lo v1.25.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spiffe/go-spiffe/v2 v2.0.1-0.20220414143532-2ed460a8b9d3

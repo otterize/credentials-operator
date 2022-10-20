@@ -6,7 +6,7 @@ package mock_bundles
 
 import (
 	context "context"
-	"github.com/otterize/spire-integration-operator/src/controllers/spireclient/bundles"
+	"github.com/otterize/spire-integration-operator/src/operator/controllers/spireclient/bundles"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
