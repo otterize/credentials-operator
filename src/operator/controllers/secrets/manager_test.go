@@ -26,7 +26,7 @@ type ManagerSuite struct {
 	controller  *gomock.Controller
 	client      *mock_client.MockClient
 	mockCertGen *mock_certificates.MockCertificateDataGenerator
-	manager     *SecretManager
+	manager     *KubernetesSecretsManager
 }
 
 func (s *ManagerSuite) SetupTest() {

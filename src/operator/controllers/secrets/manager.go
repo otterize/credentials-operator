@@ -43,16 +43,16 @@ func SecretConfigFromExistingSecret(secret *corev1.Secret) secretstypes.SecretCo
 	}
 }
 
-type SecretManager struct {
+type KubernetesSecretsManager struct {
 	client.Client
 	certificateDataGenerator secretstypes.CertificateDataGenerator
 }
 
-func NewSecretManager(c client.Client, tlsSecretUpdater secretstypes.CertificateDataGenerator) *SecretManager {
-	return &SecretManager{Client: c, certificateDataGenerator: tlsSecretUpdater}
+func NewSecretManager(c client.Client, tlsSecretUpdater secretstypes.CertificateDataGenerator) *KubernetesSecretsManager {
+	return &KubernetesSecretsManager{Client: c, certificateDataGenerator: tlsSecretUpdater}
 }
 
-func (m *SecretManager) isRefreshNeeded(secret *corev1.Secret) bool {
+func (m *KubernetesSecretsManager) isRefreshNeeded(secret *corev1.Secret) bool {
 	log := logrus.WithFields(logrus.Fields{"secret.namespace": secret.Namespace, "secret.name": secret.Name})
 	expiryBaseline := time.Now().Add(secretExpiryDelta)
 	expiryStr, ok := secret.Annotations[metadata.TLSSecretSVIDExpiryAnnotation]
@@ -78,7 +78,7 @@ func (m *SecretManager) isRefreshNeeded(secret *corev1.Secret) bool {
 	return false
 }
 
-func (m *SecretManager) getExistingSecret(ctx context.Context, namespace string, name string) (*corev1.Secret, bool, error) {
+func (m *KubernetesSecretsManager) getExistingSecret(ctx context.Context, namespace string, name string) (*corev1.Secret, bool, error) {
 	found := corev1.Secret{}
 	if err := m.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &found); err != nil && apierrors.IsNotFound(err) {
 		return nil, false, nil
@@ -89,7 +89,7 @@ func (m *SecretManager) getExistingSecret(ctx context.Context, namespace string,
 	return &found, true, nil
 }
 
-func (m *SecretManager) updateTLSSecret(ctx context.Context, config secretstypes.SecretConfig, secret *corev1.Secret) error {
+func (m *KubernetesSecretsManager) updateTLSSecret(ctx context.Context, config secretstypes.SecretConfig, secret *corev1.Secret) error {
 	certificateData, err := m.certificateDataGenerator.Generate(ctx, config)
 	if err != nil {
 		return err
@@ -117,7 +117,7 @@ func (m *SecretManager) updateTLSSecret(ctx context.Context, config secretstypes
 	return nil
 }
 
-func (m *SecretManager) EnsureTLSSecret(ctx context.Context, config secretstypes.SecretConfig, owner metav1.Object) error {
+func (m *KubernetesSecretsManager) EnsureTLSSecret(ctx context.Context, config secretstypes.SecretConfig, owner metav1.Object) error {
 	log := logrus.WithFields(logrus.Fields{"secret.namespace": config.Namespace, "secret.name": config.SecretName})
 
 	existingSecret, isExistingSecret, err := m.getExistingSecret(ctx, config.Namespace, config.SecretName)
@@ -171,7 +171,7 @@ func (m *SecretManager) EnsureTLSSecret(ctx context.Context, config secretstypes
 	return nil
 }
 
-func (m *SecretManager) refreshTLSSecret(ctx context.Context, secret *corev1.Secret) error {
+func (m *KubernetesSecretsManager) refreshTLSSecret(ctx context.Context, secret *corev1.Secret) error {
 	log := logrus.WithFields(logrus.Fields{"secret.namespace": secret.Namespace, "secret.name": secret.Name})
 	_, ok := secret.Annotations[metadata.TLSSecretRegisteredServiceNameAnnotation]
 	if !ok {
@@ -192,7 +192,7 @@ func (m *SecretManager) refreshTLSSecret(ctx context.Context, secret *corev1.Sec
 	return m.Update(ctx, secret)
 }
 
-func (m *SecretManager) RefreshTLSSecrets(ctx context.Context) error {
+func (m *KubernetesSecretsManager) RefreshTLSSecrets(ctx context.Context) error {
 	logrus.Info("refreshing TLS secrets")
 	secrets := corev1.SecretList{}
 	if err := m.List(ctx, &secrets, &client.MatchingLabels{metadata.SecretTypeLabel: string(secretstypes.TlsSecretType)}); err != nil {
@@ -219,7 +219,7 @@ func (m *SecretManager) RefreshTLSSecrets(ctx context.Context) error {
 	return nil
 }
 
-func (m *SecretManager) isUpdateNeeded(existingSecretConfig secretstypes.SecretConfig, newSecretConfig secretstypes.SecretConfig) bool {
+func (m *KubernetesSecretsManager) isUpdateNeeded(existingSecretConfig secretstypes.SecretConfig, newSecretConfig secretstypes.SecretConfig) bool {
 	log := logrus.WithFields(logrus.Fields{"secret.namespace": existingSecretConfig.Namespace, "secret.name": existingSecretConfig.SecretName})
 	needsUpdate := existingSecretConfig != newSecretConfig
 	log.Infof("needs update: %v", needsUpdate)
