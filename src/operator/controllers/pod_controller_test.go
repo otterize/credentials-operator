@@ -7,7 +7,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/spire-integration-operator/src/controllers/metadata"
-	"github.com/otterize/spire-integration-operator/src/controllers/secrets"
+	"github.com/otterize/spire-integration-operator/src/controllers/secrets/types"
 	"github.com/otterize/spire-integration-operator/src/mocks/controller-runtime/client"
 	mock_secrets "github.com/otterize/spire-integration-operator/src/mocks/controllers/secrets"
 	mock_record "github.com/otterize/spire-integration-operator/src/mocks/eventrecorder"
@@ -119,7 +119,7 @@ func (s *PodControllerSuite) TestController_Reconcile() {
 	s.NoError(err)
 	s.secretsManager.EXPECT().EnsureTLSSecret(
 		gomock.Any(),
-		secrets.NewSecretConfig(
+		secretstypes.NewSecretConfig(
 			entryID,
 			entryHash,
 			secretname,
