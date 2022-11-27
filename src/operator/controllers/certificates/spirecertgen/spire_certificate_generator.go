@@ -2,7 +2,6 @@ package spirecertgen
 
 import (
 	"context"
-	"fmt"
 	"github.com/otterize/spire-integration-operator/src/controllers/secrets/types"
 	"github.com/otterize/spire-integration-operator/src/controllers/spireclient/bundles"
 	"github.com/otterize/spire-integration-operator/src/controllers/spireclient/svids"
@@ -14,60 +13,69 @@ type SpireCertificateDataGenerator struct {
 	svidsStore   svids.Store
 }
 
+type spireCert struct {
+	TrustBundle bundles.EncodedTrustBundle
+	Svid        svids.EncodedX509SVID
+	Expiry      string
+}
+
 func NewSpireCertificateDataGenerator(bundlesStore bundles.Store, svidsStore svids.Store) *SpireCertificateDataGenerator {
 	return &SpireCertificateDataGenerator{bundlesStore: bundlesStore, svidsStore: svidsStore}
 }
 
-func (m *SpireCertificateDataGenerator) Generate(ctx context.Context, config secretstypes.SecretConfig) (secretstypes.CertificateData, error) {
+func (m *SpireCertificateDataGenerator) getSpireCert(ctx context.Context, entryID string) (spireCert, error) {
 	trustBundle, err := m.bundlesStore.GetTrustBundle(ctx)
 	if err != nil {
-		return secretstypes.CertificateData{}, err
+		return spireCert{}, err
 	}
 
 	privateKey, err := m.svidsStore.GeneratePrivateKey()
 
 	if err != nil {
-		return secretstypes.CertificateData{}, err
+		return spireCert{}, err
 	}
 
-	svid, err := m.svidsStore.GetX509SVID(ctx, config.EntryID, privateKey)
+	svid, err := m.svidsStore.GetX509SVID(ctx, entryID, privateKey)
 	if err != nil {
-		return secretstypes.CertificateData{}, err
+		return spireCert{}, err
 	}
 
 	expiry := time.Unix(svid.ExpiresAt, 0)
 	expiryStr := expiry.Format(time.RFC3339)
 
-	secretData, err := m.generateSecretData(trustBundle, svid, config.CertConfig)
-	if err != nil {
-		return secretstypes.CertificateData{}, nil
-	}
-	return secretstypes.CertificateData{Files: secretData, ExpiryStr: expiryStr}, nil
+	return spireCert{TrustBundle: trustBundle, Svid: svid, Expiry: expiryStr}, nil
 }
 
-func (m *SpireCertificateDataGenerator) generateSecretData(trustBundle bundles.EncodedTrustBundle, svid svids.EncodedX509SVID, certConfig secretstypes.CertConfig) (map[string][]byte, error) {
-	switch certConfig.CertType {
-	case secretstypes.JksCertType:
-		trustStoreBytes, err := trustBundleToTrustStore(trustBundle, certConfig.JksConfig.Password)
-		if err != nil {
-			return nil, err
-		}
-
-		keyStoreBytes, err := svidToKeyStore(svid, certConfig.JksConfig.Password)
-		if err != nil {
-			return nil, err
-		}
-		return map[string][]byte{
-			certConfig.JksConfig.TrustStoreFileName: trustStoreBytes,
-			certConfig.JksConfig.KeyStoreFileName:   keyStoreBytes,
-		}, nil
-	case secretstypes.PemCertType:
-		return map[string][]byte{
-			certConfig.PemConfig.BundleFileName: trustBundle.BundlePEM,
-			certConfig.PemConfig.KeyFileName:    svid.KeyPEM,
-			certConfig.PemConfig.SvidFileName:   svid.SVIDPEM,
-		}, nil
-	default:
-		return nil, fmt.Errorf("failed generating secret data. unsupported cert type %s", certConfig.CertType)
+func (m *SpireCertificateDataGenerator) GenerateJKS(ctx context.Context, entryID string, password string) (secretstypes.JKSCert, error) {
+	spireCertificate, err := m.getSpireCert(ctx, entryID)
+	if err != nil {
+		return secretstypes.JKSCert{}, err
 	}
+
+	trustStoreBytes, err := trustBundleToTrustStore(spireCertificate.TrustBundle, password)
+
+	if err != nil {
+		return secretstypes.JKSCert{}, err
+	}
+
+	keyStoreBytes, err := svidToKeyStore(spireCertificate.Svid, password)
+
+	if err != nil {
+		return secretstypes.JKSCert{}, err
+	}
+
+	return secretstypes.JKSCert{TrustStore: trustStoreBytes, KeyStore: keyStoreBytes, Expiry: spireCertificate.Expiry}, nil
+}
+
+func (m *SpireCertificateDataGenerator) GeneratePem(ctx context.Context, entryID string) (secretstypes.PemCert, error) {
+	spireCertificate, err := m.getSpireCert(ctx, entryID)
+	if err != nil {
+		return secretstypes.PemCert{}, err
+	}
+
+	return secretstypes.PemCert{
+		Svid:   spireCertificate.Svid.SVIDPEM,
+		Key:    spireCertificate.Svid.KeyPEM,
+		Bundle: spireCertificate.TrustBundle.BundlePEM,
+		Expiry: spireCertificate.Expiry}, nil
 }

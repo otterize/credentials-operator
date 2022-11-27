@@ -3,6 +3,7 @@ package secrets
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/otterize/spire-integration-operator/src/controllers/metadata"
 	"github.com/otterize/spire-integration-operator/src/controllers/secrets/types"
 	"github.com/samber/lo"
@@ -89,8 +90,39 @@ func (m *KubernetesSecretsManager) getExistingSecret(ctx context.Context, namesp
 	return &found, true, nil
 }
 
+func (m *KubernetesSecretsManager) getCertificateData(ctx context.Context, entryID string, certConfig secretstypes.CertConfig) (secretstypes.CertificateData, error) {
+	switch certConfig.CertType {
+	case secretstypes.JksCertType:
+		jksCert, err := m.certificateDataGenerator.GenerateJKS(ctx, entryID, certConfig.JksConfig.Password)
+		if err != nil {
+			return secretstypes.CertificateData{}, err
+		}
+		return secretstypes.CertificateData{
+			Files: map[string][]byte{
+				certConfig.JksConfig.KeyStoreFileName:   jksCert.KeyStore,
+				certConfig.JksConfig.TrustStoreFileName: jksCert.TrustStore,
+			},
+			ExpiryStr: jksCert.Expiry,
+		}, nil
+	case secretstypes.PemCertType:
+		pemCert, err := m.certificateDataGenerator.GeneratePem(ctx, entryID)
+		if err != nil {
+			return secretstypes.CertificateData{}, err
+		}
+		return secretstypes.CertificateData{
+			Files: map[string][]byte{
+				certConfig.PemConfig.BundleFileName: pemCert.Bundle,
+				certConfig.PemConfig.KeyFileName:    pemCert.Key,
+				certConfig.PemConfig.SvidFileName:   pemCert.Svid,
+			},
+		}, nil
+	default:
+		return secretstypes.CertificateData{}, fmt.Errorf("failed generating secret data. unsupported cert type %s", certConfig.CertType)
+	}
+}
+
 func (m *KubernetesSecretsManager) updateTLSSecret(ctx context.Context, config secretstypes.SecretConfig, secret *corev1.Secret) error {
-	certificateData, err := m.certificateDataGenerator.Generate(ctx, config)
+	certificateData, err := m.getCertificateData(ctx, config.EntryID, config.CertConfig)
 	if err != nil {
 		return err
 	}

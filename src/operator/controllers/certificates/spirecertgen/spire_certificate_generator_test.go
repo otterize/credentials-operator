@@ -1,7 +1,9 @@
 package spirecertgen
 
 import (
+	"bytes"
 	"context"
+	"encoding/pem"
 	"github.com/golang/mock/gomock"
 	"github.com/otterize/spire-integration-operator/src/controllers/secrets/types"
 	"github.com/otterize/spire-integration-operator/src/controllers/spireclient/bundles"
@@ -9,8 +11,10 @@ import (
 	mock_bundles "github.com/otterize/spire-integration-operator/src/mocks/spireclient/bundles"
 	mock_svids "github.com/otterize/spire-integration-operator/src/mocks/spireclient/svids"
 	"github.com/otterize/spire-integration-operator/src/testdata"
+	"github.com/pavlo-v-chernykh/keystore-go/v4"
 	"github.com/spiffe/spire/pkg/common/pemutil"
 	"github.com/stretchr/testify/suite"
+	"strings"
 	"testing"
 	"time"
 )
@@ -55,10 +59,7 @@ func (s *ManagerSuite) mockTLSStores(entryId string, testData testdata.TestData)
 	).Return(encodedX509SVID, nil)
 }
 
-func (s *ManagerSuite) TestCertGenerator_Generate() {
-	namespace := "test_namespace"
-	secretName := "test_secretname"
-	serviceName := "test_servicename"
+func (s *ManagerSuite) TestCertGenerator_GeneratePem() {
 
 	testData, err := testdata.LoadTestData()
 	s.Require().NoError(err)
@@ -66,27 +67,63 @@ func (s *ManagerSuite) TestCertGenerator_Generate() {
 
 	s.mockTLSStores(entryId, testData)
 
-	certConfig := secretstypes.CertConfig{
-		CertType:  secretstypes.StrToCertType("pem"),
-		PemConfig: secretstypes.NewPemConfig("", "", ""),
-	}
-
-	secretConf := secretstypes.NewSecretConfig(entryId, "", secretName, namespace, serviceName, certConfig)
-
-	certData, err := s.certGenerator.Generate(context.Background(), secretConf)
+	certPem, err := s.certGenerator.GeneratePem(context.Background(), entryId)
 	s.Require().NoError(err)
 	expiry, err := time.Parse(ExpiryTimeTestLayout, ExpiryTimeTestStr)
 	s.Require().NoError(err)
 	expiryUnix := time.Unix(expiry.Unix(), 0)
-	expectedCertData := secretstypes.CertificateData{
-		Files: map[string][]byte{
-			certConfig.PemConfig.BundleFileName: testData.BundlePEM,
-			certConfig.PemConfig.KeyFileName:    testData.KeyPEM,
-			certConfig.PemConfig.SvidFileName:   testData.SVIDPEM,
-		},
-		ExpiryStr: expiryUnix.Format(time.RFC3339),
+	expectedCertData := secretstypes.PemCert{
+		Bundle: testData.BundlePEM,
+		Key:    testData.KeyPEM,
+		Svid:   testData.SVIDPEM,
+		Expiry: expiryUnix.Format(time.RFC3339),
 	}
-	s.Equal(expectedCertData, certData)
+	s.Equal(expectedCertData, certPem)
+}
+
+func (s *ManagerSuite) TestCertGenerator_GenerateJKS() {
+	entryId := "/test"
+	password := []byte("password")
+	testData, err := testdata.LoadTestData()
+	s.Require().NoError(err)
+	s.mockTLSStores(entryId, testData)
+	certJks, err := s.certGenerator.GenerateJKS(context.Background(), entryId, string(password))
+	s.Require().NoError(err)
+
+	// test cert expiry
+	expiry, err := time.Parse(ExpiryTimeTestLayout, ExpiryTimeTestStr)
+	s.Require().NoError(err)
+	expiryUnix := time.Unix(expiry.Unix(), 0)
+	s.Require().Equal(expiryUnix.Format(time.RFC3339), certJks.Expiry)
+
+	// test truststore is as expected
+	ts := keystore.New()
+	trustStoreReader := bytes.NewReader(certJks.TrustStore)
+	err = ts.Load(trustStoreReader, password)
+	s.Require().NoError(err)
+	s.Require().Equal(len(ts.Aliases()), 1)
+	caAlias := ts.Aliases()[0]
+	ca, err := ts.GetTrustedCertificateEntry(caAlias)
+	s.Require().NoError(err)
+	s.Require().Equal(testData.BundlePEM, ca.Certificate.Content)
+
+	// test keystore is as expected
+	ks := keystore.New()
+	keyStoreReader := bytes.NewReader(certJks.KeyStore)
+	err = ks.Load(keyStoreReader, password)
+	s.Require().NoError(err)
+	s.Require().Equal(len(ks.Aliases()), 1)
+	pkey, err := ks.GetPrivateKeyEntry("pkey", password)
+	s.Require().NoError(err)
+	// compare pkey
+	decodedPkey, _ := pem.Decode(testData.KeyPEM)
+	s.Require().Equal(decodedPkey.Bytes, pkey.PrivateKey)
+	// compare certificate chain
+	certChain := strings.Split(string(testData.SVIDPEM), "-\n-")
+	// remove padding in order to compare
+	s.Require().Equal([]byte(certChain[0]+"-"), pkey.CertificateChain[0].Content[:len(pkey.CertificateChain[0].Content)-1])
+	s.Require().Equal([]byte("-"+certChain[1]), pkey.CertificateChain[1].Content)
+
 }
 
 func (s *ManagerSuite) TestJksTrustStoreCreate() {
@@ -102,9 +139,9 @@ func (s *ManagerSuite) TestJksKeyStoreCreate() {
 	testData, err := testdata.LoadTestData()
 	s.Require().NoError(err)
 	svid := svids.EncodedX509SVID{SVIDPEM: testData.SVIDPEM, KeyPEM: testData.KeyPEM}
-	trustBundle, err := svidToKeyStore(svid, "password")
+	keyStore, err := svidToKeyStore(svid, "password")
 	s.Require().NoError(err)
-	s.Require().NotNil(trustBundle)
+	s.Require().NotNil(keyStore)
 }
 
 func TestRunManagerSuite(t *testing.T) {
