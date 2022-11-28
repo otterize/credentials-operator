@@ -8,6 +8,7 @@ import (
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/spire-integration-operator/src/controllers/metadata"
 	"github.com/otterize/spire-integration-operator/src/controllers/secrets/types"
+	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 	"hash/fnv"
 	corev1 "k8s.io/api/core/v1"
@@ -115,7 +116,10 @@ func (r *PodReconciler) ensurePodTLSSecret(ctx context.Context, pod *corev1.Pod,
 	}
 
 	secretName := pod.Annotations[metadata.TLSSecretNameAnnotation]
-	certConfig := certConfigFromPod(pod)
+	certConfig, err := certConfigFromPod(pod)
+	if err != nil {
+		return fmt.Errorf("failed parsing annotations: %w", err)
+	}
 	log.WithFields(logrus.Fields{"secret_name": secretName, "cert_config": certConfig}).Info("ensuring TLS secret")
 	secretConfig := secretstypes.NewSecretConfig(entryID, entryHash, secretName, pod.Namespace, serviceName, certConfig)
 	if err := r.secretsManager.EnsureTLSSecret(ctx, secretConfig, pod); err != nil {
@@ -128,25 +132,29 @@ func (r *PodReconciler) ensurePodTLSSecret(ctx context.Context, pod *corev1.Pod,
 	return nil
 }
 
-func certConfigFromPod(pod *corev1.Pod) secretstypes.CertConfig {
-	certType := secretstypes.StrToCertType(pod.Annotations[metadata.CertTypeAnnotation])
+func certConfigFromPod(pod *corev1.Pod) (secretstypes.CertConfig, error) {
+	certTypeStr, _ := lo.Coalesce(pod.Annotations[metadata.CertTypeAnnotation], "pem")
+	certType, err := secretstypes.StrToCertType(certTypeStr)
+	if err != nil {
+		return secretstypes.CertConfig{}, err
+	}
 	certConfig := secretstypes.CertConfig{CertType: certType}
 	switch certType {
-	case secretstypes.PemCertType:
-		certConfig.PemConfig = secretstypes.NewPemConfig(
+	case secretstypes.PEMCertType:
+		certConfig.PEMConfig = secretstypes.NewPEMConfig(
 			pod.Annotations[metadata.SVIDFileNameAnnotation],
 			pod.Annotations[metadata.BundleFileNameAnnotation],
 			pod.Annotations[metadata.KeyFileNameAnnotation],
 		)
-	case secretstypes.JksCertType:
-		certConfig.JksConfig = secretstypes.NewJksConfig(
+	case secretstypes.JKSCertType:
+		certConfig.JKSConfig = secretstypes.NewJKSConfig(
 			pod.Annotations[metadata.KeyStoreFileNameAnnotation],
 			pod.Annotations[metadata.TrustStoreFileNameAnnotation],
-			pod.Annotations[metadata.JksPasswordAnnotation],
+			pod.Annotations[metadata.JKSPasswordAnnotation],
 		)
 
 	}
-	return certConfig
+	return certConfig, nil
 }
 
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

@@ -59,7 +59,7 @@ func (s *ManagerSuite) mockTLSStores(entryId string, testData testdata.TestData)
 	).Return(encodedX509SVID, nil)
 }
 
-func (s *ManagerSuite) TestCertGenerator_GeneratePem() {
+func (s *ManagerSuite) TestCertGenerator_GeneratePEM() {
 
 	testData, err := testdata.LoadTestData()
 	s.Require().NoError(err)
@@ -67,18 +67,18 @@ func (s *ManagerSuite) TestCertGenerator_GeneratePem() {
 
 	s.mockTLSStores(entryId, testData)
 
-	certPem, err := s.certGenerator.GeneratePem(context.Background(), entryId)
+	certPEM, err := s.certGenerator.GeneratePEM(context.Background(), entryId)
 	s.Require().NoError(err)
 	expiry, err := time.Parse(ExpiryTimeTestLayout, ExpiryTimeTestStr)
 	s.Require().NoError(err)
 	expiryUnix := time.Unix(expiry.Unix(), 0)
-	expectedCertData := secretstypes.PemCert{
+	expectedCertData := secretstypes.PEMCert{
 		Bundle: testData.BundlePEM,
 		Key:    testData.KeyPEM,
-		Svid:   testData.SVIDPEM,
+		SVID:   testData.SVIDPEM,
 		Expiry: expiryUnix.Format(time.RFC3339),
 	}
-	s.Equal(expectedCertData, certPem)
+	s.Equal(expectedCertData, certPEM)
 }
 
 func (s *ManagerSuite) TestCertGenerator_GenerateJKS() {
@@ -87,18 +87,18 @@ func (s *ManagerSuite) TestCertGenerator_GenerateJKS() {
 	testData, err := testdata.LoadTestData()
 	s.Require().NoError(err)
 	s.mockTLSStores(entryId, testData)
-	certJks, err := s.certGenerator.GenerateJKS(context.Background(), entryId, string(password))
+	certJKS, err := s.certGenerator.GenerateJKS(context.Background(), entryId, string(password))
 	s.Require().NoError(err)
 
 	// test cert expiry
 	expiry, err := time.Parse(ExpiryTimeTestLayout, ExpiryTimeTestStr)
 	s.Require().NoError(err)
 	expiryUnix := time.Unix(expiry.Unix(), 0)
-	s.Require().Equal(expiryUnix.Format(time.RFC3339), certJks.Expiry)
+	s.Require().Equal(expiryUnix.Format(time.RFC3339), certJKS.Expiry)
 
 	// test truststore is as expected
 	ts := keystore.New()
-	trustStoreReader := bytes.NewReader(certJks.TrustStore)
+	trustStoreReader := bytes.NewReader(certJKS.TrustStore)
 	err = ts.Load(trustStoreReader, password)
 	s.Require().NoError(err)
 	s.Require().Equal(len(ts.Aliases()), 1)
@@ -109,7 +109,7 @@ func (s *ManagerSuite) TestCertGenerator_GenerateJKS() {
 
 	// test keystore is as expected
 	ks := keystore.New()
-	keyStoreReader := bytes.NewReader(certJks.KeyStore)
+	keyStoreReader := bytes.NewReader(certJKS.KeyStore)
 	err = ks.Load(keyStoreReader, password)
 	s.Require().NoError(err)
 	s.Require().Equal(len(ks.Aliases()), 1)
@@ -126,7 +126,7 @@ func (s *ManagerSuite) TestCertGenerator_GenerateJKS() {
 
 }
 
-func (s *ManagerSuite) TestJksTrustStoreCreate() {
+func (s *ManagerSuite) TestJKSTrustStoreCreate() {
 	testData, err := testdata.LoadTestData()
 	s.Require().NoError(err)
 	bundle := bundles.EncodedTrustBundle{BundlePEM: testData.BundlePEM}
@@ -135,7 +135,7 @@ func (s *ManagerSuite) TestJksTrustStoreCreate() {
 	s.Require().NotNil(trustBundle)
 }
 
-func (s *ManagerSuite) TestJksKeyStoreCreate() {
+func (s *ManagerSuite) TestJKSKeyStoreCreate() {
 	testData, err := testdata.LoadTestData()
 	s.Require().NoError(err)
 	svid := svids.EncodedX509SVID{SVIDPEM: testData.SVIDPEM, KeyPEM: testData.KeyPEM}

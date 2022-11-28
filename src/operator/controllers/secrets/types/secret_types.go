@@ -2,6 +2,7 @@ package secretstypes
 
 import (
 	"context"
+	"fmt"
 	"github.com/samber/lo"
 	"strings"
 )
@@ -11,18 +12,18 @@ type CertType string
 
 const (
 	TlsSecretType = SecretType("TLS")
-	JksCertType   = CertType("jks")
-	PemCertType   = CertType("pem")
+	JKSCertType   = CertType("jks")
+	PEMCertType   = CertType("pem")
 )
 
-func StrToCertType(strCertType string) CertType {
+func StrToCertType(strCertType string) (CertType, error) {
 	switch CertType(strings.ToLower(strCertType)) {
-	case JksCertType:
-		return JksCertType
-	case PemCertType:
-		return PemCertType
+	case JKSCertType:
+		return JKSCertType, nil
+	case PEMCertType:
+		return PEMCertType, nil
 	default:
-		return PemCertType
+		return "", fmt.Errorf("certificate type: %s is not a valid certificate type. valid types: [jks pem]", strCertType)
 	}
 }
 
@@ -31,28 +32,28 @@ type CertificateData struct {
 	ExpiryStr string
 }
 
-type PemConfig struct {
-	SvidFileName   string
+type PEMConfig struct {
+	SVIDFileName   string
 	BundleFileName string
 	KeyFileName    string
 }
 
-func NewPemConfig(svidFileName string, bundleFileName string, keyFileName string) PemConfig {
-	newFileNames := PemConfig{}
-	newFileNames.SvidFileName, _ = lo.Coalesce(svidFileName, "svid.pem")
+func NewPEMConfig(svidFileName string, bundleFileName string, keyFileName string) PEMConfig {
+	newFileNames := PEMConfig{}
+	newFileNames.SVIDFileName, _ = lo.Coalesce(svidFileName, "svid.pem")
 	newFileNames.KeyFileName, _ = lo.Coalesce(keyFileName, "key.pem")
 	newFileNames.BundleFileName, _ = lo.Coalesce(bundleFileName, "bundle.pem")
 	return newFileNames
 }
 
-type JksConfig struct {
+type JKSConfig struct {
 	KeyStoreFileName   string
 	TrustStoreFileName string
 	Password           string
 }
 
-func NewJksConfig(keystoreFileName string, truststoreFileName string, password string) JksConfig {
-	newFileNames := JksConfig{}
+func NewJKSConfig(keystoreFileName string, truststoreFileName string, password string) JKSConfig {
+	newFileNames := JKSConfig{}
 	newFileNames.KeyStoreFileName, _ = lo.Coalesce(keystoreFileName, "keystore.jks")
 	newFileNames.TrustStoreFileName, _ = lo.Coalesce(truststoreFileName, "truststore.jks")
 	newFileNames.Password, _ = lo.Coalesce(password, "password")
@@ -65,8 +66,8 @@ type JKSCert struct {
 	Expiry     string
 }
 
-type PemCert struct {
-	Svid   []byte
+type PEMCert struct {
+	SVID   []byte
 	Bundle []byte
 	Key    []byte
 	Expiry string
@@ -74,8 +75,8 @@ type PemCert struct {
 
 type CertConfig struct {
 	CertType  CertType
-	JksConfig JksConfig
-	PemConfig PemConfig
+	JKSConfig JKSConfig
+	PEMConfig PEMConfig
 }
 
 type SecretConfig struct {
@@ -100,5 +101,5 @@ func NewSecretConfig(entryID string, entryHash string, secretName string, namesp
 
 type CertificateDataGenerator interface {
 	GenerateJKS(ctx context.Context, entryID string, password string) (JKSCert, error)
-	GeneratePem(ctx context.Context, entryID string) (PemCert, error)
+	GeneratePEM(ctx context.Context, entryID string) (PEMCert, error)
 }

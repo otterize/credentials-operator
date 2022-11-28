@@ -117,6 +117,8 @@ func (s *PodControllerSuite) TestController_Reconcile() {
 	// expect TLS secret creation
 	entryHash, err := getEntryHash(namespace, servicename, ttl, extraDnsNames)
 	s.NoError(err)
+	certConf, err := certConfigFromPod(&pod)
+	s.NoError(err)
 	s.secretsManager.EXPECT().EnsureTLSSecret(
 		gomock.Any(),
 		secretstypes.NewSecretConfig(
@@ -125,7 +127,7 @@ func (s *PodControllerSuite) TestController_Reconcile() {
 			secretname,
 			namespace,
 			servicename,
-			certConfigFromPod(&pod),
+			certConf,
 		),
 		&ObjectNameMatcher{name: podname, namespace: namespace}).Return(nil)
 

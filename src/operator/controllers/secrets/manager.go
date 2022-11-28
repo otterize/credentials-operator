@@ -30,15 +30,15 @@ func SecretConfigFromExistingSecret(secret *corev1.Secret) secretstypes.SecretCo
 		Namespace:   secret.Namespace,
 		CertConfig: secretstypes.CertConfig{
 			CertType: secretstypes.CertType(secret.Annotations[metadata.CertTypeAnnotation]),
-			PemConfig: secretstypes.PemConfig{
-				SvidFileName:   secret.Annotations[metadata.SVIDFileNameAnnotation],
+			PEMConfig: secretstypes.PEMConfig{
+				SVIDFileName:   secret.Annotations[metadata.SVIDFileNameAnnotation],
 				BundleFileName: secret.Annotations[metadata.BundleFileNameAnnotation],
 				KeyFileName:    secret.Annotations[metadata.KeyFileNameAnnotation],
 			},
-			JksConfig: secretstypes.JksConfig{
+			JKSConfig: secretstypes.JKSConfig{
 				KeyStoreFileName:   secret.Annotations[metadata.KeyStoreFileNameAnnotation],
 				TrustStoreFileName: secret.Annotations[metadata.TrustStoreFileNameAnnotation],
-				Password:           secret.Annotations[metadata.JksPasswordAnnotation],
+				Password:           secret.Annotations[metadata.JKSPasswordAnnotation],
 			},
 		},
 	}
@@ -92,28 +92,28 @@ func (m *KubernetesSecretsManager) getExistingSecret(ctx context.Context, namesp
 
 func (m *KubernetesSecretsManager) getCertificateData(ctx context.Context, entryID string, certConfig secretstypes.CertConfig) (secretstypes.CertificateData, error) {
 	switch certConfig.CertType {
-	case secretstypes.JksCertType:
-		jksCert, err := m.certificateDataGenerator.GenerateJKS(ctx, entryID, certConfig.JksConfig.Password)
+	case secretstypes.JKSCertType:
+		jksCert, err := m.certificateDataGenerator.GenerateJKS(ctx, entryID, certConfig.JKSConfig.Password)
 		if err != nil {
 			return secretstypes.CertificateData{}, err
 		}
 		return secretstypes.CertificateData{
 			Files: map[string][]byte{
-				certConfig.JksConfig.KeyStoreFileName:   jksCert.KeyStore,
-				certConfig.JksConfig.TrustStoreFileName: jksCert.TrustStore,
+				certConfig.JKSConfig.KeyStoreFileName:   jksCert.KeyStore,
+				certConfig.JKSConfig.TrustStoreFileName: jksCert.TrustStore,
 			},
 			ExpiryStr: jksCert.Expiry,
 		}, nil
-	case secretstypes.PemCertType:
-		pemCert, err := m.certificateDataGenerator.GeneratePem(ctx, entryID)
+	case secretstypes.PEMCertType:
+		pemCert, err := m.certificateDataGenerator.GeneratePEM(ctx, entryID)
 		if err != nil {
 			return secretstypes.CertificateData{}, err
 		}
 		return secretstypes.CertificateData{
 			Files: map[string][]byte{
-				certConfig.PemConfig.BundleFileName: pemCert.Bundle,
-				certConfig.PemConfig.KeyFileName:    pemCert.Key,
-				certConfig.PemConfig.SvidFileName:   pemCert.Svid,
+				certConfig.PEMConfig.BundleFileName: pemCert.Bundle,
+				certConfig.PEMConfig.KeyFileName:    pemCert.Key,
+				certConfig.PEMConfig.SVIDFileName:   pemCert.SVID,
 			},
 		}, nil
 	default:
@@ -136,12 +136,12 @@ func (m *KubernetesSecretsManager) updateTLSSecret(ctx context.Context, config s
 		metadata.TLSSecretRegisteredServiceNameAnnotation: config.ServiceName,
 		metadata.TLSSecretEntryIDAnnotation:               config.EntryID,
 		metadata.TLSSecretEntryHashAnnotation:             config.EntryHash,
-		metadata.SVIDFileNameAnnotation:                   config.CertConfig.PemConfig.SvidFileName,
-		metadata.BundleFileNameAnnotation:                 config.CertConfig.PemConfig.BundleFileName,
-		metadata.KeyFileNameAnnotation:                    config.CertConfig.PemConfig.KeyFileName,
-		metadata.KeyStoreFileNameAnnotation:               config.CertConfig.JksConfig.KeyStoreFileName,
-		metadata.TrustStoreFileNameAnnotation:             config.CertConfig.JksConfig.TrustStoreFileName,
-		metadata.JksPasswordAnnotation:                    config.CertConfig.JksConfig.Password,
+		metadata.SVIDFileNameAnnotation:                   config.CertConfig.PEMConfig.SVIDFileName,
+		metadata.BundleFileNameAnnotation:                 config.CertConfig.PEMConfig.BundleFileName,
+		metadata.KeyFileNameAnnotation:                    config.CertConfig.PEMConfig.KeyFileName,
+		metadata.KeyStoreFileNameAnnotation:               config.CertConfig.JKSConfig.KeyStoreFileName,
+		metadata.TrustStoreFileNameAnnotation:             config.CertConfig.JKSConfig.TrustStoreFileName,
+		metadata.JKSPasswordAnnotation:                    config.CertConfig.JKSConfig.Password,
 		metadata.CertTypeAnnotation:                       string(config.CertConfig.CertType),
 	}
 

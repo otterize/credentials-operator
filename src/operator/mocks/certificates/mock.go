@@ -50,17 +50,17 @@ func (mr *MockCertificateDataGeneratorMockRecorder) GenerateJKS(ctx, entryID, pa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateJKS", reflect.TypeOf((*MockCertificateDataGenerator)(nil).GenerateJKS), ctx, entryID, password)
 }
 
-// GeneratePem mocks base method.
-func (m *MockCertificateDataGenerator) GeneratePem(ctx context.Context, entryID string) (secretstypes.PemCert, error) {
+// GeneratePEM mocks base method.
+func (m *MockCertificateDataGenerator) GeneratePEM(ctx context.Context, entryID string) (secretstypes.PEMCert, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GeneratePem", ctx, entryID)
-	ret0, _ := ret[0].(secretstypes.PemCert)
+	ret := m.ctrl.Call(m, "GeneratePEM", ctx, entryID)
+	ret0, _ := ret[0].(secretstypes.PEMCert)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GeneratePem indicates an expected call of GeneratePem.
-func (mr *MockCertificateDataGeneratorMockRecorder) GeneratePem(ctx, entryID interface{}) *gomock.Call {
+// GeneratePEM indicates an expected call of GeneratePEM.
+func (mr *MockCertificateDataGeneratorMockRecorder) GeneratePEM(ctx, entryID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GeneratePem", reflect.TypeOf((*MockCertificateDataGenerator)(nil).GeneratePem), ctx, entryID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GeneratePEM", reflect.TypeOf((*MockCertificateDataGenerator)(nil).GeneratePEM), ctx, entryID)
 }

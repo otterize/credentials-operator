@@ -15,7 +15,7 @@ type SpireCertificateDataGenerator struct {
 
 type spireCert struct {
 	TrustBundle bundles.EncodedTrustBundle
-	Svid        svids.EncodedX509SVID
+	SVID        svids.EncodedX509SVID
 	Expiry      string
 }
 
@@ -43,7 +43,7 @@ func (m *SpireCertificateDataGenerator) getSpireCert(ctx context.Context, entryI
 	expiry := time.Unix(svid.ExpiresAt, 0)
 	expiryStr := expiry.Format(time.RFC3339)
 
-	return spireCert{TrustBundle: trustBundle, Svid: svid, Expiry: expiryStr}, nil
+	return spireCert{TrustBundle: trustBundle, SVID: svid, Expiry: expiryStr}, nil
 }
 
 func (m *SpireCertificateDataGenerator) GenerateJKS(ctx context.Context, entryID string, password string) (secretstypes.JKSCert, error) {
@@ -58,7 +58,7 @@ func (m *SpireCertificateDataGenerator) GenerateJKS(ctx context.Context, entryID
 		return secretstypes.JKSCert{}, err
 	}
 
-	keyStoreBytes, err := svidToKeyStore(spireCertificate.Svid, password)
+	keyStoreBytes, err := svidToKeyStore(spireCertificate.SVID, password)
 
 	if err != nil {
 		return secretstypes.JKSCert{}, err
@@ -67,15 +67,15 @@ func (m *SpireCertificateDataGenerator) GenerateJKS(ctx context.Context, entryID
 	return secretstypes.JKSCert{TrustStore: trustStoreBytes, KeyStore: keyStoreBytes, Expiry: spireCertificate.Expiry}, nil
 }
 
-func (m *SpireCertificateDataGenerator) GeneratePem(ctx context.Context, entryID string) (secretstypes.PemCert, error) {
+func (m *SpireCertificateDataGenerator) GeneratePEM(ctx context.Context, entryID string) (secretstypes.PEMCert, error) {
 	spireCertificate, err := m.getSpireCert(ctx, entryID)
 	if err != nil {
-		return secretstypes.PemCert{}, err
+		return secretstypes.PEMCert{}, err
 	}
 
-	return secretstypes.PemCert{
-		Svid:   spireCertificate.Svid.SVIDPEM,
-		Key:    spireCertificate.Svid.KeyPEM,
+	return secretstypes.PEMCert{
+		SVID:   spireCertificate.SVID.SVIDPEM,
+		Key:    spireCertificate.SVID.KeyPEM,
 		Bundle: spireCertificate.TrustBundle.BundlePEM,
 		Expiry: spireCertificate.Expiry}, nil
 }
