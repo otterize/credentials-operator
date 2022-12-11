@@ -3,35 +3,37 @@ package otterizecertgen
 import (
 	"context"
 	"github.com/otterize/spire-integration-operator/src/controllers/certificates/jks"
+	"github.com/otterize/spire-integration-operator/src/controllers/otterizeclient/otterizegraphql"
 	secretstypes "github.com/otterize/spire-integration-operator/src/controllers/secrets/types"
 	"github.com/samber/lo"
+	"time"
 )
 
-type KeyPair struct {
-	KeyPEM    string `json:"keyPEM"`
-	RootCAPEM string `json:"rootCAPEM"`
-	CaPEM     string `json:"caPEM"`
-	CertPEM   string `json:"certPEM"`
-}
-
 type OtterizeCloudClient interface {
-	GetTlsKeyPair(ctx context.Context, entryID string) (KeyPair, error)
+	GetTLSKeyPair(ctx context.Context, serviceId string, certificateCustomization otterizegraphql.CertificateCustomization) (otterizegraphql.TLSKeyPair, error)
 }
 
 type OtterizeCertificateDataGenerator struct {
 	cloudClient OtterizeCloudClient
 }
 
-func (m *OtterizeCertificateDataGenerator) GeneratePEM(ctx context.Context, entryID string) (secretstypes.PEMCert, error) {
-	keyPair, err := m.cloudClient.GetTlsKeyPair(ctx, entryID)
+func keyPairToExpiryStr(keyPair otterizegraphql.TLSKeyPair) string {
+	expiry := time.Unix(int64(keyPair.ExpiresAt), 0)
+	expiryStr := expiry.Format(time.RFC3339)
+	return expiryStr
+}
+
+func (m *OtterizeCertificateDataGenerator) GeneratePEM(ctx context.Context, serviceId string) (secretstypes.PEMCert, error) {
+	keyPair, err := m.cloudClient.GetTLSKeyPair(ctx, serviceId, otterizegraphql.CertificateCustomization{})
 	if err != nil {
 		return secretstypes.PEMCert{}, err
 	}
-	return secretstypes.PEMCert{Key: []byte(keyPair.KeyPEM), SVID: []byte(keyPair.CertPEM), Bundle: []byte(keyPair.RootCAPEM)}, nil
+	expiryStr := keyPairToExpiryStr(keyPair)
+	return secretstypes.PEMCert{Key: []byte(keyPair.KeyPEM), SVID: []byte(keyPair.CertPEM), Bundle: []byte(keyPair.RootCAPEM), Expiry: expiryStr}, nil
 }
 
-func (m *OtterizeCertificateDataGenerator) GenerateJKS(ctx context.Context, entryID string, password string) (secretstypes.JKSCert, error) {
-	keyPair, err := m.cloudClient.GetTlsKeyPair(ctx, entryID)
+func (m *OtterizeCertificateDataGenerator) GenerateJKS(ctx context.Context, serviceId string, password string) (secretstypes.JKSCert, error) {
+	keyPair, err := m.cloudClient.GetTLSKeyPair(ctx, serviceId, otterizegraphql.CertificateCustomization{})
 	if err != nil {
 		return secretstypes.JKSCert{}, err
 	}
@@ -54,6 +56,8 @@ func (m *OtterizeCertificateDataGenerator) GenerateJKS(ctx context.Context, entr
 		return secretstypes.JKSCert{}, err
 	}
 
-	return secretstypes.JKSCert{KeyStore: keyStoreBytes, TrustStore: trustStoreBytes}, nil
+	expiryStr := keyPairToExpiryStr(keyPair)
+
+	return secretstypes.JKSCert{KeyStore: keyStoreBytes, TrustStore: trustStoreBytes, Expiry: expiryStr}, nil
 
 }
