@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/spire-integration-operator/src/controllers/metadata"
 	"github.com/otterize/spire-integration-operator/src/controllers/secrets/types"
 	"github.com/samber/lo"
@@ -11,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -47,10 +49,14 @@ func SecretConfigFromExistingSecret(secret *corev1.Secret) secretstypes.SecretCo
 type KubernetesSecretsManager struct {
 	client.Client
 	certificateDataGenerator secretstypes.CertificateDataGenerator
+	serviceIdResolver        *serviceidresolver.Resolver
 }
 
-func NewSecretManager(c client.Client, tlsSecretUpdater secretstypes.CertificateDataGenerator) *KubernetesSecretsManager {
-	return &KubernetesSecretsManager{Client: c, certificateDataGenerator: tlsSecretUpdater}
+func NewSecretManager(
+	c client.Client,
+	tlsSecretUpdater secretstypes.CertificateDataGenerator,
+	serviceIdResolver *serviceidresolver.Resolver) *KubernetesSecretsManager {
+	return &KubernetesSecretsManager{Client: c, certificateDataGenerator: tlsSecretUpdater, serviceIdResolver: serviceIdResolver}
 }
 
 func (m *KubernetesSecretsManager) isRefreshNeeded(secret *corev1.Secret) bool {
@@ -245,6 +251,9 @@ func (m *KubernetesSecretsManager) RefreshTLSSecrets(ctx context.Context) error 
 		if err := m.refreshTLSSecret(ctx, &secret); err != nil {
 			log.WithError(err).Error("failed refreshing TLS secret")
 		}
+		if err := m.handlePodRestarts(ctx, &secret); err != nil {
+			log.WithError(err).Error("failed restarting pods after secret refresh")
+		}
 	}
 
 	log.Info("finished refreshing secrets")
@@ -257,4 +266,30 @@ func (m *KubernetesSecretsManager) isUpdateNeeded(existingSecretConfig secretsty
 	log.Infof("needs update: %v", needsUpdate)
 
 	return needsUpdate
+}
+
+func (m *KubernetesSecretsManager) handlePodRestarts(ctx context.Context, secret *corev1.Secret) error {
+	podList := corev1.PodList{}
+	labelSelector, err := labels.Parse(fmt.Sprintf("%s=%s", metadata.RegisteredServiceNameLabel, secret.Labels[metadata.RegisteredServiceNameLabel]))
+	if err != nil {
+		return err
+	}
+
+	err = m.List(ctx, &podList, &client.ListOptions{
+		LabelSelector: labelSelector,
+		Namespace:     secret.Namespace,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, pod := range podList.Items {
+		// TODO: restart pod here
+		owner, err := m.serviceIdResolver.ResolvePodToServiceIdentity(ctx, &pod)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

@@ -114,8 +114,8 @@ func main() {
 	svidsStore := svids.NewSVIDsStore(spireClient)
 	entriesRegistry := entries.NewSpireRegistry(spireClient)
 	certGenerator := spirecertgen.NewSpireCertificateDataGenerator(bundlesStore, svidsStore)
-	secretsManager := secrets.NewSecretManager(mgr.GetClient(), certGenerator)
 	serviceIdResolver := serviceidresolver.NewResolver(mgr.GetClient())
+	secretsManager := secrets.NewSecretManager(mgr.GetClient(), certGenerator, serviceIdResolver)
 	eventRecorder := mgr.GetEventRecorderFor("spire-integration-operator")
 	podReconciler := controllers.NewPodReconciler(mgr.GetClient(), mgr.GetScheme(), entriesRegistry, secretsManager,
 		serviceIdResolver, eventRecorder)
