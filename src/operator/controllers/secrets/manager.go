@@ -285,7 +285,8 @@ func (m *KubernetesSecretsManager) handlePodRestarts(ctx context.Context, secret
 
 	for _, pod := range podList.Items {
 		// TODO: restart pod here
-		owner, err := m.serviceIdResolver.ResolvePodToServiceIdentity(ctx, &pod)
+		if
+		owner, err := m.serviceIdResolver.GetOwnerObj(ctx, &pod)
 		if err != nil {
 			return err
 		}
