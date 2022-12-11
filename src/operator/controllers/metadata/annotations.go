@@ -15,6 +15,10 @@ const (
 	// CertTypeAnnotation is the requested certificate type - pem (default) or jks.
 	CertTypeAnnotation = "spire-integration.otterize.com/cert-type"
 
+	// ShouldRestartOnRenewalAnnotation - After a certificate is being renewed, pods with this annotation set to "true"
+	// will be restarted. Defaults to "false"
+	ShouldRestartOnRenewalAnnotation = "spire-integration.otterize.com/restart-pod-on-certificate-renewal"
+
 	// SVIDFileNameAnnotation holds the name of the file in the secret data, that stores the certificate's SVID file
 	// (for pem certificate type). Defaults to "svid.pem".
 	SVIDFileNameAnnotation = "spire-integration.otterize.com/svid-file-name"

@@ -80,22 +80,24 @@ type CertConfig struct {
 }
 
 type SecretConfig struct {
-	EntryID     string
-	EntryHash   string
-	SecretName  string
-	Namespace   string
-	ServiceName string
-	CertConfig  CertConfig
+	EntryID                   string
+	EntryHash                 string
+	SecretName                string
+	Namespace                 string
+	ServiceName               string
+	ShouldRestartPodOnRenewal bool
+	CertConfig                CertConfig
 }
 
-func NewSecretConfig(entryID string, entryHash string, secretName string, namespace string, serviceName string, certConfig CertConfig) SecretConfig {
+func NewSecretConfig(entryID string, entryHash string, secretName string, namespace string, serviceName string, certConfig CertConfig, ShouldRestartPodOnRenewal bool) SecretConfig {
 	return SecretConfig{
-		EntryID:     entryID,
-		EntryHash:   entryHash,
-		SecretName:  secretName,
-		Namespace:   namespace,
-		ServiceName: serviceName,
-		CertConfig:  certConfig,
+		EntryID:                   entryID,
+		EntryHash:                 entryHash,
+		SecretName:                secretName,
+		Namespace:                 namespace,
+		ServiceName:               serviceName,
+		CertConfig:                certConfig,
+		ShouldRestartPodOnRenewal: ShouldRestartPodOnRenewal,
 	}
 }
 
