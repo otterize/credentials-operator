@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"strings"
 	"time"
 )
 
@@ -24,12 +25,15 @@ const (
 )
 
 func SecretConfigFromExistingSecret(secret *corev1.Secret) secretstypes.SecretConfig {
+	shouldRestartOnRenewalStr := strings.ToLower(secret.Annotations[metadata.ShouldRestartOnRenewalAnnotation])
+	shouldRestartOnRenewalBool := shouldRestartOnRenewalStr == "true"
 	return secretstypes.SecretConfig{
-		SecretName:  secret.Name,
-		ServiceName: secret.Annotations[metadata.TLSSecretRegisteredServiceNameAnnotation],
-		EntryID:     secret.Annotations[metadata.TLSSecretEntryIDAnnotation],
-		EntryHash:   secret.Annotations[metadata.TLSSecretEntryHashAnnotation],
-		Namespace:   secret.Namespace,
+		SecretName:                secret.Name,
+		ServiceName:               secret.Annotations[metadata.TLSSecretRegisteredServiceNameAnnotation],
+		EntryID:                   secret.Annotations[metadata.TLSSecretEntryIDAnnotation],
+		EntryHash:                 secret.Annotations[metadata.TLSSecretEntryHashAnnotation],
+		Namespace:                 secret.Namespace,
+		ShouldRestartPodOnRenewal: shouldRestartOnRenewalBool,
 		CertConfig: secretstypes.CertConfig{
 			CertType: secretstypes.CertType(secret.Annotations[metadata.CertTypeAnnotation]),
 			PEMConfig: secretstypes.PEMConfig{
@@ -149,6 +153,7 @@ func (m *KubernetesSecretsManager) updateTLSSecret(ctx context.Context, config s
 		metadata.TrustStoreFileNameAnnotation:             config.CertConfig.JKSConfig.TrustStoreFileName,
 		metadata.JKSPasswordAnnotation:                    config.CertConfig.JKSConfig.Password,
 		metadata.CertTypeAnnotation:                       string(config.CertConfig.CertType),
+		metadata.ShouldRestartOnRenewalAnnotation:         lo.Ternary(config.ShouldRestartPodOnRenewal, "true", "false"),
 	}
 
 	secret.Data = certificateData.Files

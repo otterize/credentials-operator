@@ -108,7 +108,7 @@ func (r *PodReconciler) updatePodLabel(ctx context.Context, pod *corev1.Pod, lab
 	return ctrl.Result{}, nil
 }
 
-func (r *PodReconciler) ensurePodTLSSecret(ctx context.Context, pod *corev1.Pod, serviceName string, entryID string, entryHash string) error {
+func (r *PodReconciler) ensurePodTLSSecret(ctx context.Context, pod *corev1.Pod, serviceName string, entryID string, entryHash string, shouldRestartPodOnRenewal bool) error {
 	log := logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace})
 	if pod.Annotations == nil || pod.Annotations[metadata.TLSSecretNameAnnotation] == "" {
 		log.WithField("annotation.key", metadata.TLSSecretNameAnnotation).Info("skipping TLS secrets creation - annotation not found")
@@ -121,7 +121,7 @@ func (r *PodReconciler) ensurePodTLSSecret(ctx context.Context, pod *corev1.Pod,
 		return fmt.Errorf("failed parsing annotations: %w", err)
 	}
 	log.WithFields(logrus.Fields{"secret_name": secretName, "cert_config": certConfig}).Info("ensuring TLS secret")
-	secretConfig := secretstypes.NewSecretConfig(entryID, entryHash, secretName, pod.Namespace, serviceName, certConfig)
+	secretConfig := secretstypes.NewSecretConfig(entryID, entryHash, secretName, pod.Namespace, serviceName, certConfig, shouldRestartPodOnRenewal)
 	if err := r.secretsManager.EnsureTLSSecret(ctx, secretConfig, pod); err != nil {
 		log.WithError(err).Error("failed creating TLS secret")
 		return err
@@ -220,8 +220,10 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	shouldRestartPodOnRenewal := r.resolvePodToShouldRestartOnRenewal(pod)
+
 	// generate TLS secret for pod
-	if err := r.ensurePodTLSSecret(ctx, pod, serviceID, entryID, hashStr); err != nil {
+	if err := r.ensurePodTLSSecret(ctx, pod, serviceID, entryID, hashStr, shouldRestartPodOnRenewal); err != nil {
 		r.eventRecorder.Eventf(pod, corev1.EventTypeWarning, ReasonEnsuringPodTLSFailed, "Failed creating TLS secret for pod: %s", err.Error())
 		return ctrl.Result{}, err
 	}
@@ -265,6 +267,11 @@ func (r *PodReconciler) resolvePodToCertTTl(pod *corev1.Pod) (int32, error) {
 	}
 
 	return int32(ttl64), nil
+}
+
+func (r *PodReconciler) resolvePodToShouldRestartOnRenewal(pod *corev1.Pod) bool {
+	shouldRestartOnRenewalString := pod.Annotations[metadata.ShouldRestartOnRenewalAnnotation]
+	return strings.ToLower(shouldRestartOnRenewalString) == "true"
 }
 
 // SetupWithManager sets up the controller with the Manager.
