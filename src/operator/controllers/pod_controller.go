@@ -58,7 +58,7 @@ type PodReconciler struct {
 
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=create;get;list;update;patch;watch
-// +kubebuilder:rbac:groups=apps,resources=replicasets;daemonsets;statefulsets;deployments,verbs=get;list;watch
+// +kubebuilder:rbac:groups=apps,resources=replicasets;daemonsets;statefulsets;deployments,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=events,verbs=get;update;patch;list;watch;create
 
 func NewPodReconciler(client client.Client, scheme *runtime.Scheme, workloadRegistry workloadRegistry,
