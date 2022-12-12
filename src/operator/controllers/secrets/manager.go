@@ -17,7 +17,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"strings"
 	"time"
 )
 
@@ -27,8 +26,7 @@ const (
 )
 
 func SecretConfigFromExistingSecret(secret *corev1.Secret) secretstypes.SecretConfig {
-	shouldRestartOnRenewalStr := strings.ToLower(secret.Annotations[metadata.ShouldRestartOnRenewalAnnotation])
-	shouldRestartOnRenewalBool := shouldRestartOnRenewalStr == "true"
+	_, shouldRestartOnRenewalBool := secret.Annotations[metadata.ShouldRestartOnRenewalAnnotation]
 	return secretstypes.SecretConfig{
 		SecretName:                secret.Name,
 		ServiceName:               secret.Annotations[metadata.TLSSecretRegisteredServiceNameAnnotation],
@@ -158,7 +156,9 @@ func (m *KubernetesSecretsManager) updateTLSSecret(ctx context.Context, config s
 		metadata.TrustStoreFileNameAnnotation:             config.CertConfig.JKSConfig.TrustStoreFileName,
 		metadata.JKSPasswordAnnotation:                    config.CertConfig.JKSConfig.Password,
 		metadata.CertTypeAnnotation:                       string(config.CertConfig.CertType),
-		metadata.ShouldRestartOnRenewalAnnotation:         lo.Ternary(config.ShouldRestartPodOnRenewal, "true", "false"),
+	}
+	if config.ShouldRestartPodOnRenewal {
+		secret.Annotations[metadata.ShouldRestartOnRenewalAnnotation] = "remove this annotation to disable"
 	}
 
 	secret.Data = certificateData.Files

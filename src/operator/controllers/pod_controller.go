@@ -269,8 +269,8 @@ func (r *PodReconciler) resolvePodToCertTTl(pod *corev1.Pod) (int32, error) {
 }
 
 func (r *PodReconciler) resolvePodToShouldRestartOnRenewal(pod *corev1.Pod) bool {
-	shouldRestartOnRenewalString := pod.Annotations[metadata.ShouldRestartOnRenewalAnnotation]
-	return strings.ToLower(shouldRestartOnRenewalString) == "true"
+	_, ok := pod.Annotations[metadata.ShouldRestartOnRenewalAnnotation]
+	return ok
 }
 
 // SetupWithManager sets up the controller with the Manager.
