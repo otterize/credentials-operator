@@ -51,4 +51,6 @@ const (
 	// TLSSecretSVIDExpiryAnnotation is the expiry time of the encoded svid, used to determine when this secret's data
 	// should be refreshed.
 	TLSSecretSVIDExpiryAnnotation = "spire-integration.otterize.com/svid-expires-at"
+	// TLSRestartTimeAfterRenewal is the last time the owner's pods were restarted due to a secret being refrshed
+	TLSRestartTimeAfterRenewal = "spire-integration.otterize.com/restart-time-after-renewal"
 )

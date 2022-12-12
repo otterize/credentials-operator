@@ -253,7 +253,7 @@ func (m *KubernetesSecretsManager) refreshTLSSecret(ctx context.Context, secret 
 }
 
 func (m *KubernetesSecretsManager) RefreshTLSSecrets(ctx context.Context) error {
-	logrus.Info("refreshing TLS secrets 2")
+	logrus.Info("refreshing TLS secrets")
 	secrets := corev1.SecretList{}
 	if err := m.List(ctx, &secrets, &client.MatchingLabels{metadata.SecretTypeLabel: string(secretstypes.TlsSecretType)}); err != nil {
 		logrus.WithError(err).Error("failed listing TLS secrets")
@@ -293,7 +293,6 @@ func (m *KubernetesSecretsManager) isUpdateNeeded(existingSecretConfig secretsty
 func (m *KubernetesSecretsManager) handlePodRestarts(ctx context.Context, secret *corev1.Secret) error {
 	podList := corev1.PodList{}
 	labelSelector, err := labels.Parse(fmt.Sprintf("%s=%s", metadata.RegisteredServiceNameLabel, secret.Annotations[metadata.RegisteredServiceNameLabel]))
-	logrus.Infof("####### USING LABEL SELECTOR FOR PODS !!!!!!!!!!!!! %s", labelSelector.String())
 	if err != nil {
 		return err
 	}
@@ -308,9 +307,7 @@ func (m *KubernetesSecretsManager) handlePodRestarts(ctx context.Context, secret
 	// create unique owner list
 	owners := make(map[secretstypes.PodOwnerIdentifier]client.Object)
 	for _, pod := range podList.Items {
-		logrus.Infof("######## CHECKING POD!!!!!!!!!! %s", pod.Name)
 		if _, ok := pod.Annotations[metadata.ShouldRestartOnRenewalAnnotation]; ok {
-			logrus.Infof("######## RESTARTING POD!!!!!!!!!! %s", pod.Name)
 			owner, err := m.serviceIdResolver.GetOwnerObject(ctx, &pod)
 			if err != nil {
 				return err
@@ -319,7 +316,8 @@ func (m *KubernetesSecretsManager) handlePodRestarts(ctx context.Context, secret
 		}
 	}
 	for _, owner := range owners {
-		logrus.Infof("######### GOT OWNER !!!!!!!!!!!!!!!!!!!!!!!! %s %s", owner.GetName(), owner.GetObjectKind().GroupVersionKind().Kind)
+		logrus.Infof("Restarting pods for owner %s of type %s after certificate renewal",
+			owner.GetName(), owner.GetObjectKind().GroupVersionKind().Kind)
 		err = m.TriggerPodRestarts(ctx, owner, secret)
 		if err != nil {
 			return err
@@ -344,17 +342,31 @@ func (m *KubernetesSecretsManager) TriggerPodRestarts(ctx context.Context, owner
 		err = m.Update(ctx, &deployment)
 		m.eventRecorder.Eventf(&deployment, corev1.EventTypeNormal, CertRenewReason, "Successfully restarted Deployment after secret '%s' renewal", secret.Name)
 	case "ReplicaSet":
-		podOwnerTyped := owner.(*v1.ReplicaSet)
-		podOwnerTyped.Spec.Template = m.updatePodTemplateSpec(podOwnerTyped.Spec.Template)
-		err = m.Update(ctx, podOwnerTyped)
+		replicaSet := v1.ReplicaSet{}
+		if err := m.Get(ctx, types.NamespacedName{Namespace: secret.Namespace, Name: owner.GetName()}, &replicaSet); err != nil {
+			return err
+		}
+		replicaSet.Spec.Template = m.updatePodTemplateSpec(replicaSet.Spec.Template)
+		err = m.Update(ctx, &replicaSet)
+		m.eventRecorder.Eventf(&replicaSet, corev1.EventTypeNormal, CertRenewReason, "Successfully restarted ReplicaSet after secret '%s' renewal", secret.Name)
 	case "StatefulSet":
-		podOwnerTyped := owner.(*v1.StatefulSet)
-		podOwnerTyped.Spec.Template = m.updatePodTemplateSpec(podOwnerTyped.Spec.Template)
-		err = m.Update(ctx, podOwnerTyped)
+		statefulSet := v1.StatefulSet{}
+		if err := m.Get(ctx, types.NamespacedName{Namespace: secret.Namespace, Name: owner.GetName()}, &statefulSet); err != nil {
+			return err
+		}
+		statefulSet.Spec.Template = m.updatePodTemplateSpec(statefulSet.Spec.Template)
+		err = m.Update(ctx, &statefulSet)
+		m.eventRecorder.Eventf(&statefulSet, corev1.EventTypeNormal, CertRenewReason, "Successfully restarted StatefulSet after secret '%s' renewal", secret.Name)
+
 	case "DaemonSet":
-		podOwnerTyped := owner.(*v1.DaemonSet)
-		podOwnerTyped.Spec.Template = m.updatePodTemplateSpec(podOwnerTyped.Spec.Template)
-		err = m.Update(ctx, podOwnerTyped)
+		daemonSet := v1.DaemonSet{}
+		if err := m.Get(ctx, types.NamespacedName{Namespace: secret.Namespace, Name: owner.GetName()}, &daemonSet); err != nil {
+			return err
+		}
+		daemonSet.Spec.Template = m.updatePodTemplateSpec(daemonSet.Spec.Template)
+		err = m.Update(ctx, &daemonSet)
+		m.eventRecorder.Eventf(&daemonSet, corev1.EventTypeNormal, CertRenewReason, "Successfully restarted DaemonSet after secret '%s' renewal", secret.Name)
+
 	default:
 		err = fmt.Errorf("unsupported owner type: %s", kind)
 	}
@@ -368,6 +380,6 @@ func (m *KubernetesSecretsManager) updatePodTemplateSpec(podTemplateSpec corev1.
 	if podTemplateSpec.Annotations == nil {
 		podTemplateSpec.Annotations = map[string]string{}
 	}
-	podTemplateSpec.Annotations["last_updated"] = time.Now().String()
+	podTemplateSpec.Annotations[metadata.TLSRestartTimeAfterRenewal] = time.Now().String()
 	return podTemplateSpec
 }
