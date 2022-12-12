@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/golang/mock/gomock"
+	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/spire-integration-operator/src/controllers/metadata"
 	"github.com/otterize/spire-integration-operator/src/controllers/secrets/types"
 	mock_certificates "github.com/otterize/spire-integration-operator/src/mocks/certificates"
@@ -33,7 +34,7 @@ func (s *ManagerSuite) SetupTest() {
 	s.controller = gomock.NewController(s.T())
 	s.client = mock_client.NewMockClient(s.controller)
 	s.mockCertGen = mock_certificates.NewMockCertificateDataGenerator(s.controller)
-	s.manager = NewSecretManager(s.client, s.mockCertGen)
+	s.manager = NewSecretManager(s.client, s.mockCertGen, serviceidresolver.NewResolver(s.client))
 
 	s.client.EXPECT().Scheme().AnyTimes()
 }

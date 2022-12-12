@@ -3,6 +3,7 @@ module github.com/otterize/spire-integration-operator/src
 go 1.18
 
 require (
+	github.com/Khan/genqlient v0.5.0
 	github.com/amit7itz/goset v1.1.0
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a
 	github.com/bombsimon/logrusr/v3 v3.0.0
@@ -16,6 +17,7 @@ require (
 	github.com/spiffe/spire-api-sdk v1.3.1
 	github.com/stretchr/testify v1.8.0
 	golang.org/x/exp v0.0.0-20221012211006-4de253d81b95
+	golang.org/x/oauth2 v0.0.0-20220524215830-622c5d57e401
 	google.golang.org/grpc v1.47.0
 	k8s.io/api v0.24.2
 	k8s.io/apimachinery v0.24.2
@@ -73,11 +75,11 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/twmb/murmur3 v1.1.6 // indirect
 	github.com/uber-go/tally/v4 v4.1.1 // indirect
+	github.com/vektah/gqlparser/v2 v2.4.5 // indirect
 	github.com/zeebo/errs v1.3.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	golang.org/x/crypto v0.0.0-20220511200225-c6db032c6c88 // indirect
 	golang.org/x/net v0.0.0-20220526153639-5463443f8c37 // indirect
-	golang.org/x/oauth2 v0.0.0-20220524215830-622c5d57e401 // indirect
 	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
