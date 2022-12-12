@@ -9,11 +9,14 @@ import (
 	"github.com/otterize/spire-integration-operator/src/controllers/secrets/types"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/json"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"strings"
@@ -289,13 +292,57 @@ func (m *KubernetesSecretsManager) handlePodRestarts(ctx context.Context, secret
 	}
 
 	for _, pod := range podList.Items {
-		// TODO: restart pod here
-		if
-		owner, err := m.serviceIdResolver.GetOwnerObj(ctx, &pod)
-		if err != nil {
-			return err
+		if _, ok := pod.Annotations[metadata.ShouldRestartOnRenewalAnnotation]; ok {
+			owner, err := m.serviceIdResolver.GetOwnerObject(ctx, &pod)
+			if err != nil {
+				return err
+			}
+			err = m.TriggerPodRestarts(owner, pod.Namespace)
 		}
+
+		logrus.WithFields().Infof("Refreshing all pods for %s under %s")
 	}
 
 	return nil
+}
+
+// TriggerPodRestarts edits the pod owner's template spec with an annotation about the secret's expiry date
+// If the secret is refreshed, its expiry will be updated in the pod owner's spec which will trigger the pods to restart
+func (m *KubernetesSecretsManager) TriggerPodRestarts(ctx context.Context, owner client.Object, namespace string) error {
+	uu := unstructured.Unstructured{}
+	kind := owner.GetObjectKind().GroupVersionKind().Kind
+	var data []byte
+	var err error
+	switch kind {
+	case "Deployment":
+		depl := owner.(*v1.Deployment)
+		depl.Spec.Template.Annotations["a"] = "crap"
+		data, err = json.Marshal(depl)
+	case "ReplicaSet":
+		depl := owner.(*v1.Deployment)
+		depl.Spec.Template.Annotations["a"] = "crap"
+		data, err = json.Marshal(depl)
+
+	}
+	return nil
+}
+
+type PodOwner interface {
+	*v1.Deployment | *v1.ReplicaSet
+}
+
+type PodOwnerSpec interface {
+	*v1.DeploymentSpec | *v1.ReplicaSetSpec
+}
+
+type PodOwnerSpecImpl[S PodOwnerSpec] struct {
+	Template corev1.PodTemplateSpec
+}
+
+type templateSetter[T PodOwner, S PodOwnerSpec] struct {
+	Spec S
+}
+
+func (c *templateSetter[T, S]) Set(key string, value T) {
+
 }
