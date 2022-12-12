@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/samber/lo"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"strings"
 )
 
@@ -104,4 +105,9 @@ func NewSecretConfig(entryID string, entryHash string, secretName string, namesp
 type CertificateDataGenerator interface {
 	GenerateJKS(ctx context.Context, entryID string, password string) (JKSCert, error)
 	GeneratePEM(ctx context.Context, entryID string) (PEMCert, error)
+}
+
+type PodOwnerIdentifier struct {
+	Name             string
+	GroupVersionKind schema.GroupVersionKind
 }

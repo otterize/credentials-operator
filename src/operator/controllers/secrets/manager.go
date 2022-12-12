@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"strings"
@@ -23,6 +24,7 @@ import (
 
 const (
 	secretExpiryDelta = 10 * time.Minute
+	CertRenewReason   = "CertificateRenewed"
 )
 
 func SecretConfigFromExistingSecret(secret *corev1.Secret) secretstypes.SecretConfig {
@@ -53,6 +55,7 @@ func SecretConfigFromExistingSecret(secret *corev1.Secret) secretstypes.SecretCo
 
 type KubernetesSecretsManager struct {
 	client.Client
+	eventRecorder            record.EventRecorder
 	certificateDataGenerator secretstypes.CertificateDataGenerator
 	serviceIdResolver        *serviceidresolver.Resolver
 }
@@ -60,8 +63,9 @@ type KubernetesSecretsManager struct {
 func NewSecretManager(
 	c client.Client,
 	tlsSecretUpdater secretstypes.CertificateDataGenerator,
-	serviceIdResolver *serviceidresolver.Resolver) *KubernetesSecretsManager {
-	return &KubernetesSecretsManager{Client: c, certificateDataGenerator: tlsSecretUpdater, serviceIdResolver: serviceIdResolver}
+	serviceIdResolver *serviceidresolver.Resolver,
+	eventRecorder record.EventRecorder) *KubernetesSecretsManager {
+	return &KubernetesSecretsManager{Client: c, certificateDataGenerator: tlsSecretUpdater, serviceIdResolver: serviceIdResolver, eventRecorder: eventRecorder}
 }
 
 func (m *KubernetesSecretsManager) isRefreshNeeded(secret *corev1.Secret) bool {
@@ -290,6 +294,8 @@ func (m *KubernetesSecretsManager) handlePodRestarts(ctx context.Context, secret
 	if err != nil {
 		return err
 	}
+	// create unique owner list
+	owners := make(map[secretstypes.PodOwnerIdentifier]client.Object)
 	for _, pod := range podList.Items {
 		logrus.Infof("######## CHECKING POD!!!!!!!!!! %s", pod.Name)
 		if _, ok := pod.Annotations[metadata.ShouldRestartOnRenewalAnnotation]; ok {
@@ -298,11 +304,14 @@ func (m *KubernetesSecretsManager) handlePodRestarts(ctx context.Context, secret
 			if err != nil {
 				return err
 			}
-			logrus.Infof("######### GOT OWNER !!!!!!!!!!!!!!!!!!!!!!!! %s %s", owner.GetName(), owner.GetObjectKind().GroupVersionKind().Kind)
-			err = m.TriggerPodRestarts(ctx, owner, secret.Namespace)
-			if err != nil {
-				return err
-			}
+			owners[secretstypes.PodOwnerIdentifier{Name: owner.GetName(), GroupVersionKind: owner.GetObjectKind().GroupVersionKind()}] = owner
+		}
+	}
+	for _, owner := range owners {
+		logrus.Infof("######### GOT OWNER !!!!!!!!!!!!!!!!!!!!!!!! %s %s", owner.GetName(), owner.GetObjectKind().GroupVersionKind().Kind)
+		err = m.TriggerPodRestarts(ctx, owner, secret)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -311,17 +320,18 @@ func (m *KubernetesSecretsManager) handlePodRestarts(ctx context.Context, secret
 
 // TriggerPodRestarts edits the pod owner's template spec with an annotation about the secret's expiry date
 // If the secret is refreshed, its expiry will be updated in the pod owner's spec which will trigger the pods to restart
-func (m *KubernetesSecretsManager) TriggerPodRestarts(ctx context.Context, owner client.Object, namespace string) error {
+func (m *KubernetesSecretsManager) TriggerPodRestarts(ctx context.Context, owner client.Object, secret *corev1.Secret) error {
 	var err error
 	kind := owner.GetObjectKind().GroupVersionKind().Kind
 	switch kind {
 	case "Deployment":
 		deployment := v1.Deployment{}
-		if err := m.Get(ctx, types.NamespacedName{Namespace: namespace, Name: owner.GetName()}, &deployment); err != nil {
+		if err := m.Get(ctx, types.NamespacedName{Namespace: secret.Namespace, Name: owner.GetName()}, &deployment); err != nil {
 			return err
 		}
 		deployment.Spec.Template = m.updatePodTemplateSpec(deployment.Spec.Template)
 		err = m.Update(ctx, &deployment)
+		m.eventRecorder.Eventf(&deployment, corev1.EventTypeNormal, CertRenewReason, "Successfully restarted Deployment after secret '%s' renewal", secret.Name)
 	case "ReplicaSet":
 		podOwnerTyped := owner.(*v1.ReplicaSet)
 		podOwnerTyped.Spec.Template = m.updatePodTemplateSpec(podOwnerTyped.Spec.Template)
