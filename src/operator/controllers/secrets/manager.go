@@ -166,7 +166,7 @@ func (m *KubernetesSecretsManager) updateTLSSecret(ctx context.Context, config s
 	return nil
 }
 
-func (m *KubernetesSecretsManager) EnsureTLSSecret(ctx context.Context, config secretstypes.SecretConfig, owner metav1.Object) error {
+func (m *KubernetesSecretsManager) EnsureTLSSecret(ctx context.Context, config secretstypes.SecretConfig, pod *corev1.Pod) error {
 	log := logrus.WithFields(logrus.Fields{"secret.namespace": config.Namespace, "secret.name": config.SecretName})
 
 	existingSecret, isExistingSecret, err := m.getExistingSecret(ctx, config.Namespace, config.SecretName)
@@ -196,8 +196,12 @@ func (m *KubernetesSecretsManager) EnsureTLSSecret(ctx context.Context, config s
 		}
 	}
 
-	if owner != nil {
-		if err := controllerutil.SetOwnerReference(owner, secret, m.Scheme()); err != nil {
+	if pod != nil {
+		podOwner, err := m.serviceIdResolver.GetOwnerObject(ctx, pod)
+		if err != nil {
+			return err
+		}
+		if err := controllerutil.SetOwnerReference(podOwner, secret, m.Scheme()); err != nil {
 			log.WithError(err).Error("failed setting pod as owner reference")
 			return err
 		}
