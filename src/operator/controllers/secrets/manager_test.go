@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"github.com/golang/mock/gomock"
-	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/spire-integration-operator/src/controllers/metadata"
 	"github.com/otterize/spire-integration-operator/src/controllers/secrets/types"
 	mock_certificates "github.com/otterize/spire-integration-operator/src/mocks/certificates"
 	mock_client "github.com/otterize/spire-integration-operator/src/mocks/controller-runtime/client"
+	mock_record "github.com/otterize/spire-integration-operator/src/mocks/eventrecorder"
+	mock_serviceidresolver "github.com/otterize/spire-integration-operator/src/mocks/serviceidresolver"
 	"github.com/otterize/spire-integration-operator/src/testdata"
 	"github.com/stretchr/testify/suite"
 	corev1 "k8s.io/api/core/v1"
@@ -24,17 +25,21 @@ import (
 
 type ManagerSuite struct {
 	suite.Suite
-	controller  *gomock.Controller
-	client      *mock_client.MockClient
-	mockCertGen *mock_certificates.MockCertificateDataGenerator
-	manager     *KubernetesSecretsManager
+	controller        *gomock.Controller
+	client            *mock_client.MockClient
+	mockCertGen       *mock_certificates.MockCertificateDataGenerator
+	eventRecorder     *mock_record.MockEventRecorder
+	serviceIdResolver *mock_serviceidresolver.MockServiceIdResolver
+	manager           *KubernetesSecretsManager
 }
 
 func (s *ManagerSuite) SetupTest() {
 	s.controller = gomock.NewController(s.T())
 	s.client = mock_client.NewMockClient(s.controller)
 	s.mockCertGen = mock_certificates.NewMockCertificateDataGenerator(s.controller)
-	s.manager = NewSecretManager(s.client, s.mockCertGen, serviceidresolver.NewResolver(s.client))
+	s.eventRecorder = mock_record.NewMockEventRecorder(s.controller)
+	s.serviceIdResolver = mock_serviceidresolver.NewMockServiceIdResolver(s.controller)
+	s.manager = NewSecretManager(s.client, s.mockCertGen, s.serviceIdResolver, s.eventRecorder)
 
 	s.client.EXPECT().Scheme().AnyTimes()
 }
@@ -201,14 +206,6 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NoRefresh
 			},
 		}
 	})
-
-	s.client.EXPECT().Update(
-		gomock.Any(),
-		&TLSSecretMatcher{
-			namespace: namespace,
-			name:      secretName,
-		},
-	).Return(nil)
 
 	certType, err := secretstypes.StrToCertType("pem")
 	s.Require().NoError(err)
@@ -511,6 +508,18 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded() {
 			},
 		},
 	).Return(nil)
+
+	pod := corev1.Pod{}
+
+	s.client.EXPECT().List(
+		gomock.Any(),
+		gomock.AssignableToTypeOf(&corev1.PodList{}),
+		gomock.AssignableToTypeOf(&client.ListOptions{}),
+	).Do(func(ctx context.Context, list *corev1.PodList, opts ...client.ListOption) {
+		*list = corev1.PodList{
+			Items: []corev1.Pod{pod},
+		}
+	})
 
 	err = s.manager.RefreshTLSSecrets(context.Background())
 	s.Require().NoError(err)

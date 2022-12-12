@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/spire-integration-operator/src/controllers/metadata"
 	"github.com/otterize/spire-integration-operator/src/controllers/secrets/types"
 	"github.com/samber/lo"
@@ -57,13 +56,13 @@ type KubernetesSecretsManager struct {
 	client.Client
 	eventRecorder            record.EventRecorder
 	certificateDataGenerator secretstypes.CertificateDataGenerator
-	serviceIdResolver        *serviceidresolver.Resolver
+	serviceIdResolver        secretstypes.ServiceIdResolver
 }
 
 func NewSecretManager(
 	c client.Client,
 	tlsSecretUpdater secretstypes.CertificateDataGenerator,
-	serviceIdResolver *serviceidresolver.Resolver,
+	serviceIdResolver secretstypes.ServiceIdResolver,
 	eventRecorder record.EventRecorder) *KubernetesSecretsManager {
 	return &KubernetesSecretsManager{Client: c, certificateDataGenerator: tlsSecretUpdater, serviceIdResolver: serviceIdResolver, eventRecorder: eventRecorder}
 }
