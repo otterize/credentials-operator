@@ -7,15 +7,15 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a
 	github.com/bombsimon/logrusr/v3 v3.0.0
 	github.com/golang/mock v1.6.0
-	github.com/otterize/intents-operator/src v0.0.0-20220908093359-0838c363d68c
+	github.com/otterize/intents-operator/src v0.0.0-20221211145636-d1cea87cca72
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.0
-	github.com/samber/lo v1.25.0
+	github.com/samber/lo v1.33.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spiffe/go-spiffe/v2 v2.0.1-0.20220414143532-2ed460a8b9d3
 	github.com/spiffe/spire v1.3.1
 	github.com/spiffe/spire-api-sdk v1.3.1
-	github.com/stretchr/testify v1.7.1
-	golang.org/x/exp v0.0.0-20220303212507-bbda1eaf7a17
+	github.com/stretchr/testify v1.8.0
+	golang.org/x/exp v0.0.0-20221012211006-4de253d81b95
 	google.golang.org/grpc v1.47.0
 	k8s.io/api v0.24.2
 	k8s.io/apimachinery v0.24.2
@@ -78,7 +78,7 @@ require (
 	golang.org/x/crypto v0.0.0-20220511200225-c6db032c6c88 // indirect
 	golang.org/x/net v0.0.0-20220526153639-5463443f8c37 // indirect
 	golang.org/x/oauth2 v0.0.0-20220524215830-622c5d57e401 // indirect
-	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
+	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20220411224347-583f2d630306 // indirect
@@ -89,7 +89,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.24.0 // indirect
 	k8s.io/component-base v0.24.0 // indirect
 	k8s.io/klog/v2 v2.60.1 // indirect
