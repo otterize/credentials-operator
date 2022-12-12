@@ -176,6 +176,8 @@ func (m *KubernetesSecretsManager) EnsureTLSSecret(ctx context.Context, config s
 	}
 
 	var secret *corev1.Secret
+	shouldUpdate := false
+
 	if isExistingSecret {
 		secret = existingSecret
 	} else {
@@ -194,8 +196,10 @@ func (m *KubernetesSecretsManager) EnsureTLSSecret(ctx context.Context, config s
 			log.WithError(err).Error("failed updating TLS secret config")
 			return err
 		}
+		shouldUpdate = true
 	}
 
+	ownerCount := len(secret.OwnerReferences)
 	if pod != nil {
 		podOwner, err := m.serviceIdResolver.GetOwnerObject(ctx, pod)
 		if err != nil {
@@ -205,13 +209,16 @@ func (m *KubernetesSecretsManager) EnsureTLSSecret(ctx context.Context, config s
 			log.WithError(err).Error("failed setting pod as owner reference")
 			return err
 		}
+		shouldUpdate = shouldUpdate || len(secret.OwnerReferences) != ownerCount
 	}
 
 	if isExistingSecret {
-		log.Info("Updating existing secret")
-		if err := m.Update(ctx, secret); err != nil {
-			logrus.WithError(err).Error("failed updating existing secret")
-			return err
+		if shouldUpdate {
+			log.Info("Updating existing secret")
+			if err := m.Update(ctx, secret); err != nil {
+				logrus.WithError(err).Error("failed updating existing secret")
+				return err
+			}
 		}
 	} else {
 		log.Info("Creating a new secret")
