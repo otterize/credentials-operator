@@ -13,7 +13,6 @@ import (
 	"hash/fnv"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -43,7 +42,7 @@ type workloadRegistry interface {
 }
 
 type secretsManager interface {
-	EnsureTLSSecret(ctx context.Context, config secretstypes.SecretConfig, owner metav1.Object) error
+	EnsureTLSSecret(ctx context.Context, config secretstypes.SecretConfig, pod *corev1.Pod) error
 	RefreshTLSSecrets(ctx context.Context) error
 }
 
