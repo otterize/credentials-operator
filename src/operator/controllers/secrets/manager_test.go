@@ -455,7 +455,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 	s.Require().NoError(err)
 }
 
-func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded_NOT_ShouldnRestartPod() {
+func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded_NOT_ShouldRestartPod() {
 	namespace := "test_namespace"
 	secretName := "test_secretname"
 	serviceName := "test_servicename"
@@ -527,7 +527,7 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded_NOT_ShouldnRe
 	s.Require().NoError(err)
 }
 
-func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded_ShouldnRestartPod() {
+func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded_ShouldRestartPod() {
 	namespace := "test_namespace"
 	secretName := "test_secretname"
 	serviceName := "test_servicename"
