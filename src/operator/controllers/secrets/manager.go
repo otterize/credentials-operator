@@ -158,7 +158,8 @@ func (m *KubernetesSecretsManager) updateTLSSecret(ctx context.Context, config s
 		metadata.CertTypeAnnotation:                       string(config.CertConfig.CertType),
 	}
 	if config.ShouldRestartPodOnRenewal {
-		secret.Annotations[metadata.ShouldRestartOnRenewalAnnotation] = "remove this annotation *from the pod* to disable"
+		// it only has to exist, we don't check the value
+		secret.Annotations[metadata.ShouldRestartOnRenewalAnnotation] = ""
 	}
 
 	secret.Data = certificateData.Files
