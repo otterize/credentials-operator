@@ -158,7 +158,7 @@ func (m *KubernetesSecretsManager) updateTLSSecret(ctx context.Context, config s
 		metadata.CertTypeAnnotation:                       string(config.CertConfig.CertType),
 	}
 	if config.ShouldRestartPodOnRenewal {
-		secret.Annotations[metadata.ShouldRestartOnRenewalAnnotation] = "remove this annotation to disable"
+		secret.Annotations[metadata.ShouldRestartOnRenewalAnnotation] = "remove this annotation *from the pod* to disable"
 	}
 
 	secret.Data = certificateData.Files
@@ -329,7 +329,6 @@ func (m *KubernetesSecretsManager) handlePodRestarts(ctx context.Context, secret
 // TriggerPodRestarts edits the pod owner's template spec with an annotation about the secret's expiry date
 // If the secret is refreshed, its expiry will be updated in the pod owner's spec which will trigger the pods to restart
 func (m *KubernetesSecretsManager) TriggerPodRestarts(ctx context.Context, owner client.Object, secret *corev1.Secret) error {
-	var err error
 	kind := owner.GetObjectKind().GroupVersionKind().Kind
 	switch kind {
 	case "Deployment":
@@ -338,7 +337,9 @@ func (m *KubernetesSecretsManager) TriggerPodRestarts(ctx context.Context, owner
 			return err
 		}
 		deployment.Spec.Template = m.updatePodTemplateSpec(deployment.Spec.Template)
-		err = m.Update(ctx, &deployment)
+		if err := m.Update(ctx, &deployment); err != nil {
+			return err
+		}
 		m.eventRecorder.Eventf(&deployment, corev1.EventTypeNormal, CertRenewReason, "Successfully restarted Deployment after secret '%s' renewal", secret.Name)
 	case "ReplicaSet":
 		replicaSet := v1.ReplicaSet{}
@@ -346,7 +347,9 @@ func (m *KubernetesSecretsManager) TriggerPodRestarts(ctx context.Context, owner
 			return err
 		}
 		replicaSet.Spec.Template = m.updatePodTemplateSpec(replicaSet.Spec.Template)
-		err = m.Update(ctx, &replicaSet)
+		if err := m.Update(ctx, &replicaSet); err != nil {
+			return err
+		}
 		m.eventRecorder.Eventf(&replicaSet, corev1.EventTypeNormal, CertRenewReason, "Successfully restarted ReplicaSet after secret '%s' renewal", secret.Name)
 	case "StatefulSet":
 		statefulSet := v1.StatefulSet{}
@@ -354,7 +357,9 @@ func (m *KubernetesSecretsManager) TriggerPodRestarts(ctx context.Context, owner
 			return err
 		}
 		statefulSet.Spec.Template = m.updatePodTemplateSpec(statefulSet.Spec.Template)
-		err = m.Update(ctx, &statefulSet)
+		if err := m.Update(ctx, &statefulSet); err != nil {
+			return err
+		}
 		m.eventRecorder.Eventf(&statefulSet, corev1.EventTypeNormal, CertRenewReason, "Successfully restarted StatefulSet after secret '%s' renewal", secret.Name)
 
 	case "DaemonSet":
@@ -363,14 +368,13 @@ func (m *KubernetesSecretsManager) TriggerPodRestarts(ctx context.Context, owner
 			return err
 		}
 		daemonSet.Spec.Template = m.updatePodTemplateSpec(daemonSet.Spec.Template)
-		err = m.Update(ctx, &daemonSet)
+		if err := m.Update(ctx, &daemonSet); err != nil {
+			return err
+		}
 		m.eventRecorder.Eventf(&daemonSet, corev1.EventTypeNormal, CertRenewReason, "Successfully restarted DaemonSet after secret '%s' renewal", secret.Name)
 
 	default:
-		err = fmt.Errorf("unsupported owner type: %s", kind)
-	}
-	if err != nil {
-		return err
+		return fmt.Errorf("unsupported owner type: %s", kind)
 	}
 	return nil
 }
