@@ -36,12 +36,12 @@ const (
 	ReasonSPIREEntryHashCalculationFailed = "SPIREEntryHashCalculationFailed"
 )
 
-type workloadRegistry interface {
+type WorkloadRegistry interface {
 	RegisterK8SPod(ctx context.Context, namespace string, serviceNameLabel string, serviceName string, ttl int32, dnsNames []string) (string, error)
 	CleanupOrphanK8SPodEntries(ctx context.Context, serviceNameLabel string, existingServicesByNamespace map[string]*goset.Set[string]) error
 }
 
-type secretsManager interface {
+type SecretsManager interface {
 	EnsureTLSSecret(ctx context.Context, config secretstypes.SecretConfig, pod *corev1.Pod) error
 	RefreshTLSSecrets(ctx context.Context) error
 }
@@ -50,8 +50,8 @@ type secretsManager interface {
 type PodReconciler struct {
 	client.Client
 	scheme            *runtime.Scheme
-	workloadRegistry  workloadRegistry
-	secretsManager    secretsManager
+	workloadRegistry  WorkloadRegistry
+	secretsManager    SecretsManager
 	serviceIdResolver *serviceidresolver.Resolver
 	eventRecorder     record.EventRecorder
 }
@@ -61,8 +61,8 @@ type PodReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=replicasets;daemonsets;statefulsets;deployments,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=events,verbs=get;update;patch;list;watch;create
 
-func NewPodReconciler(client client.Client, scheme *runtime.Scheme, workloadRegistry workloadRegistry,
-	secretsManager secretsManager, serviceIdResolver *serviceidresolver.Resolver, eventRecorder record.EventRecorder) *PodReconciler {
+func NewPodReconciler(client client.Client, scheme *runtime.Scheme, workloadRegistry WorkloadRegistry,
+	secretsManager SecretsManager, serviceIdResolver *serviceidresolver.Resolver, eventRecorder record.EventRecorder) *PodReconciler {
 	return &PodReconciler{
 		Client:            client,
 		scheme:            scheme,

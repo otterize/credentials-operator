@@ -17,6 +17,10 @@ type OtterizeCertificateDataGenerator struct {
 	cloudClient OtterizeCloudClient
 }
 
+func NewOtterizeCertificateGenerator(cloudClient OtterizeCloudClient) *OtterizeCertificateDataGenerator {
+	return &OtterizeCertificateDataGenerator{cloudClient: cloudClient}
+}
+
 func keyPairToExpiryStr(keyPair otterizegraphql.TLSKeyPair) string {
 	expiry := time.Unix(int64(keyPair.ExpiresAt), 0)
 	expiryStr := expiry.Format(time.RFC3339)
