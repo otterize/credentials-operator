@@ -51,10 +51,22 @@ func PemToKeyStore(certificatesChainPEM [][]byte, keyPem []byte, password string
 	if block == nil {
 		return keystore.KeyStore{}, errors.New("error decoding private key PEM block")
 	}
+	var key any
+	var err error
+	switch block.Type {
+	case "PRIVATE KEY":
+		key, err = x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err != nil {
+			return keystore.KeyStore{}, err
+		}
+	case "RSA PRIVATE KEY":
+		key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+		if err != nil {
+			return keystore.KeyStore{}, err
+		}
+	default:
+		return keystore.KeyStore{}, fmt.Errorf("unsupprted block type for pricate key: %s", block.Type)
 
-	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return keystore.KeyStore{}, err
 	}
 
 	keyDER, err := x509.MarshalPKCS8PrivateKey(key)

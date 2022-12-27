@@ -172,7 +172,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	log.Info("updating SPIRE entries & secrets for pod")
+	log.Info("updating workload entries & secrets for pod")
 
 	// resolve pod to otterize service name
 	serviceID, err := r.serviceIdResolver.ResolvePodToServiceIdentity(ctx, pod)
@@ -207,7 +207,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// Add workload entry for pod
 	entryID, err := r.workloadRegistry.RegisterK8SPod(ctx, pod.Namespace, metadata.RegisteredServiceNameLabel, serviceID, ttl, dnsNames)
 	if err != nil {
-		log.WithError(err).Error("failed registering SPIRE entry for pod")
+		log.WithError(err).Error("failed registering workload entry for pod")
 		r.eventRecorder.Eventf(pod, corev1.EventTypeWarning, ReasonSPIREEntryRegistrationFailed, "Failed registering workload entry: %s", err.Error())
 		return ctrl.Result{}, err
 	}

@@ -9,12 +9,20 @@ fragment TLSKeyPair on KeyPair {
 mutation ReportKubernetesWorkload($namespace: String!, $podOwnerName: String!) {
     reportKubernetesWorkload(namespace: $namespace, podOwnerName: $podOwnerName)
     {
-        id
+        id1
     }
 }
 
-query GetTLSKeyPair ($serviceID: ID!, $certificateCustomizations: CertificateCustomization) {
-    service(id: $serviceID) {
+#query GetTLSKeyPair ($serviceID: ID!, $certificateCustomizations: CertificateCustomization) {
+#    service(id: $serviceID) {
+#        tlsKeyPair(certificateCustomization: $certificateCustomizations) {
+#            ...TLSKeyPair
+#        }
+#    }
+#}
+
+query GetTLSKeyPair ($id: ID!$name: String!, $namespace: String!, $certificateCustomizations: CertificateCustomization) {
+    mockService(id: $id, name: $name, namespace: $namespace) {
         tlsKeyPair(certificateCustomization: $certificateCustomizations) {
             ...TLSKeyPair
         }

@@ -1,6 +1,7 @@
 package otterizecertgen
 
 import (
+	"bytes"
 	"context"
 	"github.com/otterize/spire-integration-operator/src/controllers/certificates/jks"
 	"github.com/otterize/spire-integration-operator/src/controllers/otterizeclient/otterizegraphql"
@@ -33,7 +34,10 @@ func (m *OtterizeCertificateDataGenerator) GeneratePEM(ctx context.Context, serv
 		return secretstypes.PEMCert{}, err
 	}
 	expiryStr := keyPairToExpiryStr(keyPair)
-	return secretstypes.PEMCert{Key: []byte(keyPair.KeyPEM), SVID: []byte(keyPair.CertPEM), Bundle: []byte(keyPair.RootCAPEM), Expiry: expiryStr}, nil
+	certCAChain := lo.Map([]string{keyPair.CaPEM, keyPair.RootCAPEM}, func(cert string, _ int) []byte { return []byte(cert) })
+	CaPoolPem := bytes.Join(certCAChain, []byte("\n"))
+
+	return secretstypes.PEMCert{Key: []byte(keyPair.KeyPEM), SVID: []byte(keyPair.CertPEM), Bundle: CaPoolPem, Expiry: expiryStr}, nil
 }
 
 func (m *OtterizeCertificateDataGenerator) GenerateJKS(ctx context.Context, serviceId string, password string) (secretstypes.JKSCert, error) {
@@ -41,7 +45,7 @@ func (m *OtterizeCertificateDataGenerator) GenerateJKS(ctx context.Context, serv
 	if err != nil {
 		return secretstypes.JKSCert{}, err
 	}
-	certChain := lo.Map([]string{keyPair.CertPEM, keyPair.CaPEM, keyPair.CaPEM}, func(cert string, _ int) []byte { return []byte(cert) })
+	certChain := lo.Map([]string{keyPair.CertPEM, keyPair.CaPEM, keyPair.RootCAPEM}, func(cert string, _ int) []byte { return []byte(cert) })
 	keyStore, err := jks.PemToKeyStore(certChain, []byte(keyPair.KeyPEM), password)
 	if err != nil {
 		return secretstypes.JKSCert{}, err

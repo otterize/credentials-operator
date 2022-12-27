@@ -8,6 +8,7 @@ import (
 	"github.com/amit7itz/goset"
 	"github.com/otterize/intents-operator/src/shared/injectablerecorder"
 	"github.com/otterize/spire-integration-operator/src/controllers/otterizeclient/otterizegraphql"
+	"github.com/samber/lo"
 	"github.com/spf13/viper"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
@@ -16,6 +17,7 @@ import (
 type CloudClient struct {
 	graphqlClient graphql.Client
 	injectablerecorder.InjectableRecorder
+	serviceCache map[string]lo.Tuple3[string, string, []string]
 }
 
 func newGraphqlClient(ctx context.Context) (graphql.Client, error) {
@@ -50,22 +52,27 @@ func NewCloudClient(ctx context.Context) (*CloudClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &CloudClient{graphqlClient: gql}, err
+	return &CloudClient{graphqlClient: gql, serviceCache: map[string]lo.Tuple3[string, string, []string]{}}, err
 }
-func (c *CloudClient) GetTLSKeyPair(ctx context.Context, serviceId string, certificateCustomization otterizegraphql.CertificateCustomization) (otterizegraphql.TLSKeyPair, error) {
-	res, err := otterizegraphql.GetTLSKeyPair(ctx, c.graphqlClient, serviceId, certificateCustomization)
+func (c *CloudClient) GetTLSKeyPair(ctx context.Context, serviceId string, _ otterizegraphql.CertificateCustomization) (otterizegraphql.TLSKeyPair, error) {
+	tup, ok := c.serviceCache[serviceId]
+	if !ok {
+		return otterizegraphql.TLSKeyPair{}, fmt.Errorf("service id not registered: %s", serviceId)
+	}
+	res, err := otterizegraphql.GetTLSKeyPair(ctx, c.graphqlClient, serviceId, tup.A, tup.B, otterizegraphql.CertificateCustomization{DnsNames: tup.C})
 	if err != nil {
 		return otterizegraphql.TLSKeyPair{}, err
 	}
-	return res.Service.TlsKeyPair.TLSKeyPair, nil
+	return res.MockService.TlsKeyPair.TLSKeyPair, nil
 }
 
-func (c *CloudClient) RegisterK8SPod(ctx context.Context, namespace string, _ string, serviceName string, _ int32, _ []string) (string, error) {
+func (c *CloudClient) RegisterK8SPod(ctx context.Context, namespace string, _ string, serviceName string, _ int32, dnsNames []string) (string, error) {
 	res, err := otterizegraphql.ReportKubernetesWorkload(ctx, c.graphqlClient, namespace, serviceName)
 	if err != nil {
 		return "", err
 	}
-	return res.ReportKubernetesWorkload.Id, nil
+	c.serviceCache[res.ReportKubernetesWorkload.Id1] = lo.Tuple3[string, string, []string]{serviceName, namespace, dnsNames}
+	return res.ReportKubernetesWorkload.Id1, nil
 }
 
 func (c *CloudClient) CleanupOrphanK8SPodEntries(_ context.Context, _ string, _ map[string]*goset.Set[string]) error {
