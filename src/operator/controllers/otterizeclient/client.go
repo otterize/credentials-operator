@@ -73,8 +73,8 @@ func (c *CloudClient) RegisterK8SPod(ctx context.Context, namespace string, _ st
 		return "", err
 	}
 	certCustomization := otterizegraphql.CertificateCustomization{Ttl: int(ttl), DnsNames: dnsNames}
-	c.serviceCache[res.ReportKubernetesWorkload.Id1] = lo.Tuple3[string, string, otterizegraphql.CertificateCustomization]{serviceName, namespace, certCustomization}
-	return res.ReportKubernetesWorkload.Id1, nil
+	c.serviceCache[res.ReportKubernetesWorkload.Id] = lo.Tuple3[string, string, otterizegraphql.CertificateCustomization]{serviceName, namespace, certCustomization}
+	return res.ReportKubernetesWorkload.Id, nil
 }
 
 func (c *CloudClient) CleanupOrphanK8SPodEntries(_ context.Context, _ string, _ map[string]*goset.Set[string]) error {

@@ -9,7 +9,7 @@ fragment TLSKeyPair on KeyPair {
 mutation ReportKubernetesWorkload($namespace: String!, $podOwnerName: String!) {
     reportKubernetesWorkload(namespace: $namespace, podOwnerName: $podOwnerName)
     {
-        id1
+        id
     }
 }
 

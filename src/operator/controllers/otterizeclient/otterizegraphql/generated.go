@@ -116,11 +116,11 @@ func (v *GetTLSKeyPairResponse) GetMockService() GetTLSKeyPairMockService { retu
 
 // ReportKubernetesWorkloadReportKubernetesWorkloadService includes the requested fields of the GraphQL type Service.
 type ReportKubernetesWorkloadReportKubernetesWorkloadService struct {
-	Id1 string `json:"id1"`
+	Id string `json:"id"`
 }
 
-// GetId1 returns ReportKubernetesWorkloadReportKubernetesWorkloadService.Id1, and is useful for accessing the field via an interface.
-func (v *ReportKubernetesWorkloadReportKubernetesWorkloadService) GetId1() string { return v.Id1 }
+// GetId returns ReportKubernetesWorkloadReportKubernetesWorkloadService.Id, and is useful for accessing the field via an interface.
+func (v *ReportKubernetesWorkloadReportKubernetesWorkloadService) GetId() string { return v.Id }
 
 // ReportKubernetesWorkloadResponse is returned by ReportKubernetesWorkload on success.
 type ReportKubernetesWorkloadResponse struct {
@@ -248,7 +248,7 @@ func ReportKubernetesWorkload(
 		Query: `
 mutation ReportKubernetesWorkload ($namespace: String!, $podOwnerName: String!) {
 	reportKubernetesWorkload(namespace: $namespace, podOwnerName: $podOwnerName) {
-		id1
+		id
 	}
 }
 `,
