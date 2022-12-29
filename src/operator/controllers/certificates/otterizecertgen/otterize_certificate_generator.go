@@ -11,7 +11,7 @@ import (
 )
 
 type OtterizeCloudClient interface {
-	GetTLSKeyPair(ctx context.Context, serviceId string, certificateCustomization otterizegraphql.CertificateCustomization) (otterizegraphql.TLSKeyPair, error)
+	GetTLSKeyPair(ctx context.Context, serviceId string) (otterizegraphql.TLSKeyPair, error)
 }
 
 type OtterizeCertificateDataGenerator struct {
@@ -29,7 +29,7 @@ func keyPairToExpiryStr(keyPair otterizegraphql.TLSKeyPair) string {
 }
 
 func (m *OtterizeCertificateDataGenerator) GeneratePEM(ctx context.Context, serviceId string) (secretstypes.PEMCert, error) {
-	keyPair, err := m.cloudClient.GetTLSKeyPair(ctx, serviceId, otterizegraphql.CertificateCustomization{})
+	keyPair, err := m.cloudClient.GetTLSKeyPair(ctx, serviceId)
 	if err != nil {
 		return secretstypes.PEMCert{}, err
 	}
@@ -41,7 +41,7 @@ func (m *OtterizeCertificateDataGenerator) GeneratePEM(ctx context.Context, serv
 }
 
 func (m *OtterizeCertificateDataGenerator) GenerateJKS(ctx context.Context, serviceId string, password string) (secretstypes.JKSCert, error) {
-	keyPair, err := m.cloudClient.GetTLSKeyPair(ctx, serviceId, otterizegraphql.CertificateCustomization{})
+	keyPair, err := m.cloudClient.GetTLSKeyPair(ctx, serviceId)
 	if err != nil {
 		return secretstypes.JKSCert{}, err
 	}
