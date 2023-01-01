@@ -11,6 +11,7 @@ import (
 	mock_otterizecertgen "github.com/otterize/spire-integration-operator/src/mocks/otteirzecertgen"
 	"github.com/pavlo-v-chernykh/keystore-go/v4"
 	"github.com/stretchr/testify/suite"
+	"sort"
 	"testing"
 	"time"
 )
@@ -173,6 +174,7 @@ func (s *ManagerSuite) TestCertGenerator_GenerateJKS() {
 	s.Require().NoError(err)
 	s.Require().Equal(len(ts.Aliases()), 2)
 	caAliases := ts.Aliases()
+	sort.Strings(caAliases)
 	caAlias := caAliases[0]
 	ca, err := ts.GetTrustedCertificateEntry(caAlias)
 	s.Require().NoError(err)
