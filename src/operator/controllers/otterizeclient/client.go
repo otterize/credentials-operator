@@ -60,7 +60,7 @@ func (c *CloudClient) GetTLSKeyPair(ctx context.Context, serviceId string) (otte
 		return otterizegraphql.TLSKeyPair{}, fmt.Errorf("service id not registered: %s", serviceId)
 	}
 	serviceName, namespace, customization := tup.Unpack()
-	res, err := otterizegraphql.GetTLSKeyPair(ctx, c.graphqlClient, serviceId, serviceName, namespace, customization)
+	res, err := otterizegraphql.GetTLSKeyPair(ctx, c.graphqlClient, &serviceId, &serviceName, &namespace, &customization)
 	if err != nil {
 		return otterizegraphql.TLSKeyPair{}, err
 	}
@@ -72,7 +72,11 @@ func (c *CloudClient) RegisterK8SPod(ctx context.Context, namespace string, _ st
 	if err != nil {
 		return "", err
 	}
-	certCustomization := otterizegraphql.CertificateCustomization{Ttl: int(ttl), DnsNames: dnsNames}
+	certCustomization := otterizegraphql.CertificateCustomization{DnsNames: lo.ToSlicePtr(dnsNames)}
+	if ttl != 0 {
+		ttlInt := int(ttl)
+		certCustomization.Ttl = &ttlInt
+	}
 	c.serviceCache[res.ReportKubernetesWorkload.Id] = lo.Tuple3[string, string, otterizegraphql.CertificateCustomization]{serviceName, namespace, certCustomization}
 	return res.ReportKubernetesWorkload.Id, nil
 }

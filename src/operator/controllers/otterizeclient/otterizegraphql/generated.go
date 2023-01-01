@@ -10,23 +10,23 @@ import (
 )
 
 type CertificateCustomization struct {
-	DnsNames []string `json:"dnsNames"`
-	Ttl      int      `json:"ttl"`
+	DnsNames []*string `json:"dnsNames"`
+	Ttl      *int      `json:"ttl"`
 }
 
 // GetDnsNames returns CertificateCustomization.DnsNames, and is useful for accessing the field via an interface.
-func (v *CertificateCustomization) GetDnsNames() []string { return v.DnsNames }
+func (v *CertificateCustomization) GetDnsNames() []*string { return v.DnsNames }
 
 // GetTtl returns CertificateCustomization.Ttl, and is useful for accessing the field via an interface.
-func (v *CertificateCustomization) GetTtl() int { return v.Ttl }
+func (v *CertificateCustomization) GetTtl() *int { return v.Ttl }
 
 // GetTLSKeyPairMockService includes the requested fields of the GraphQL type Service.
 type GetTLSKeyPairMockService struct {
-	TlsKeyPair GetTLSKeyPairMockServiceTlsKeyPair `json:"tlsKeyPair"`
+	TlsKeyPair *GetTLSKeyPairMockServiceTlsKeyPair `json:"tlsKeyPair"`
 }
 
 // GetTlsKeyPair returns GetTLSKeyPairMockService.TlsKeyPair, and is useful for accessing the field via an interface.
-func (v *GetTLSKeyPairMockService) GetTlsKeyPair() GetTLSKeyPairMockServiceTlsKeyPair {
+func (v *GetTLSKeyPairMockService) GetTlsKeyPair() *GetTLSKeyPairMockServiceTlsKeyPair {
 	return v.TlsKeyPair
 }
 
@@ -108,11 +108,11 @@ func (v *GetTLSKeyPairMockServiceTlsKeyPair) __premarshalJSON() (*__premarshalGe
 
 // GetTLSKeyPairResponse is returned by GetTLSKeyPair on success.
 type GetTLSKeyPairResponse struct {
-	MockService GetTLSKeyPairMockService `json:"mockService"`
+	MockService *GetTLSKeyPairMockService `json:"mockService"`
 }
 
 // GetMockService returns GetTLSKeyPairResponse.MockService, and is useful for accessing the field via an interface.
-func (v *GetTLSKeyPairResponse) GetMockService() GetTLSKeyPairMockService { return v.MockService }
+func (v *GetTLSKeyPairResponse) GetMockService() *GetTLSKeyPairMockService { return v.MockService }
 
 // ReportKubernetesWorkloadReportKubernetesWorkloadService includes the requested fields of the GraphQL type Service.
 type ReportKubernetesWorkloadReportKubernetesWorkloadService struct {
@@ -158,23 +158,23 @@ func (v *TLSKeyPair) GetExpiresAt() int { return v.ExpiresAt }
 
 // __GetTLSKeyPairInput is used internally by genqlient
 type __GetTLSKeyPairInput struct {
-	Id                        string                   `json:"id"`
-	Name                      string                   `json:"name"`
-	Namespace                 string                   `json:"namespace"`
-	CertificateCustomizations CertificateCustomization `json:"certificateCustomizations"`
+	Id                        *string                   `json:"id"`
+	Name                      *string                   `json:"name"`
+	Namespace                 *string                   `json:"namespace"`
+	CertificateCustomizations *CertificateCustomization `json:"certificateCustomizations"`
 }
 
 // GetId returns __GetTLSKeyPairInput.Id, and is useful for accessing the field via an interface.
-func (v *__GetTLSKeyPairInput) GetId() string { return v.Id }
+func (v *__GetTLSKeyPairInput) GetId() *string { return v.Id }
 
 // GetName returns __GetTLSKeyPairInput.Name, and is useful for accessing the field via an interface.
-func (v *__GetTLSKeyPairInput) GetName() string { return v.Name }
+func (v *__GetTLSKeyPairInput) GetName() *string { return v.Name }
 
 // GetNamespace returns __GetTLSKeyPairInput.Namespace, and is useful for accessing the field via an interface.
-func (v *__GetTLSKeyPairInput) GetNamespace() string { return v.Namespace }
+func (v *__GetTLSKeyPairInput) GetNamespace() *string { return v.Namespace }
 
 // GetCertificateCustomizations returns __GetTLSKeyPairInput.CertificateCustomizations, and is useful for accessing the field via an interface.
-func (v *__GetTLSKeyPairInput) GetCertificateCustomizations() CertificateCustomization {
+func (v *__GetTLSKeyPairInput) GetCertificateCustomizations() *CertificateCustomization {
 	return v.CertificateCustomizations
 }
 
@@ -193,10 +193,10 @@ func (v *__ReportKubernetesWorkloadInput) GetPodOwnerName() string { return v.Po
 func GetTLSKeyPair(
 	ctx context.Context,
 	client graphql.Client,
-	id string,
-	name string,
-	namespace string,
-	certificateCustomizations CertificateCustomization,
+	id *string,
+	name *string,
+	namespace *string,
+	certificateCustomizations *CertificateCustomization,
 ) (*GetTLSKeyPairResponse, error) {
 	req := &graphql.Request{
 		OpName: "GetTLSKeyPair",
