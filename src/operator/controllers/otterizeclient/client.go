@@ -14,10 +14,16 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
+type cachedServiceDetails struct {
+	serviceName       string
+	namesSpace        string
+	certCustomization otterizegraphql.CertificateCustomization
+}
+
 type CloudClient struct {
 	graphqlClient graphql.Client
 	injectablerecorder.InjectableRecorder
-	serviceCache map[string]lo.Tuple3[string, string, otterizegraphql.CertificateCustomization]
+	serviceCache map[string]cachedServiceDetails
 }
 
 func newGraphqlClient(ctx context.Context) (graphql.Client, error) {
@@ -51,15 +57,14 @@ func NewCloudClient(ctx context.Context) (*CloudClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &CloudClient{graphqlClient: gql, serviceCache: map[string]lo.Tuple3[string, string, otterizegraphql.CertificateCustomization]{}}, err
+	return &CloudClient{graphqlClient: gql, serviceCache: map[string]cachedServiceDetails{}}, err
 }
 func (c *CloudClient) GetTLSKeyPair(ctx context.Context, serviceId string) (otterizegraphql.TLSKeyPair, error) {
-	tup, ok := c.serviceCache[serviceId]
+	cachedDetails, ok := c.serviceCache[serviceId]
 	if !ok {
 		return otterizegraphql.TLSKeyPair{}, fmt.Errorf("service id not registered: %s", serviceId)
 	}
-	serviceName, namespace, customization := tup.Unpack()
-	res, err := otterizegraphql.GetTLSKeyPair(ctx, c.graphqlClient, &serviceId, &serviceName, &namespace, &customization)
+	res, err := otterizegraphql.GetTLSKeyPair(ctx, c.graphqlClient, &serviceId, &cachedDetails.serviceName, &cachedDetails.serviceName, &cachedDetails.certCustomization)
 	if err != nil {
 		return otterizegraphql.TLSKeyPair{}, err
 	}
@@ -76,7 +81,7 @@ func (c *CloudClient) RegisterK8SPod(ctx context.Context, namespace string, _ st
 		ttlInt := int(ttl)
 		certCustomization.Ttl = &ttlInt
 	}
-	c.serviceCache[res.ReportKubernetesWorkload.Id] = lo.Tuple3[string, string, otterizegraphql.CertificateCustomization]{serviceName, namespace, certCustomization}
+	c.serviceCache[res.ReportKubernetesWorkload.Id] = cachedServiceDetails{serviceName: serviceName, namesSpace: namespace, certCustomization: certCustomization}
 	return res.ReportKubernetesWorkload.Id, nil
 }
 
