@@ -22,7 +22,7 @@ mutation ReportKubernetesWorkload($namespace: String!, $podOwnerName: String!) {
 #}
 
 # @genqlient(pointer: true)
-query GetTLSKeyPair ($id: ID!$name: String!, $namespace: String!, $certificateCustomizations: CertificateCustomization) {
+query GetTLSKeyPair ($id: ID!, $name: String!, $namespace: String!, $certificateCustomizations: CertificateCustomization) {
     mockService(id: $id, name: $name, namespace: $namespace) {
         tlsKeyPair(certificateCustomization: $certificateCustomizations) {
             ...TLSKeyPair
