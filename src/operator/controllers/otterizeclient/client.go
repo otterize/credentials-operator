@@ -35,9 +35,8 @@ func newGraphqlClient(ctx context.Context) (graphql.Client, error) {
 	cfg := clientcredentials.Config{
 		ClientID:     clientID,
 		ClientSecret: secret,
-		//TokenURL:     "http://app.staging.otterize.com/auth/tokens/token",
-		TokenURL:  fmt.Sprintf("%s/auth/tokens/token", apiAddress),
-		AuthStyle: oauth2.AuthStyleInParams,
+		TokenURL:     fmt.Sprintf("%s/auth/tokens/token", apiAddress),
+		AuthStyle:    oauth2.AuthStyleInParams,
 	}
 
 	tokenSrc := cfg.TokenSource(ctx)
