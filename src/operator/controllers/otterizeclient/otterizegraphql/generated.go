@@ -10,15 +10,15 @@ import (
 )
 
 type CertificateCustomization struct {
-	DnsNames []*string `json:"dnsNames"`
-	Ttl      *int      `json:"ttl"`
+	DnsNames []string `json:"dnsNames"`
+	Ttl      int      `json:"ttl"`
 }
 
 // GetDnsNames returns CertificateCustomization.DnsNames, and is useful for accessing the field via an interface.
-func (v *CertificateCustomization) GetDnsNames() []*string { return v.DnsNames }
+func (v *CertificateCustomization) GetDnsNames() []string { return v.DnsNames }
 
 // GetTtl returns CertificateCustomization.Ttl, and is useful for accessing the field via an interface.
-func (v *CertificateCustomization) GetTtl() *int { return v.Ttl }
+func (v *CertificateCustomization) GetTtl() int { return v.Ttl }
 
 type ComponentType string
 
@@ -175,17 +175,11 @@ func (v *TLSKeyPair) GetExpiresAt() int { return v.ExpiresAt }
 
 // __GetTLSKeyPairInput is used internally by genqlient
 type __GetTLSKeyPairInput struct {
-	Id                        *string                   `json:"id"`
-	CertificateCustomizations *CertificateCustomization `json:"certificateCustomizations"`
+	Id *string `json:"id"`
 }
 
 // GetId returns __GetTLSKeyPairInput.Id, and is useful for accessing the field via an interface.
 func (v *__GetTLSKeyPairInput) GetId() *string { return v.Id }
-
-// GetCertificateCustomizations returns __GetTLSKeyPairInput.CertificateCustomizations, and is useful for accessing the field via an interface.
-func (v *__GetTLSKeyPairInput) GetCertificateCustomizations() *CertificateCustomization {
-	return v.CertificateCustomizations
-}
 
 // __ReportComponentStatusInput is used internally by genqlient
 type __ReportComponentStatusInput struct {
@@ -197,8 +191,9 @@ func (v *__ReportComponentStatusInput) GetComponent() ComponentType { return v.C
 
 // __ReportKubernetesWorkloadInput is used internally by genqlient
 type __ReportKubernetesWorkloadInput struct {
-	Namespace    string `json:"namespace"`
-	PodOwnerName string `json:"podOwnerName"`
+	Namespace                 string                   `json:"namespace"`
+	PodOwnerName              string                   `json:"podOwnerName"`
+	CertificateCustomizations CertificateCustomization `json:"certificateCustomizations"`
 }
 
 // GetNamespace returns __ReportKubernetesWorkloadInput.Namespace, and is useful for accessing the field via an interface.
@@ -207,18 +202,22 @@ func (v *__ReportKubernetesWorkloadInput) GetNamespace() string { return v.Names
 // GetPodOwnerName returns __ReportKubernetesWorkloadInput.PodOwnerName, and is useful for accessing the field via an interface.
 func (v *__ReportKubernetesWorkloadInput) GetPodOwnerName() string { return v.PodOwnerName }
 
+// GetCertificateCustomizations returns __ReportKubernetesWorkloadInput.CertificateCustomizations, and is useful for accessing the field via an interface.
+func (v *__ReportKubernetesWorkloadInput) GetCertificateCustomizations() CertificateCustomization {
+	return v.CertificateCustomizations
+}
+
 func GetTLSKeyPair(
 	ctx context.Context,
 	client graphql.Client,
 	id *string,
-	certificateCustomizations *CertificateCustomization,
 ) (*GetTLSKeyPairResponse, error) {
 	req := &graphql.Request{
 		OpName: "GetTLSKeyPair",
 		Query: `
-query GetTLSKeyPair ($id: ID!, $certificateCustomizations: CertificateCustomization) {
+query GetTLSKeyPair ($id: ID!) {
 	service(id: $id) {
-		tlsKeyPair(certificateCustomization: $certificateCustomizations) {
+		tlsKeyPair {
 			... TLSKeyPair
 		}
 	}
@@ -232,8 +231,7 @@ fragment TLSKeyPair on KeyPair {
 }
 `,
 		Variables: &__GetTLSKeyPairInput{
-			Id:                        id,
-			CertificateCustomizations: certificateCustomizations,
+			Id: id,
 		},
 	}
 	var err error
@@ -285,19 +283,21 @@ func ReportKubernetesWorkload(
 	client graphql.Client,
 	namespace string,
 	podOwnerName string,
+	certificateCustomizations CertificateCustomization,
 ) (*ReportKubernetesWorkloadResponse, error) {
 	req := &graphql.Request{
 		OpName: "ReportKubernetesWorkload",
 		Query: `
-mutation ReportKubernetesWorkload ($namespace: String!, $podOwnerName: String!) {
-	reportKubernetesWorkload(namespace: $namespace, podOwnerName: $podOwnerName) {
+mutation ReportKubernetesWorkload ($namespace: String!, $podOwnerName: String!, $certificateCustomizations: CertificateCustomization) {
+	reportKubernetesWorkload(namespace: $namespace, podOwnerName: $podOwnerName, certificateCustomization: $certificateCustomizations) {
 		id
 	}
 }
 `,
 		Variables: &__ReportKubernetesWorkloadInput{
-			Namespace:    namespace,
-			PodOwnerName: podOwnerName,
+			Namespace:                 namespace,
+			PodOwnerName:              podOwnerName,
+			CertificateCustomizations: certificateCustomizations,
 		},
 	}
 	var err error

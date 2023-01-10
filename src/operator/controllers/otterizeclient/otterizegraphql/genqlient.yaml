@@ -3,6 +3,7 @@
 schema:
   - ../../../../../graphql/root.graphql
   - ../../../../../graphql/credentials.graphql
+  - ../../../../../graphql/credentialstypes.graphql
   - ../../../../../graphql/services.graphql
   - ../../../../../graphql/namespaces.graphql
   - ../../../../../graphql/clusters.graphql
