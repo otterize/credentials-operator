@@ -62,11 +62,11 @@ func (c *CloudClient) GetTLSKeyPair(ctx context.Context, serviceId string) (otte
 
 func (c *CloudClient) RegisterK8SPod(ctx context.Context, namespace string, _ string, serviceName string, ttl int32, dnsNames []string) (string, error) {
 	certCustomization := otterizegraphql.CertificateCustomization{DnsNames: dnsNames, Ttl: int(ttl)}
-	res, err := otterizegraphql.ReportKubernetesWorkload(ctx, c.graphqlClient, namespace, serviceName, certCustomization)
+	res, err := otterizegraphql.RegisterKubernetesPodOwnerCertificateRequest(ctx, c.graphqlClient, namespace, serviceName, certCustomization)
 	if err != nil {
 		return "", err
 	}
-	return res.ReportKubernetesWorkload.Id, nil
+	return res.RegisterKubernetesPodOwnerCertificateRequest.Id, nil
 }
 
 func (c *CloudClient) CleanupOrphanK8SPodEntries(_ context.Context, _ string, _ map[string]*goset.Set[string]) error {

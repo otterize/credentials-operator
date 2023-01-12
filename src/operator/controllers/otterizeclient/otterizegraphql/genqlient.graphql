@@ -6,8 +6,8 @@ fragment TLSKeyPair on KeyPair {
     expiresAt
 }
 
-mutation ReportKubernetesWorkload($namespace: String!, $podOwnerName: String!, $certificateCustomizations: CertificateCustomization) {
-    reportKubernetesWorkload(namespace: $namespace, podOwnerName: $podOwnerName, certificateCustomization: $certificateCustomizations)
+mutation RegisterKubernetesPodOwnerCertificateRequest($namespace: String!, $podOwnerName: String!, $certificateCustomizations: CertificateCustomization) {
+    registerKubernetesPodOwnerCertificateRequest(namespace: $namespace, podOwnerName: $podOwnerName, certificateCustomization: $certificateCustomizations)
     {
         id
     }
