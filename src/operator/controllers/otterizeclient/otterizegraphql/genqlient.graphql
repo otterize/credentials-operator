@@ -25,3 +25,7 @@ query GetTLSKeyPair ($id: ID!) {
 mutation ReportComponentStatus($component: ComponentType!) {
     reportIntegrationComponentStatus(component: $component)
 }
+
+mutation CleanupOrphanK8SPodEntries($existingPodOwners: [NamespacedPodOwner!]!) {
+    removeOrphanedCertificateRequests(activePodOwners: $existingPodOwners)
+}

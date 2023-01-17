@@ -20,6 +20,17 @@ func (v *CertificateCustomization) GetDnsNames() []string { return v.DnsNames }
 // GetTtl returns CertificateCustomization.Ttl, and is useful for accessing the field via an interface.
 func (v *CertificateCustomization) GetTtl() int { return v.Ttl }
 
+// CleanupOrphanK8SPodEntriesResponse is returned by CleanupOrphanK8SPodEntries on success.
+type CleanupOrphanK8SPodEntriesResponse struct {
+	// Removes certificateRequests of pod owners from the context's cluster which does not appear in the "activePodOwners" list
+	RemoveOrphanedCertificateRequests bool `json:"removeOrphanedCertificateRequests"`
+}
+
+// GetRemoveOrphanedCertificateRequests returns CleanupOrphanK8SPodEntriesResponse.RemoveOrphanedCertificateRequests, and is useful for accessing the field via an interface.
+func (v *CleanupOrphanK8SPodEntriesResponse) GetRemoveOrphanedCertificateRequests() bool {
+	return v.RemoveOrphanedCertificateRequests
+}
+
 type ComponentType string
 
 const (
@@ -121,6 +132,17 @@ func (v *GetTLSKeyPairServiceTlsKeyPair) __premarshalJSON() (*__premarshalGetTLS
 	return &retval, nil
 }
 
+type NamespacedPodOwner struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+}
+
+// GetName returns NamespacedPodOwner.Name, and is useful for accessing the field via an interface.
+func (v *NamespacedPodOwner) GetName() string { return v.Name }
+
+// GetNamespace returns NamespacedPodOwner.Namespace, and is useful for accessing the field via an interface.
+func (v *NamespacedPodOwner) GetNamespace() string { return v.Namespace }
+
 // RegisterKubernetesPodOwnerCertificateRequestRegisterKubernetesPodOwnerCertificateRequestService includes the requested fields of the GraphQL type Service.
 type RegisterKubernetesPodOwnerCertificateRequestRegisterKubernetesPodOwnerCertificateRequestService struct {
 	Id string `json:"id"`
@@ -176,6 +198,16 @@ func (v *TLSKeyPair) GetRootCAPEM() string { return v.RootCAPEM }
 // GetExpiresAt returns TLSKeyPair.ExpiresAt, and is useful for accessing the field via an interface.
 func (v *TLSKeyPair) GetExpiresAt() int { return v.ExpiresAt }
 
+// __CleanupOrphanK8SPodEntriesInput is used internally by genqlient
+type __CleanupOrphanK8SPodEntriesInput struct {
+	ExistingPodOwners []NamespacedPodOwner `json:"existingPodOwners"`
+}
+
+// GetExistingPodOwners returns __CleanupOrphanK8SPodEntriesInput.ExistingPodOwners, and is useful for accessing the field via an interface.
+func (v *__CleanupOrphanK8SPodEntriesInput) GetExistingPodOwners() []NamespacedPodOwner {
+	return v.ExistingPodOwners
+}
+
 // __GetTLSKeyPairInput is used internally by genqlient
 type __GetTLSKeyPairInput struct {
 	Id *string `json:"id"`
@@ -213,6 +245,36 @@ type __ReportComponentStatusInput struct {
 
 // GetComponent returns __ReportComponentStatusInput.Component, and is useful for accessing the field via an interface.
 func (v *__ReportComponentStatusInput) GetComponent() ComponentType { return v.Component }
+
+func CleanupOrphanK8SPodEntries(
+	ctx context.Context,
+	client graphql.Client,
+	existingPodOwners []NamespacedPodOwner,
+) (*CleanupOrphanK8SPodEntriesResponse, error) {
+	req := &graphql.Request{
+		OpName: "CleanupOrphanK8SPodEntries",
+		Query: `
+mutation CleanupOrphanK8SPodEntries ($existingPodOwners: [NamespacedPodOwner!]!) {
+	removeOrphanedCertificateRequests(activePodOwners: $existingPodOwners)
+}
+`,
+		Variables: &__CleanupOrphanK8SPodEntriesInput{
+			ExistingPodOwners: existingPodOwners,
+		},
+	}
+	var err error
+
+	var data CleanupOrphanK8SPodEntriesResponse
+	resp := &graphql.Response{Data: &data}
+
+	err = client.MakeRequest(
+		ctx,
+		req,
+		resp,
+	)
+
+	return &data, err
+}
 
 func GetTLSKeyPair(
 	ctx context.Context,
