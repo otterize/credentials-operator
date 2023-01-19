@@ -80,7 +80,7 @@ func (c *CloudClient) CleanupOrphanK8SPodEntries(ctx context.Context, _ string, 
 	if err != nil {
 		return fmt.Errorf("failed removing orphan entries: %w", err)
 	}
-	if !res.RemoveOrphanedCertificateRequests {
+	if !res.ReportActiveCertificateRequesters {
 		return fmt.Errorf("failed removing orphan entries")
 	}
 
