@@ -23,12 +23,12 @@ func (v *CertificateCustomization) GetTtl() int { return v.Ttl }
 // CleanupOrphanK8SPodEntriesResponse is returned by CleanupOrphanK8SPodEntries on success.
 type CleanupOrphanK8SPodEntriesResponse struct {
 	// Removes certificateRequests of pod owners from the context's cluster which does not appear in the "activePodOwners" list
-	RemoveOrphanedCertificateRequests bool `json:"removeOrphanedCertificateRequests"`
+	ReportActiveCertificateRequesters bool `json:"reportActiveCertificateRequesters"`
 }
 
-// GetRemoveOrphanedCertificateRequests returns CleanupOrphanK8SPodEntriesResponse.RemoveOrphanedCertificateRequests, and is useful for accessing the field via an interface.
-func (v *CleanupOrphanK8SPodEntriesResponse) GetRemoveOrphanedCertificateRequests() bool {
-	return v.RemoveOrphanedCertificateRequests
+// GetReportActiveCertificateRequesters returns CleanupOrphanK8SPodEntriesResponse.ReportActiveCertificateRequesters, and is useful for accessing the field via an interface.
+func (v *CleanupOrphanK8SPodEntriesResponse) GetReportActiveCertificateRequesters() bool {
+	return v.ReportActiveCertificateRequesters
 }
 
 type ComponentType string
@@ -255,7 +255,7 @@ func CleanupOrphanK8SPodEntries(
 		OpName: "CleanupOrphanK8SPodEntries",
 		Query: `
 mutation CleanupOrphanK8SPodEntries ($existingPodOwners: [NamespacedPodOwner!]!) {
-	removeOrphanedCertificateRequests(activePodOwners: $existingPodOwners)
+	reportActiveCertificateRequesters(activePodOwners: $existingPodOwners)
 }
 `,
 		Variables: &__CleanupOrphanK8SPodEntriesInput{
@@ -328,7 +328,7 @@ func RegisterKubernetesPodOwnerCertificateRequest(
 		OpName: "RegisterKubernetesPodOwnerCertificateRequest",
 		Query: `
 mutation RegisterKubernetesPodOwnerCertificateRequest ($namespace: String!, $podOwnerName: String!, $certificateCustomizations: CertificateCustomization) {
-	registerKubernetesPodOwnerCertificateRequest(namespace: $namespace, podOwnerName: $podOwnerName, certificateCustomization: $certificateCustomizations) {
+	registerKubernetesPodOwnerCertificateRequest(podOwner: {name:$podOwnerName,namespace:$namespace}, certificateCustomization: $certificateCustomizations) {
 		id
 	}
 }
