@@ -20,17 +20,6 @@ func (v *CertificateCustomization) GetDnsNames() []string { return v.DnsNames }
 // GetTtl returns CertificateCustomization.Ttl, and is useful for accessing the field via an interface.
 func (v *CertificateCustomization) GetTtl() int { return v.Ttl }
 
-// CleanupOrphanK8SPodEntriesResponse is returned by CleanupOrphanK8SPodEntries on success.
-type CleanupOrphanK8SPodEntriesResponse struct {
-	// Removes certificateRequests of pod owners from the context's cluster which does not appear in the "activePodOwners" list
-	ReportActiveCertificateRequesters bool `json:"reportActiveCertificateRequesters"`
-}
-
-// GetReportActiveCertificateRequesters returns CleanupOrphanK8SPodEntriesResponse.ReportActiveCertificateRequesters, and is useful for accessing the field via an interface.
-func (v *CleanupOrphanK8SPodEntriesResponse) GetReportActiveCertificateRequesters() bool {
-	return v.ReportActiveCertificateRequesters
-}
-
 type ComponentType string
 
 const (
@@ -164,6 +153,17 @@ func (v *RegisterKubernetesPodOwnerCertificateRequestResponse) GetRegisterKubern
 	return v.RegisterKubernetesPodOwnerCertificateRequest
 }
 
+// ReportActiveCertificateRequestersResponse is returned by ReportActiveCertificateRequesters on success.
+type ReportActiveCertificateRequestersResponse struct {
+	// Report active pod owners to the cloud, as a result the cloud removes certificate requests of inactive pod owners
+	ReportActiveCertificateRequesters bool `json:"reportActiveCertificateRequesters"`
+}
+
+// GetReportActiveCertificateRequesters returns ReportActiveCertificateRequestersResponse.ReportActiveCertificateRequesters, and is useful for accessing the field via an interface.
+func (v *ReportActiveCertificateRequestersResponse) GetReportActiveCertificateRequesters() bool {
+	return v.ReportActiveCertificateRequesters
+}
+
 // ReportComponentStatusResponse is returned by ReportComponentStatus on success.
 type ReportComponentStatusResponse struct {
 	ReportIntegrationComponentStatus bool `json:"reportIntegrationComponentStatus"`
@@ -198,16 +198,6 @@ func (v *TLSKeyPair) GetRootCAPEM() string { return v.RootCAPEM }
 // GetExpiresAt returns TLSKeyPair.ExpiresAt, and is useful for accessing the field via an interface.
 func (v *TLSKeyPair) GetExpiresAt() int { return v.ExpiresAt }
 
-// __CleanupOrphanK8SPodEntriesInput is used internally by genqlient
-type __CleanupOrphanK8SPodEntriesInput struct {
-	ExistingPodOwners []NamespacedPodOwner `json:"existingPodOwners"`
-}
-
-// GetExistingPodOwners returns __CleanupOrphanK8SPodEntriesInput.ExistingPodOwners, and is useful for accessing the field via an interface.
-func (v *__CleanupOrphanK8SPodEntriesInput) GetExistingPodOwners() []NamespacedPodOwner {
-	return v.ExistingPodOwners
-}
-
 // __GetTLSKeyPairInput is used internally by genqlient
 type __GetTLSKeyPairInput struct {
 	Id *string `json:"id"`
@@ -238,6 +228,16 @@ func (v *__RegisterKubernetesPodOwnerCertificateRequestInput) GetCertificateCust
 	return v.CertificateCustomizations
 }
 
+// __ReportActiveCertificateRequestersInput is used internally by genqlient
+type __ReportActiveCertificateRequestersInput struct {
+	ExistingPodOwners []NamespacedPodOwner `json:"existingPodOwners"`
+}
+
+// GetExistingPodOwners returns __ReportActiveCertificateRequestersInput.ExistingPodOwners, and is useful for accessing the field via an interface.
+func (v *__ReportActiveCertificateRequestersInput) GetExistingPodOwners() []NamespacedPodOwner {
+	return v.ExistingPodOwners
+}
+
 // __ReportComponentStatusInput is used internally by genqlient
 type __ReportComponentStatusInput struct {
 	Component ComponentType `json:"component"`
@@ -245,36 +245,6 @@ type __ReportComponentStatusInput struct {
 
 // GetComponent returns __ReportComponentStatusInput.Component, and is useful for accessing the field via an interface.
 func (v *__ReportComponentStatusInput) GetComponent() ComponentType { return v.Component }
-
-func CleanupOrphanK8SPodEntries(
-	ctx context.Context,
-	client graphql.Client,
-	existingPodOwners []NamespacedPodOwner,
-) (*CleanupOrphanK8SPodEntriesResponse, error) {
-	req := &graphql.Request{
-		OpName: "CleanupOrphanK8SPodEntries",
-		Query: `
-mutation CleanupOrphanK8SPodEntries ($existingPodOwners: [NamespacedPodOwner!]!) {
-	reportActiveCertificateRequesters(activePodOwners: $existingPodOwners)
-}
-`,
-		Variables: &__CleanupOrphanK8SPodEntriesInput{
-			ExistingPodOwners: existingPodOwners,
-		},
-	}
-	var err error
-
-	var data CleanupOrphanK8SPodEntriesResponse
-	resp := &graphql.Response{Data: &data}
-
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
-	)
-
-	return &data, err
-}
 
 func GetTLSKeyPair(
 	ctx context.Context,
@@ -342,6 +312,36 @@ mutation RegisterKubernetesPodOwnerCertificateRequest ($namespace: String!, $pod
 	var err error
 
 	var data RegisterKubernetesPodOwnerCertificateRequestResponse
+	resp := &graphql.Response{Data: &data}
+
+	err = client.MakeRequest(
+		ctx,
+		req,
+		resp,
+	)
+
+	return &data, err
+}
+
+func ReportActiveCertificateRequesters(
+	ctx context.Context,
+	client graphql.Client,
+	existingPodOwners []NamespacedPodOwner,
+) (*ReportActiveCertificateRequestersResponse, error) {
+	req := &graphql.Request{
+		OpName: "ReportActiveCertificateRequesters",
+		Query: `
+mutation ReportActiveCertificateRequesters ($existingPodOwners: [NamespacedPodOwner!]!) {
+	reportActiveCertificateRequesters(activePodOwners: $existingPodOwners)
+}
+`,
+		Variables: &__ReportActiveCertificateRequestersInput{
+			ExistingPodOwners: existingPodOwners,
+		},
+	}
+	var err error
+
+	var data ReportActiveCertificateRequestersResponse
 	resp := &graphql.Response{Data: &data}
 
 	err = client.MakeRequest(

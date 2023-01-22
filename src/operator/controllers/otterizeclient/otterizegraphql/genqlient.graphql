@@ -26,6 +26,6 @@ mutation ReportComponentStatus($component: ComponentType!) {
     reportIntegrationComponentStatus(component: $component)
 }
 
-mutation CleanupOrphanK8SPodEntries($existingPodOwners: [NamespacedPodOwner!]!) {
+mutation ReportActiveCertificateRequesters($existingPodOwners: [NamespacedPodOwner!]!) {
     reportActiveCertificateRequesters(activePodOwners: $existingPodOwners)
 }

@@ -76,7 +76,7 @@ func (c *CloudClient) CleanupOrphanK8SPodEntries(ctx context.Context, _ string, 
 			namespacedPodOwners = append(namespacedPodOwners, otterizegraphql.NamespacedPodOwner{Namespace: namespace, Name: podOwner})
 		}
 	}
-	res, err := otterizegraphql.CleanupOrphanK8SPodEntries(ctx, c.graphqlClient, namespacedPodOwners)
+	res, err := otterizegraphql.ReportActiveCertificateRequesters(ctx, c.graphqlClient, namespacedPodOwners)
 	if err != nil {
 		return fmt.Errorf("failed removing orphan entries: %w", err)
 	}
