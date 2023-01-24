@@ -175,8 +175,6 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, nil
 	}
 
-	shouldCreateSecret := r.shouldCreateSecretPod(pod)
-
 	if !r.shouldRegisterEntryForPod(pod) {
 		return ctrl.Result{}, nil
 	}
@@ -230,7 +228,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	shouldRestartPodOnRenewal := r.resolvePodToShouldRestartOnRenewal(pod)
 
-	if !shouldCreateSecret {
+	if !r.shouldCreateSecretForPod(pod) {
 		log.WithField("annotation.key", metadata.TLSSecretNameAnnotation).Info("skipping TLS secrets creation - annotation not found")
 		return ctrl.Result{}, err
 	}
@@ -281,12 +279,12 @@ func (r *PodReconciler) resolvePodToCertTTl(pod *corev1.Pod) (int32, error) {
 	return int32(ttl64), nil
 }
 
-func (r *PodReconciler) shouldCreateSecretPod(pod *corev1.Pod) bool {
+func (r *PodReconciler) shouldCreateSecretForPod(pod *corev1.Pod) bool {
 	return pod.Annotations != nil && pod.Annotations[metadata.TLSSecretNameAnnotation] != ""
 }
 
 func (r *PodReconciler) shouldRegisterEntryForPod(pod *corev1.Pod) bool {
-	return !r.registerOnlyPodsWithSecretAnnotation || r.shouldCreateSecretPod(pod)
+	return !r.registerOnlyPodsWithSecretAnnotation || r.shouldCreateSecretForPod(pod)
 }
 
 func (r *PodReconciler) resolvePodToShouldRestartOnRenewal(pod *corev1.Pod) bool {
