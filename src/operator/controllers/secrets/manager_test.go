@@ -102,7 +102,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_NoExistingSecret() {
 		certConfig.PEMConfig.KeyFileName:  testData.KeyPEM,
 		certConfig.PEMConfig.CertFileName: testData.SVIDPEM},
 	}
-	pem := secretstypes.PEMCert{Key: testData.KeyPEM, Ca: testData.BundlePEM, Certificate: testData.SVIDPEM}
+	pem := secretstypes.PEMCert{Key: testData.KeyPEM, CA: testData.BundlePEM, Certificate: testData.SVIDPEM}
 	s.mockCertGen.EXPECT().GeneratePEM(gomock.Any(), secretConf.EntryID).Return(pem, nil)
 
 	s.client.EXPECT().Create(
@@ -137,7 +137,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NeedsRefr
 				Annotations: map[string]string{
 					metadata.TLSSecretExpiryAnnotation:                time.Now().Format(time.RFC3339),
 					metadata.CertFileNameAnnotation:                   secretFileNames.CertFileName,
-					metadata.CaFileNameAnnotation:                     secretFileNames.CAFileName,
+					metadata.CAFileNameAnnotation:                     secretFileNames.CAFileName,
 					metadata.KeyFileNameAnnotation:                    secretFileNames.KeyFileName,
 					metadata.TLSSecretRegisteredServiceNameAnnotation: serviceName,
 					metadata.TLSSecretEntryIDAnnotation:               entryId,
@@ -161,7 +161,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NeedsRefr
 		certConfig.PEMConfig.CertFileName: testData.SVIDPEM},
 	}
 
-	pem := secretstypes.PEMCert{Key: testData.KeyPEM, Ca: testData.BundlePEM, Certificate: testData.SVIDPEM}
+	pem := secretstypes.PEMCert{Key: testData.KeyPEM, CA: testData.BundlePEM, Certificate: testData.SVIDPEM}
 	s.mockCertGen.EXPECT().GeneratePEM(gomock.Any(), secretConf.EntryID).Return(pem, nil)
 
 	s.client.EXPECT().Update(
@@ -199,7 +199,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_NoRefresh
 				Annotations: map[string]string{
 					metadata.TLSSecretExpiryAnnotation:                time.Now().Add(2 * secretExpiryDelta).Format(time.RFC3339),
 					metadata.CertFileNameAnnotation:                   secretFileNames.CertFileName,
-					metadata.CaFileNameAnnotation:                     secretFileNames.CAFileName,
+					metadata.CAFileNameAnnotation:                     secretFileNames.CAFileName,
 					metadata.KeyFileNameAnnotation:                    secretFileNames.KeyFileName,
 					metadata.TLSSecretRegisteredServiceNameAnnotation: serviceName,
 					metadata.TLSSecretEntryIDAnnotation:               entryId,
@@ -236,7 +236,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 				Annotations: map[string]string{
 					metadata.TLSSecretExpiryAnnotation:                time.Now().Add(2 * secretExpiryDelta).Format(time.RFC3339),
 					metadata.CertFileNameAnnotation:                   secretFileNames.CertFileName,
-					metadata.CaFileNameAnnotation:                     secretFileNames.CAFileName,
+					metadata.CAFileNameAnnotation:                     secretFileNames.CAFileName,
 					metadata.KeyFileNameAnnotation:                    secretFileNames.KeyFileName,
 					metadata.TLSSecretRegisteredServiceNameAnnotation: serviceName,
 					metadata.TLSSecretEntryHashAnnotation:             "",
@@ -259,7 +259,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 
 	secretConf := secretstypes.NewSecretConfig(entryId, "", secretName, namespace, serviceName, certConfig, false)
 
-	pem := secretstypes.PEMCert{Key: testData.KeyPEM, Ca: testData.BundlePEM, Certificate: testData.SVIDPEM}
+	pem := secretstypes.PEMCert{Key: testData.KeyPEM, CA: testData.BundlePEM, Certificate: testData.SVIDPEM}
 	s.mockCertGen.EXPECT().GeneratePEM(gomock.Any(), secretConf.EntryID).Return(pem, nil)
 
 	s.client.EXPECT().Update(
@@ -297,7 +297,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 				Annotations: map[string]string{
 					metadata.TLSSecretExpiryAnnotation:                time.Now().Add(2 * secretExpiryDelta).Format(time.RFC3339),
 					metadata.CertFileNameAnnotation:                   secretFileNames.CertFileName,
-					metadata.CaFileNameAnnotation:                     secretFileNames.CAFileName,
+					metadata.CAFileNameAnnotation:                     secretFileNames.CAFileName,
 					metadata.KeyFileNameAnnotation:                    secretFileNames.KeyFileName,
 					metadata.TLSSecretRegisteredServiceNameAnnotation: serviceName,
 					metadata.TLSSecretEntryHashAnnotation:             "",
@@ -319,7 +319,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 	newEntryHash := "New-Hash"
 	secretConf := secretstypes.NewSecretConfig(entryId, newEntryHash, secretName, namespace, serviceName, certConfig, false)
 
-	pem := secretstypes.PEMCert{Key: testData.KeyPEM, Ca: testData.BundlePEM, Certificate: testData.SVIDPEM}
+	pem := secretstypes.PEMCert{Key: testData.KeyPEM, CA: testData.BundlePEM, Certificate: testData.SVIDPEM}
 	s.mockCertGen.EXPECT().GeneratePEM(gomock.Any(), secretConf.EntryID).Return(pem, nil)
 
 	s.client.EXPECT().Update(
@@ -357,7 +357,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 				Annotations: map[string]string{
 					metadata.TLSSecretExpiryAnnotation:                time.Now().Add(2 * secretExpiryDelta).Format(time.RFC3339),
 					metadata.CertFileNameAnnotation:                   secretFileNames.CertFileName,
-					metadata.CaFileNameAnnotation:                     secretFileNames.CAFileName,
+					metadata.CAFileNameAnnotation:                     secretFileNames.CAFileName,
 					metadata.KeyFileNameAnnotation:                    secretFileNames.KeyFileName,
 					metadata.TLSSecretRegisteredServiceNameAnnotation: serviceName,
 					metadata.TLSSecretEntryHashAnnotation:             "",
@@ -383,7 +383,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 		certConfig.PEMConfig.KeyFileName:  testData.KeyPEM,
 		certConfig.PEMConfig.CertFileName: testData.SVIDPEM},
 	}
-	pem := secretstypes.PEMCert{Key: testData.KeyPEM, Ca: testData.BundlePEM, Certificate: testData.SVIDPEM}
+	pem := secretstypes.PEMCert{Key: testData.KeyPEM, CA: testData.BundlePEM, Certificate: testData.SVIDPEM}
 	s.mockCertGen.EXPECT().GeneratePEM(gomock.Any(), secretConf.EntryID).Return(pem, nil)
 
 	s.client.EXPECT().Update(
@@ -417,7 +417,7 @@ func (s *ManagerSuite) TestManager_EnsureTLSSecret_ExistingSecretFound_UpdateNee
 				Annotations: map[string]string{
 					metadata.TLSSecretExpiryAnnotation:                time.Now().Add(2 * secretExpiryDelta).Format(time.RFC3339),
 					metadata.CertFileNameAnnotation:                   secretFileNames.CertFileName,
-					metadata.CaFileNameAnnotation:                     secretFileNames.CAFileName,
+					metadata.CAFileNameAnnotation:                     secretFileNames.CAFileName,
 					metadata.KeyFileNameAnnotation:                    secretFileNames.KeyFileName,
 					metadata.TLSSecretRegisteredServiceNameAnnotation: serviceName,
 					metadata.TLSSecretEntryHashAnnotation:             "",
@@ -472,7 +472,7 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded_NOT_ShouldRes
 				metadata.TLSSecretRegisteredServiceNameAnnotation: serviceName,
 				metadata.TLSSecretEntryIDAnnotation:               entryId,
 				metadata.CertFileNameAnnotation:                   secretFileNames.CertFileName,
-				metadata.CaFileNameAnnotation:                     secretFileNames.CAFileName,
+				metadata.CAFileNameAnnotation:                     secretFileNames.CAFileName,
 				metadata.KeyFileNameAnnotation:                    secretFileNames.KeyFileName,
 				metadata.CertTypeAnnotation:                       certTypeStr,
 			},
@@ -495,7 +495,7 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded_NOT_ShouldRes
 	certConfig := secretstypes.CertConfig{CertType: certType, PEMConfig: secretFileNames}
 	secretConf := secretstypes.NewSecretConfig(entryId, "", secretName, namespace, serviceName, certConfig, false)
 
-	pem := secretstypes.PEMCert{Key: testData.KeyPEM, Ca: testData.BundlePEM, Certificate: testData.SVIDPEM}
+	pem := secretstypes.PEMCert{Key: testData.KeyPEM, CA: testData.BundlePEM, Certificate: testData.SVIDPEM}
 	s.mockCertGen.EXPECT().GeneratePEM(gomock.Any(), secretConf.EntryID).Return(pem, nil)
 
 	s.client.EXPECT().Update(
@@ -544,7 +544,7 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded_ShouldRestart
 				metadata.TLSSecretRegisteredServiceNameAnnotation: serviceName,
 				metadata.TLSSecretEntryIDAnnotation:               entryId,
 				metadata.CertFileNameAnnotation:                   secretFileNames.CertFileName,
-				metadata.CaFileNameAnnotation:                     secretFileNames.CAFileName,
+				metadata.CAFileNameAnnotation:                     secretFileNames.CAFileName,
 				metadata.KeyFileNameAnnotation:                    secretFileNames.KeyFileName,
 				metadata.CertTypeAnnotation:                       certTypeStr,
 			},
@@ -567,7 +567,7 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_RefreshNeeded_ShouldRestart
 	certConfig := secretstypes.CertConfig{CertType: certType, PEMConfig: secretFileNames}
 	secretConf := secretstypes.NewSecretConfig(entryId, "", secretName, namespace, serviceName, certConfig, false)
 
-	pem := secretstypes.PEMCert{Key: testData.KeyPEM, Ca: testData.BundlePEM, Certificate: testData.SVIDPEM}
+	pem := secretstypes.PEMCert{Key: testData.KeyPEM, CA: testData.BundlePEM, Certificate: testData.SVIDPEM}
 	s.mockCertGen.EXPECT().GeneratePEM(gomock.Any(), secretConf.EntryID).Return(pem, nil)
 
 	s.client.EXPECT().Update(
@@ -658,7 +658,7 @@ func (s *ManagerSuite) TestManager_RefreshTLSSecrets_NoRefreshNeeded() {
 							metadata.TLSSecretRegisteredServiceNameAnnotation: serviceName,
 							metadata.TLSSecretEntryIDAnnotation:               entryId,
 							metadata.CertFileNameAnnotation:                   secretFileNames.CertFileName,
-							metadata.CaFileNameAnnotation:                     secretFileNames.CAFileName,
+							metadata.CAFileNameAnnotation:                     secretFileNames.CAFileName,
 							metadata.KeyFileNameAnnotation:                    secretFileNames.KeyFileName,
 							metadata.CertTypeAnnotation:                       "pem",
 						},

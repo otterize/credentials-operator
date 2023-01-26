@@ -69,7 +69,7 @@ type JKSCert struct {
 
 type PEMCert struct {
 	Certificate []byte
-	Ca          []byte
+	CA          []byte
 	Key         []byte
 	Expiry      string
 }

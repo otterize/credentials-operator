@@ -28,9 +28,9 @@ const (
 	// (for pem certificate type). Defaults to "cert.pem".
 	CertFileNameAnnotation           = "credentials-operator.otterize.com/cert-file-name"
 	SVIDFileNameAnnotationDeprecated = "spire-integration.otterize.com/svid-file-name"
-	// CaFileNameAnnotation holds the name of the file in the secret data, that stores the ca bundle file
+	// CAFileNameAnnotation holds the name of the file in the secret data, that stores the ca bundle file
 	// (for pem certificate type). Defaults to "ca.pem".
-	CaFileNameAnnotation               = "credentials-operator.otterize.com/ca-file-name"
+	CAFileNameAnnotation               = "credentials-operator.otterize.com/ca-file-name"
 	BundleFileNameAnnotationDeprecated = "spire-integration.otterize.com/bundle-file-name"
 	// KeyFileNameAnnotation holds the name of the file in the secret data, that stores the certificate's key file
 	// (for pem certificate type). Defaults to "key.pem".

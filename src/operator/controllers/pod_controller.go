@@ -142,7 +142,7 @@ func certConfigFromPod(pod *corev1.Pod) (secretstypes.CertConfig, error) {
 	case secretstypes.PEMCertType:
 		certConfig.PEMConfig = secretstypes.NewPEMConfig(
 			metadata.GetAnnotationValue(pod.Annotations, metadata.CertFileNameAnnotation),
-			metadata.GetAnnotationValue(pod.Annotations, metadata.CaFileNameAnnotation),
+			metadata.GetAnnotationValue(pod.Annotations, metadata.CAFileNameAnnotation),
 			metadata.GetAnnotationValue(pod.Annotations, metadata.KeyFileNameAnnotation),
 		)
 	case secretstypes.JKSCertType:

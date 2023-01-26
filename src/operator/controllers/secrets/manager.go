@@ -38,7 +38,7 @@ func SecretConfigFromExistingSecret(secret *corev1.Secret) secretstypes.SecretCo
 			CertType: secretstypes.CertType(secret.Annotations[metadata.CertTypeAnnotation]),
 			PEMConfig: secretstypes.PEMConfig{
 				CertFileName: secret.Annotations[metadata.CertFileNameAnnotation],
-				CAFileName:   secret.Annotations[metadata.CaFileNameAnnotation],
+				CAFileName:   secret.Annotations[metadata.CAFileNameAnnotation],
 				KeyFileName:  secret.Annotations[metadata.KeyFileNameAnnotation],
 			},
 			JKSConfig: secretstypes.JKSConfig{
@@ -123,7 +123,7 @@ func (m *KubernetesSecretsManager) getCertificateData(ctx context.Context, entry
 		}
 		return secretstypes.CertificateData{
 			Files: map[string][]byte{
-				certConfig.PEMConfig.CAFileName:   pemCert.Ca,
+				certConfig.PEMConfig.CAFileName:   pemCert.CA,
 				certConfig.PEMConfig.KeyFileName:  pemCert.Key,
 				certConfig.PEMConfig.CertFileName: pemCert.Certificate,
 			},
@@ -150,7 +150,7 @@ func (m *KubernetesSecretsManager) updateTLSSecret(ctx context.Context, config s
 		metadata.TLSSecretEntryIDAnnotation:               config.EntryID,
 		metadata.TLSSecretEntryHashAnnotation:             config.EntryHash,
 		metadata.CertFileNameAnnotation:                   config.CertConfig.PEMConfig.CertFileName,
-		metadata.CaFileNameAnnotation:                     config.CertConfig.PEMConfig.CAFileName,
+		metadata.CAFileNameAnnotation:                     config.CertConfig.PEMConfig.CAFileName,
 		metadata.KeyFileNameAnnotation:                    config.CertConfig.PEMConfig.KeyFileName,
 		metadata.KeyStoreFileNameAnnotation:               config.CertConfig.JKSConfig.KeyStoreFileName,
 		metadata.TrustStoreFileNameAnnotation:             config.CertConfig.JKSConfig.TrustStoreFileName,

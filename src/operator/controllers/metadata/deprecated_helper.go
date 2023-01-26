@@ -2,22 +2,24 @@ package metadata
 
 import "github.com/samber/lo"
 
-var annotationNameToDeprecatedName = map[string]string{
-	JKSPasswordAnnotation:            JKSPasswordAnnotationDeprecated,
-	TrustStoreFileNameAnnotation:     TrustStoreFileNameAnnotationDeprecated,
-	KeyStoreFileNameAnnotation:       KeyStoreFileNameAnnotationDeprecated,
-	KeyFileNameAnnotation:            KeyFileNameAnnotationDeprecated,
-	CaFileNameAnnotation:             BundleFileNameAnnotationDeprecated,
-	CertFileNameAnnotation:           SVIDFileNameAnnotationDeprecated,
-	ShouldRestartOnRenewalAnnotation: ShouldRestartOnRenewalAnnotationDeprecated,
-	CertTypeAnnotation:               CertTypeAnnotationDeprecated,
-	CertTTLAnnotation:                CertTTLAnnotationDeprecated,
-	DNSNamesAnnotation:               DNSNamesAnnotationDeprecated,
-	TLSSecretNameAnnotation:          TLSSecretNameAnnotationDeprecated,
+func annotationNameToDeprecatedName() map[string]string {
+	return map[string]string{
+		JKSPasswordAnnotation:            JKSPasswordAnnotationDeprecated,
+		TrustStoreFileNameAnnotation:     TrustStoreFileNameAnnotationDeprecated,
+		KeyStoreFileNameAnnotation:       KeyStoreFileNameAnnotationDeprecated,
+		KeyFileNameAnnotation:            KeyFileNameAnnotationDeprecated,
+		CAFileNameAnnotation:             BundleFileNameAnnotationDeprecated,
+		CertFileNameAnnotation:           SVIDFileNameAnnotationDeprecated,
+		ShouldRestartOnRenewalAnnotation: ShouldRestartOnRenewalAnnotationDeprecated,
+		CertTypeAnnotation:               CertTypeAnnotationDeprecated,
+		CertTTLAnnotation:                CertTTLAnnotationDeprecated,
+		DNSNamesAnnotation:               DNSNamesAnnotationDeprecated,
+		TLSSecretNameAnnotation:          TLSSecretNameAnnotationDeprecated,
+	}
 }
 
 func GetAnnotationValue(annotations map[string]string, name string) string {
-	deprecatedName, ok := annotationNameToDeprecatedName[name]
+	deprecatedName, ok := annotationNameToDeprecatedName()[name]
 	if ok {
 		res, _ := lo.Coalesce(annotations[name], annotations[deprecatedName])
 		return res
@@ -26,7 +28,7 @@ func GetAnnotationValue(annotations map[string]string, name string) string {
 }
 
 func AnnotationExists(annotations map[string]string, name string) bool {
-	deprecatedName, ok := annotationNameToDeprecatedName[name]
+	deprecatedName, ok := annotationNameToDeprecatedName()[name]
 	_, exists := annotations[name]
 	if !ok {
 		return exists
@@ -36,5 +38,5 @@ func AnnotationExists(annotations map[string]string, name string) bool {
 }
 
 func HasDeprecatedAnnotations(annotation map[string]string) bool {
-	return len(lo.Intersect(lo.Keys(annotation), lo.Values(annotationNameToDeprecatedName))) != 0
+	return len(lo.Intersect(lo.Keys(annotation), lo.Values(annotationNameToDeprecatedName()))) != 0
 }

@@ -73,7 +73,7 @@ func (s *ManagerSuite) TestCertGenerator_GeneratePEM() {
 	s.Require().NoError(err)
 	expiryUnix := time.Unix(expiry.Unix(), 0)
 	expectedCertData := secretstypes.PEMCert{
-		Ca:          testData.BundlePEM,
+		CA:          testData.BundlePEM,
 		Key:         testData.KeyPEM,
 		Certificate: testData.SVIDPEM,
 		Expiry:      expiryUnix.Format(time.RFC3339),
