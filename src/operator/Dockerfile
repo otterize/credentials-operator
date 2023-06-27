@@ -4,8 +4,8 @@ RUN apk add build-base
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
-COPY go.mod go.mod
-COPY go.sum go.sum
+COPY operator/go.mod operator/go.mod
+COPY operator/go.sum operator/go.sum
 
 RUN go mod download
 
