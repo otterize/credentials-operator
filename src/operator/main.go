@@ -19,10 +19,13 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/bombsimon/logrusr/v3"
+	certmanager "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/otterize/credentials-operator/src/controllers"
 	"github.com/otterize/credentials-operator/src/controllers/certificates/otterizecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certificates/spirecertgen"
+	"github.com/otterize/credentials-operator/src/controllers/certmanageradapter"
 	"github.com/otterize/credentials-operator/src/controllers/otterizeclient"
 	"github.com/otterize/credentials-operator/src/controllers/secrets"
 	"github.com/otterize/credentials-operator/src/controllers/spireclient"
@@ -56,6 +59,7 @@ const (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(certmanager.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
@@ -75,18 +79,44 @@ func initSpireClient(ctx context.Context, spireServerAddr string) (spireclient.S
 	return serverClient, nil
 }
 
+//type CertProvider uint
+//
+//var CertProviderEnum = flagenum.Enum{
+//	"spire":        CertProvider(0),
+//	"cloud":        CertProvider(1),
+//	"cert-manager": CertProvider(2),
+//}
+//
+//func (val *CertProvider) Set(v string) error {
+//	if v == "" {
+//		// default value
+//		return CertProviderEnum.FlagSet(val, "spire")
+//	}
+//	return CertProviderEnum.FlagSet(val, v)
+//}
+//
+//func (val *CertProvider) String() string {
+//	return CertProviderEnum.FlagString(*val)
+//}
+
+const (
+	ProviderSpire       = "spire"
+	ProviderCloud       = "cloud"
+	ProviderCertManager = "cert-manager"
+)
+
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
 	var spireServerAddr string
-	var useOtterizeCloud bool
+	var certProvider string
 	var secretsManager controllers.SecretsManager
 	var workloadRegistry controllers.WorkloadRegistry
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":7071", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":7072", "The address the probe endpoint binds to.")
 	flag.StringVar(&spireServerAddr, "spire-server-address", "spire-server.spire:8081", "SPIRE server API address.")
-	flag.BoolVar(&useOtterizeCloud, "use-otterize-cloud", false, "Should use otterize cloud instead of spire.")
+	flag.StringVar(&certProvider, "cert-provider", "cert-manager", fmt.Sprintf("Certificate generation provider (%s, %s, %s)", ProviderSpire, ProviderCloud, ProviderCertManager))
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -112,7 +142,7 @@ func main() {
 	serviceIdResolver := serviceidresolver.NewResolver(mgr.GetClient())
 	eventRecorder := mgr.GetEventRecorderFor("spire-integration-operator")
 
-	if useOtterizeCloud {
+	if certProvider == ProviderCloud {
 		otterizeCloudClient, err := otterizeclient.NewCloudClient(ctx)
 		if err != nil {
 			logrus.WithError(err).Error("failed to connect to otterize cloud")
@@ -122,7 +152,7 @@ func main() {
 		otterizeclient.PeriodicallyReportConnectionToCloud(otterizeCloudClient)
 		otterizeCertManager := otterizecertgen.NewOtterizeCertificateGenerator(otterizeCloudClient)
 		secretsManager = secrets.NewSecretManager(mgr.GetClient(), otterizeCertManager, serviceIdResolver, eventRecorder)
-	} else {
+	} else if certProvider == ProviderSpire {
 		spireClient, err := initSpireClient(ctx, spireServerAddr)
 		if err != nil {
 			logrus.WithError(err).Error("failed to connect to spire server")
@@ -135,10 +165,18 @@ func main() {
 		certGenerator := spirecertgen.NewSpireCertificateDataGenerator(bundlesStore, svidsStore)
 		secretsManager = secrets.NewSecretManager(mgr.GetClient(), certGenerator, serviceIdResolver, eventRecorder)
 		workloadRegistry = entries.NewSpireRegistry(spireClient)
+	} else if certProvider == ProviderCertManager {
+		certManagerAdapter := certmanageradapter.NewCertManagerSecretsAdapter(mgr.GetClient(), serviceIdResolver, eventRecorder, "ca-issuer")
+		secretsManager = certManagerAdapter
+		workloadRegistry = certManagerAdapter
+	} else {
+		// TODO: Check before
+		logrus.Error("unsupported certificate provider")
+		os.Exit(1)
 	}
 
 	podReconciler := controllers.NewPodReconciler(mgr.GetClient(), mgr.GetScheme(), workloadRegistry, secretsManager,
-		serviceIdResolver, eventRecorder, useOtterizeCloud)
+		serviceIdResolver, eventRecorder, certProvider == ProviderCloud)
 
 	if err = podReconciler.SetupWithManager(mgr); err != nil {
 		logrus.WithField("controller", "Pod").WithError(err).Error("unable to create controller")
