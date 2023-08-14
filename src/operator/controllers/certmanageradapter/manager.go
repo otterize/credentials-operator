@@ -51,7 +51,7 @@ func SecretConfigFromAnnotations(annotations map[string]string) secretstypes.Sec
 }
 
 func SecretConfigFromExistingCertificate(certificate *certmanager.Certificate) secretstypes.SecretConfig {
-	config := SecretConfigFromAnnotations(certificate.Spec.SecretTemplate.Annotations)
+	config := SecretConfigFromAnnotations(certificate.Annotations)
 	config.SecretName = certificate.Spec.SecretName
 	config.Namespace = certificate.Namespace
 	return config
@@ -180,14 +180,12 @@ func (m *CertManagerAdapter) getJKSPasswordSecretRef(ctx context.Context, namesp
 
 func (m *CertManagerAdapter) updateTLSCertificate(ctx context.Context, config secretstypes.SecretConfig, certificate *certmanager.Certificate) error {
 	// TODO: Can share with the other class
-	// TODO: Should have those on the certificate also? (or instead?)
-	certificate.Spec.SecretTemplate.Labels = map[string]string{
+	certificate.Labels = map[string]string{
 		metadata.SecretTypeLabel: string(secretstypes.TlsSecretType),
 	}
 
-	certificate.Spec.SecretTemplate.Annotations = map[string]string{
-		// TODO: Fix the expiryStr according to TTL ?
-		//metadata.TLSSecretExpiryAnnotation:                certificateData.ExpiryStr,
+	certificate.Annotations = map[string]string{
+		// Not setting TLSSecretExpiryAnnotation because cert-manager is responsible for refreshing secrets
 		metadata.TLSSecretRegisteredServiceNameAnnotation: config.ServiceName,
 		metadata.TLSSecretEntryIDAnnotation:               config.EntryID,
 		metadata.TLSSecretEntryHashAnnotation:             config.EntryHash,
