@@ -111,12 +111,18 @@ func main() {
 	var probeAddr string
 	var spireServerAddr string
 	var certProvider string
+	var certManagerIssuer string
+	var certManagerUseClusterIssuer bool
 	var secretsManager controllers.SecretsManager
 	var workloadRegistry controllers.WorkloadRegistry
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":7071", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":7072", "The address the probe endpoint binds to.")
 	flag.StringVar(&spireServerAddr, "spire-server-address", "spire-server.spire:8081", "SPIRE server API address.")
+	// TODO: Change default value
 	flag.StringVar(&certProvider, "cert-provider", "cert-manager", fmt.Sprintf("Certificate generation provider (%s, %s, %s)", ProviderSpire, ProviderCloud, ProviderCertManager))
+	flag.StringVar(&certManagerIssuer, "cert-manager-issuer", "ca-issuer", fmt.Sprintf("Name of the Issuer to be used by cert-manager to sign certificates"))
+	flag.BoolVar(&certManagerUseClusterIssuer, "cert-manager-use-cluster-issuer", false, fmt.Sprintf("Use ClusterIssuer instead of a (namespace bound) Issuer"))
+
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -166,7 +172,7 @@ func main() {
 		secretsManager = secrets.NewSecretManager(mgr.GetClient(), certGenerator, serviceIdResolver, eventRecorder)
 		workloadRegistry = entries.NewSpireRegistry(spireClient)
 	} else if certProvider == ProviderCertManager {
-		certManagerAdapter := certmanageradapter.NewCertManagerSecretsAdapter(mgr.GetClient(), serviceIdResolver, eventRecorder, "ca-issuer")
+		certManagerAdapter := certmanageradapter.NewCertManagerSecretsAdapter(mgr.GetClient(), serviceIdResolver, eventRecorder, certManagerIssuer, certManagerUseClusterIssuer)
 		secretsManager = certManagerAdapter
 		workloadRegistry = certManagerAdapter
 	} else {

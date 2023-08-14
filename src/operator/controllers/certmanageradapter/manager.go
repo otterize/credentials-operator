@@ -73,18 +73,21 @@ type CertManagerAdapter struct {
 	serviceIdResolver secretstypes.ServiceIdResolver
 	entries           map[string]*CertificateEntry
 	issuerName        string
+	useClusterIssuer  bool
 }
 
 func NewCertManagerSecretsAdapter(
 	c client.Client,
 	serviceIdResolver secretstypes.ServiceIdResolver,
 	eventRecorder record.EventRecorder,
-	issuerName string) *CertManagerAdapter {
+	issuerName string,
+	useClusterIssuer bool) *CertManagerAdapter {
 	return &CertManagerAdapter{Client: c,
 		serviceIdResolver: serviceIdResolver,
 		eventRecorder:     eventRecorder,
 		entries:           make(map[string]*CertificateEntry),
 		issuerName:        issuerName,
+		useClusterIssuer:  useClusterIssuer,
 	}
 }
 
@@ -209,7 +212,11 @@ func (m *CertManagerAdapter) updateTLSCertificate(ctx context.Context, config se
 	}
 	certificate.Spec.DNSNames = entry.DnsNames
 	certificate.Spec.CommonName = entry.EntryId
-	certificate.Spec.IssuerRef.Kind = "Issuer" // TODO: Support ClusterIssuer as well
+	if m.useClusterIssuer {
+		certificate.Spec.IssuerRef.Kind = "ClusterIssuer"
+	} else {
+		certificate.Spec.IssuerRef.Kind = "Issuer"
+	}
 	certificate.Spec.IssuerRef.Name = m.issuerName
 
 	if config.CertConfig.CertType == secretstypes.JKSCertType {
