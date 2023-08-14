@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"github.com/amit7itz/goset"
 	certmanager "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	secretstypes "github.com/otterize/credentials-operator/src/controllers/secrets/types"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
-	"github.com/otterize/credentials-operator/src/controllers/secrets/types"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -35,16 +35,16 @@ func SecretConfigFromAnnotations(annotations map[string]string) secretstypes.Sec
 		EntryHash:                 annotations[metadata.TLSSecretEntryHashAnnotation],
 		ShouldRestartPodOnRenewal: shouldRestartOnRenewalBool,
 		CertConfig: secretstypes.CertConfig{
-			CertType: secretstypes.CertType(annotations[metadata.CertTypeAnnotation]),
+			CertType:  secretstypes.CertType(annotations[metadata.CertTypeAnnotation]),
 			PEMConfig: secretstypes.PEMConfig{
-				CertFileName: annotations[metadata.CertFileNameAnnotation],
-				CAFileName:   annotations[metadata.CAFileNameAnnotation],
-				KeyFileName:  annotations[metadata.KeyFileNameAnnotation],
+				//CertFileName: annotations[metadata.CertFileNameAnnotation],
+				//CAFileName:   annotations[metadata.CAFileNameAnnotation],
+				//KeyFileName:  annotations[metadata.KeyFileNameAnnotation],
 			},
 			JKSConfig: secretstypes.JKSConfig{
-				KeyStoreFileName:   annotations[metadata.KeyStoreFileNameAnnotation],
-				TrustStoreFileName: annotations[metadata.TrustStoreFileNameAnnotation],
-				Password:           annotations[metadata.JKSPasswordAnnotation],
+				//KeyStoreFileName:   annotations[metadata.KeyStoreFileNameAnnotation],
+				//TrustStoreFileName: annotations[metadata.TrustStoreFileNameAnnotation],
+				Password: annotations[metadata.JKSPasswordAnnotation],
 			},
 		},
 	}
@@ -141,6 +141,43 @@ func (m *CertManagerAdapter) getExistingCertificate(ctx context.Context, namespa
 	return &found, true, nil
 }
 
+func (m *CertManagerAdapter) getJKSPasswordSecretRef(ctx context.Context, namespace, secretName, password string) (*cmmeta.SecretKeySelector, error) {
+	jksPasswordsSecret := corev1.Secret{}
+	newJksPasswordsSecret := false
+
+	// TODO: const for the name
+	if err := m.Get(ctx, types.NamespacedName{Name: "jks-passwords", Namespace: namespace}, &jksPasswordsSecret); err != nil {
+		if apierrors.IsNotFound(err) {
+			jksPasswordsSecret.Name = "jks-passwords"
+			jksPasswordsSecret.Namespace = namespace
+			jksPasswordsSecret.Data = make(map[string][]byte)
+			newJksPasswordsSecret = true
+		} else {
+			return nil, err
+		}
+	}
+	jksPasswordsSecret.Data[secretName] = []byte(password)
+
+	if newJksPasswordsSecret {
+		if err := m.Create(ctx, &jksPasswordsSecret); err != nil {
+			logrus.WithError(err).Error("Can't create secret of jks passwords")
+			return nil, err
+		}
+	} else {
+		if err := m.Update(ctx, &jksPasswordsSecret); err != nil {
+			logrus.WithError(err).Error("Can't update secret of jks passwords")
+			return nil, err
+		}
+	}
+
+	return &cmmeta.SecretKeySelector{
+		LocalObjectReference: cmmeta.LocalObjectReference{
+			Name: "jks-passwords",
+		},
+		Key: secretName,
+	}, nil
+}
+
 func (m *CertManagerAdapter) updateTLSCertificate(ctx context.Context, config secretstypes.SecretConfig, certificate *certmanager.Certificate) error {
 	// TODO: Can share with the other class
 	// TODO: Should have those on the certificate also? (or instead?)
@@ -176,6 +213,20 @@ func (m *CertManagerAdapter) updateTLSCertificate(ctx context.Context, config se
 	certificate.Spec.CommonName = entry.EntryId
 	certificate.Spec.IssuerRef.Kind = "Issuer" // TODO: Support ClusterIssuer as well
 	certificate.Spec.IssuerRef.Name = m.issuerName
+
+	if config.CertConfig.CertType == secretstypes.JKSCertType {
+		jksPasswordRef, err := m.getJKSPasswordSecretRef(ctx, config.Namespace, config.SecretName, config.CertConfig.JKSConfig.Password)
+		if err != nil {
+			return err
+		}
+
+		certificate.Spec.Keystores = &certmanager.CertificateKeystores{
+			JKS: &certmanager.JKSKeystore{
+				Create:            true,
+				PasswordSecretRef: *jksPasswordRef,
+			},
+		}
+	}
 
 	return nil
 }
