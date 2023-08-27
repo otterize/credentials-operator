@@ -95,6 +95,8 @@ func (cm *CertManagerSecretsManager) PopulateSecretObject(ctx context.Context, c
 				PasswordSecretRef: *jksPasswordRef,
 			},
 		}
+	} else {
+		cert.Spec.Keystores = nil
 	}
 
 	return nil
