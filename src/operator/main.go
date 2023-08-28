@@ -18,7 +18,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"github.com/bombsimon/logrusr/v3"
@@ -109,7 +108,7 @@ func (cpf *CredsProvider) Set(v string) error {
 		cpf.Provider = v
 		return nil
 	}
-	return errors.New(fmt.Sprintf("credentials-provider should be one of: %s", cpf.GetPrintableOptionalValues()))
+	return fmt.Errorf("credentials-provider should be one of: %s", cpf.GetPrintableOptionalValues())
 }
 
 func (cpf *CredsProvider) String() string {
@@ -130,8 +129,8 @@ func main() {
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":7072", "The address the probe endpoint binds to.")
 	flag.StringVar(&spireServerAddr, "spire-server-address", "spire-server.spire:8081", "SPIRE server API address.")
 	flag.Var(&credProvider, "credentials-provider", fmt.Sprintf("Credentials generation provider (%s)", credProvider.GetPrintableOptionalValues()))
-	flag.StringVar(&certManagerIssuer, "cert-manager-issuer", "ca-issuer", fmt.Sprintf("Name of the Issuer to be used by cert-manager to sign certificates"))
-	flag.BoolVar(&certManagerUseClusterIssuer, "cert-manager-use-cluster-issuer", false, fmt.Sprintf("Use ClusterIssuer instead of a (namespace bound) Issuer"))
+	flag.StringVar(&certManagerIssuer, "cert-manager-issuer", "ca-issuer", "Name of the Issuer to be used by cert-manager to sign certificates")
+	flag.BoolVar(&certManagerUseClusterIssuer, "cert-manager-use-cluster-issuer", false, "Use ClusterIssuer instead of a (namespace bound) Issuer")
 
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
