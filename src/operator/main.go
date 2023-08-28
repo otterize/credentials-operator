@@ -101,8 +101,7 @@ func (cpf *CredsProvider) GetPrintableOptionalValues() string {
 
 func (cpf *CredsProvider) Set(v string) error {
 	if v == "" {
-		// TODO: Fix default
-		v = ProviderCertManager
+		v = ProviderSpire
 	}
 	if slices.Contains(cpf.getOptionalValues(), v) {
 		cpf.Provider = v
