@@ -122,6 +122,7 @@ func main() {
 	var credProvider CredsProvider
 	var certManagerIssuer string
 	var certManagerUseClusterIssuer bool
+	var certManagerApprover bool
 	var secretsManager controllers.SecretsManager
 	var workloadRegistry controllers.WorkloadRegistry
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":7071", "The address the metric endpoint binds to.")
@@ -130,6 +131,7 @@ func main() {
 	flag.Var(&credProvider, "credentials-provider", fmt.Sprintf("Credentials generation provider (%s)", credProvider.GetPrintableOptionalValues()))
 	flag.StringVar(&certManagerIssuer, "cert-manager-issuer", "ca-issuer", "Name of the Issuer to be used by cert-manager to sign certificates")
 	flag.BoolVar(&certManagerUseClusterIssuer, "cert-manager-use-cluster-issuer", false, "Use ClusterIssuer instead of a (namespace bound) Issuer")
+	flag.BoolVar(&certManagerApprover, "cert-manager-approve-requests", false, "Make credentials-operator approve its own CertificateRequests")
 
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
@@ -191,6 +193,13 @@ func main() {
 	if err = podReconciler.SetupWithManager(mgr); err != nil {
 		logrus.WithField("controller", "Pod").WithError(err).Error("unable to create controller")
 		os.Exit(1)
+	}
+
+	if provider == ProviderCertManager && certManagerApprover {
+		if err = secretsManager.(*certmanageradapter.CertManagerSecretsManager).RegisterCertificateApprover(ctx, mgr); err != nil {
+			logrus.WithField("controller", "CertificateRequest").WithError(err).Error("unable to create controller")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

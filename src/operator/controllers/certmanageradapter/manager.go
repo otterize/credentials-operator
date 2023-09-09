@@ -4,16 +4,17 @@ import (
 	"context"
 	certmanager "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
-	secretstypes "github.com/otterize/credentials-operator/src/controllers/secrets/types"
-	"github.com/otterize/credentials-operator/src/controllers/secrets"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
+	"github.com/otterize/credentials-operator/src/controllers/secrets"
+	secretstypes "github.com/otterize/credentials-operator/src/controllers/secrets/types"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"time"
 )
 
@@ -26,8 +27,10 @@ var _ secrets.K8sSecretsManagerSubclass[*certmanager.Certificate] = &CertManager
 type CertManagerSecretsManager struct {
 	secrets.K8sSecretsManagerBase[*certmanager.Certificate]
 	registry         *CertManagerWorkloadRegistry
+	issuerRef        cmmeta.ObjectReference
 	issuerName       string
 	useClusterIssuer bool
+	approver         *CertificateApprover
 }
 
 func NewCertManagerSecretsManager(c client.Client,
@@ -36,10 +39,18 @@ func NewCertManagerSecretsManager(c client.Client,
 	issuerName string,
 	useClusterIssuer bool,
 ) (*CertManagerSecretsManager, *CertManagerWorkloadRegistry) {
+	issuerKind := "Issuer"
+	if useClusterIssuer {
+		issuerKind = "ClusterIssuer"
+	}
+
 	cm := &CertManagerSecretsManager{
-		registry:         NewCertManagerWorkloadRegistry(),
-		issuerName:       issuerName,
-		useClusterIssuer: useClusterIssuer,
+		registry: NewCertManagerWorkloadRegistry(),
+		issuerRef: cmmeta.ObjectReference{
+			Name: issuerName,
+			Kind: issuerKind,
+		},
+		approver: nil,
 	}
 	cm.K8sSecretsManagerBase = *secrets.NewK8sSecretsManagerBase[*certmanager.Certificate](c, serviceIdResolver, eventRecorder, cm)
 	return cm, cm.registry
@@ -76,12 +87,7 @@ func (cm *CertManagerSecretsManager) PopulateSecretObject(ctx context.Context, c
 	cert.Spec.SecretName = config.SecretName
 	cert.Spec.DNSNames = entry.DnsNames
 	cert.Spec.CommonName = entry.EntryId
-	if cm.useClusterIssuer {
-		cert.Spec.IssuerRef.Kind = "ClusterIssuer"
-	} else {
-		cert.Spec.IssuerRef.Kind = "Issuer"
-	}
-	cert.Spec.IssuerRef.Name = cm.issuerName
+	cert.Spec.IssuerRef = cm.issuerRef
 
 	if config.CertConfig.CertType == secretstypes.JKSCertType {
 		jksPasswordRef, err := cm.getJKSPasswordSecretRef(ctx, config.Namespace, config.SecretName, config.CertConfig.JKSConfig.Password)
@@ -136,4 +142,9 @@ func (cm *CertManagerSecretsManager) getJKSPasswordSecretRef(ctx context.Context
 		},
 		Key: secretName,
 	}, nil
+}
+
+func (cm *CertManagerSecretsManager) RegisterCertificateApprover(ctx context.Context, mgr manager.Manager) error {
+	cm.approver = NewCertificateApprover(cm.issuerRef, mgr, cm.registry)
+	return cm.approver.Register(ctx)
 }
