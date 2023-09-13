@@ -45,7 +45,6 @@ const (
 type WorkloadRegistry interface {
 	RegisterK8SPod(ctx context.Context, namespace string, serviceNameLabel string, serviceName string, ttl int32, dnsNames []string) (string, error)
 	CleanupOrphanK8SPodEntries(ctx context.Context, serviceNameLabel string, existingServicesByNamespace map[string]*goset.Set[string]) error
-	ServiceDatabaseCredentials(ctx context.Context, serviceName, databaseName, namespace string) (*otterizegraphql.DatabaseCredentials, error)
 }
 
 type SecretsManager interface {
@@ -53,11 +52,16 @@ type SecretsManager interface {
 	RefreshTLSSecrets(ctx context.Context) error
 }
 
+type DatabaseCredentialsAcquirer interface {
+	AcquireServiceDatabaseCredentials(ctx context.Context, serviceName, databaseName, namespace string) (*otterizegraphql.DatabaseCredentials, error)
+}
+
 // PodReconciler reconciles a Pod object
 type PodReconciler struct {
 	client.Client
 	scheme                               *runtime.Scheme
 	workloadRegistry                     WorkloadRegistry
+	databaseCredsAcquirer                DatabaseCredentialsAcquirer
 	secretsManager                       SecretsManager
 	serviceIdResolver                    *serviceidresolver.Resolver
 	eventRecorder                        record.EventRecorder
@@ -69,13 +73,14 @@ type PodReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=replicasets;daemonsets;statefulsets;deployments,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=events,verbs=get;update;patch;list;watch;create
 
-func NewPodReconciler(client client.Client, scheme *runtime.Scheme, workloadRegistry WorkloadRegistry,
+func NewPodReconciler(client client.Client, scheme *runtime.Scheme, workloadRegistry WorkloadRegistry, databaseCredsAcquirer DatabaseCredentialsAcquirer,
 	secretsManager SecretsManager, serviceIdResolver *serviceidresolver.Resolver, eventRecorder record.EventRecorder,
 	registerOnlyPodsWithSecretAnnotation bool) *PodReconciler {
 	return &PodReconciler{
 		Client:                               client,
 		scheme:                               scheme,
 		workloadRegistry:                     workloadRegistry,
+		databaseCredsAcquirer:                databaseCredsAcquirer,
 		secretsManager:                       secretsManager,
 		serviceIdResolver:                    serviceIdResolver,
 		eventRecorder:                        eventRecorder,
@@ -249,7 +254,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		log.WithField("annotation.key", metadata.TLSSecretNameAnnotation).Info("skipping TLS secrets creation - annotation not found")
 	}
 
-	if r.shouldCreateDBCredentialsSecretsForPod(pod) {
+	if r.databaseCredsAcquirer != nil && r.shouldCreateDBCredentialsSecretsForPod(pod) {
 		log.Debug("Ensuring database credentials secrets for pod")
 		err := r.ensurePodDBCredentialsSecrets(ctx, pod, serviceID.Name)
 		if err != nil {
@@ -395,7 +400,7 @@ func (r *PodReconciler) ensurePodDBCredentialsSecrets(ctx context.Context, pod *
 		err := r.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: secretName}, &corev1.Secret{})
 		if err != nil && apierrors.IsNotFound(err) {
 			log.Info("Creating database credentials secret for pod")
-			creds, err := r.workloadRegistry.ServiceDatabaseCredentials(ctx, serviceName, database, pod.Namespace)
+			creds, err := r.databaseCredsAcquirer.AcquireServiceDatabaseCredentials(ctx, serviceName, database, pod.Namespace)
 			if err != nil {
 				return err
 			}

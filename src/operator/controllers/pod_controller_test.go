@@ -55,7 +55,7 @@ func (s *PodControllerSuiteWithoutEventRecorder) SetupTest() {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	s.client.EXPECT().Scheme().Return(scheme).AnyTimes()
-	s.podReconciler = NewPodReconciler(s.client, nil, s.entriesRegistry, s.secretsManager,
+	s.podReconciler = NewPodReconciler(s.client, nil, s.entriesRegistry, nil, s.secretsManager,
 		serviceIdResolver, eventRecorder, false)
 }
 
@@ -256,7 +256,7 @@ func (s *PodControllerSuiteWithEventRecorder) SetupTest() {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	s.client.EXPECT().Scheme().Return(scheme).AnyTimes()
-	s.podReconciler = NewPodReconciler(s.client, nil, s.entriesRegistry, s.secretsManager,
+	s.podReconciler = NewPodReconciler(s.client, nil, s.entriesRegistry, nil, s.secretsManager,
 		serviceIdResolver, s.eventRecorder, false)
 }
 

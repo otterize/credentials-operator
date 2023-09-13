@@ -44,7 +44,7 @@ func (c *CloudClient) RegisterK8SPod(ctx context.Context, namespace string, _ st
 	return res.RegisterKubernetesPodOwnerCertificateRequest.Id, nil
 }
 
-func (c *CloudClient) ServiceDatabaseCredentials(ctx context.Context, serviceName, databaseName, namespace string) (*otterizegraphql.DatabaseCredentials, error) {
+func (c *CloudClient) AcquireServiceDatabaseCredentials(ctx context.Context, serviceName, databaseName, namespace string) (*otterizegraphql.DatabaseCredentials, error) {
 	res, err := otterizegraphql.GetDatabaseCredentials(ctx, c.graphqlClient, databaseName, serviceName, namespace)
 	if err != nil {
 		return nil, err
