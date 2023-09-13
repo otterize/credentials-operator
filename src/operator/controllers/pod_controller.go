@@ -6,6 +6,7 @@ import (
 	"github.com/amit7itz/goset"
 	"github.com/asaskevich/govalidator"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
+	"github.com/otterize/credentials-operator/src/controllers/otterizeclient/otterizegraphql"
 	secretstypes "github.com/otterize/credentials-operator/src/controllers/secrets/types"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/samber/lo"
@@ -13,7 +14,9 @@ import (
 	"hash/fnv"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -26,6 +29,7 @@ const (
 	refreshSecretsLoopTick           = time.Minute
 	cleanupOrphanEntriesLoopTick     = 10 * time.Minute
 	ReasonEnsuredPodTLS              = "EnsuredPodTLS"
+	ReasonEnsuredPodDBCredentials    = "EnsuredPodDBCredentials"
 	ReasonEnsuringPodTLSFailed       = "EnsuringPodTLSFailed"
 	ReasonPodOwnerResolutionFailed   = "PodOwnerResolutionFailed"
 	ReasonPodLabelUpdateFailed       = "PodLabelUpdateFailed"
@@ -40,6 +44,7 @@ const (
 type WorkloadRegistry interface {
 	RegisterK8SPod(ctx context.Context, namespace string, serviceNameLabel string, serviceName string, ttl int32, dnsNames []string) (string, error)
 	CleanupOrphanK8SPodEntries(ctx context.Context, serviceNameLabel string, existingServicesByNamespace map[string]*goset.Set[string]) error
+	ServiceDatabaseCredentials(ctx context.Context, serviceName, databaseName, namespace string) (*otterizegraphql.DatabaseCredentials, error)
 }
 
 type SecretsManager interface {
@@ -234,14 +239,22 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	shouldRestartPodOnRenewal := r.resolvePodToShouldRestartOnRenewal(pod)
 
-	if !r.shouldCreateSecretForPod(pod) {
+	if r.shouldCreateTLSSecretForPod(pod) {
+		// generate TLS secret for pod
+		if err := r.ensurePodTLSSecret(ctx, pod, serviceID.Name, entryID, hashStr, shouldRestartPodOnRenewal); err != nil {
+			r.eventRecorder.Eventf(pod, corev1.EventTypeWarning, ReasonEnsuringPodTLSFailed, "Failed creating TLS secret for pod: %s", err.Error())
+		}
+	} else {
 		log.WithField("annotation.key", metadata.TLSSecretNameAnnotation).Info("skipping TLS secrets creation - annotation not found")
-		return ctrl.Result{}, err
 	}
-	// generate TLS secret for pod
-	if err := r.ensurePodTLSSecret(ctx, pod, serviceID.Name, entryID, hashStr, shouldRestartPodOnRenewal); err != nil {
-		r.eventRecorder.Eventf(pod, corev1.EventTypeWarning, ReasonEnsuringPodTLSFailed, "Failed creating TLS secret for pod: %s", err.Error())
-		return ctrl.Result{}, err
+
+	if r.shouldCreateDBCredentialsSecretsForPod(pod) {
+		log.Debug("Ensuring database credentials secrets for pod")
+		err := r.ensurePodDBCredentialsSecrets(ctx, pod, serviceID.Name)
+		if err != nil {
+			log.Error("Failed ensuring pod credentials")
+			return ctrl.Result{}, err
+		}
 	}
 
 	return ctrl.Result{}, nil
@@ -286,13 +299,13 @@ func (r *PodReconciler) resolvePodToCertTTl(pod *corev1.Pod) (int32, error) {
 	return int32(ttl64), nil
 }
 
-func (r *PodReconciler) shouldCreateSecretForPod(pod *corev1.Pod) bool {
+func (r *PodReconciler) shouldCreateTLSSecretForPod(pod *corev1.Pod) bool {
 	return pod.Annotations != nil &&
 		len(metadata.GetAnnotationValue(pod.Annotations, metadata.TLSSecretNameAnnotation)) != 0
 }
 
 func (r *PodReconciler) shouldRegisterEntryForPod(pod *corev1.Pod) bool {
-	return !r.registerOnlyPodsWithSecretAnnotation || r.shouldCreateSecretForPod(pod)
+	return !r.registerOnlyPodsWithSecretAnnotation || r.shouldCreateTLSSecretForPod(pod)
 }
 
 func (r *PodReconciler) resolvePodToShouldRestartOnRenewal(pod *corev1.Pod) bool {
@@ -354,4 +367,76 @@ func (r *PodReconciler) MaintenanceLoop(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (r *PodReconciler) shouldCreateDBCredentialsSecretsForPod(pod *corev1.Pod) bool {
+	return pod.Annotations != nil && hasDatabaseAccessAnnotations(pod)
+}
+
+func hasDatabaseAccessAnnotations(pod *corev1.Pod) bool {
+	for k, _ := range pod.Annotations {
+		if strings.HasPrefix(k, metadata.DBCredentialsDatabasePrefixAnnotation) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (r *PodReconciler) ensurePodDBCredentialsSecrets(ctx context.Context, pod *corev1.Pod, serviceName string) error {
+	log := logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace})
+	databasesToAccess := extractDatabasesToAccessFromAnnotations(pod)
+
+	for _, database := range databasesToAccess {
+		log.WithField("database", database).Info("Fetching database credentials for pod")
+		secretName := formatDatabaseCredentialsSecretName(database, serviceName)
+
+		err := r.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: secretName}, &corev1.Secret{})
+		if err != nil && apierrors.IsNotFound(err) {
+			log.Info("Creating database credentials secret for pod")
+			creds, err := r.workloadRegistry.ServiceDatabaseCredentials(ctx, serviceName, database, pod.Namespace)
+			if err != nil {
+				return err
+			}
+
+			secret := buildDatabaseCredentialsSecret(secretName, pod.Namespace, creds)
+			log.WithField("secret", secretName).Info("Creating new secret with database credentials")
+			if err := r.Create(ctx, secret); err != nil {
+				return err
+			}
+
+		} else if err != nil {
+			return err
+		}
+		log.Debug("Secret exists, nothing to do")
+	}
+	return nil
+}
+
+func buildDatabaseCredentialsSecret(name, namespace string, creds *otterizegraphql.DatabaseCredentials) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Data: map[string][]byte{
+			"username": []byte(creds.Username),
+			"password": []byte(creds.Password),
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+}
+
+func extractDatabasesToAccessFromAnnotations(pod *corev1.Pod) []string {
+	databaseNames := make([]string, 0)
+	for k, _ := range pod.Annotations {
+		if strings.HasPrefix(k, metadata.DBCredentialsDatabasePrefixAnnotation) {
+			databaseNames = append(databaseNames, strings.Split(k, metadata.DBCredentialsDatabasePrefixAnnotation)[1])
+		}
+	}
+	return databaseNames
+}
+
+func formatDatabaseCredentialsSecretName(databaseName, serviceName string) string {
+	return fmt.Sprintf("%s-database-credentials-for-%s", serviceName, databaseName)
 }
