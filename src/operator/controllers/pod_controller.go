@@ -39,6 +39,7 @@ const (
 	ReasonPodRegistered              = "PodRegistered"
 	ReasonEntryHashCalculationFailed = "EntryHashCalculationFailed"
 	ReasonUsingDeprecatedAnnotations = "UsingDeprecatedAnnotations"
+	DatabaseCredentialsSecretNameFmt = "%s-credentials-for-%s-database"
 )
 
 type WorkloadRegistry interface {
@@ -438,5 +439,5 @@ func extractDatabasesToAccessFromAnnotations(pod *corev1.Pod) []string {
 }
 
 func formatDatabaseCredentialsSecretName(databaseName, serviceName string) string {
-	return fmt.Sprintf("%s-database-credentials-for-%s", serviceName, databaseName)
+	return fmt.Sprintf(DatabaseCredentialsSecretNameFmt, serviceName, databaseName)
 }
