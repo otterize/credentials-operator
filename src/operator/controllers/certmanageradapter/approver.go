@@ -9,12 +9,9 @@ import (
 	utilpki "github.com/cert-manager/cert-manager/pkg/util/pki"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	"github.com/sirupsen/logrus"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // CertificateApprover - This class is inspired by and shares code with https://github.com/cert-manager/csi-driver-spiffe/tree/main/internal/approver/
@@ -35,34 +32,8 @@ func NewCertificateApprover(issuerRef cmmeta.ObjectReference, client client.Clie
 }
 
 func (a *CertificateApprover) Register(ctx context.Context, mgr manager.Manager) error {
-	log := logrus.WithFields(logrus.Fields{"name": "cert-request-aprrover"})
-
 	return ctrl.NewControllerManagedBy(mgr).
 		For(new(cmapi.CertificateRequest)).
-		WithEventFilter(predicate.NewPredicateFuncs(func(obj client.Object) bool {
-			var req cmapi.CertificateRequest
-			err := a.lister.Get(ctx, client.ObjectKeyFromObject(obj), &req)
-			if apierrors.IsNotFound(err) {
-				// Ignore CertificateRequests that have been deleted.
-				return false
-			}
-
-			// If an error happens here and we do nothing, we run the risk of not
-			// processing CertificateRequests.
-			// Exiting error is the safest option, as it will force a resync on all
-			// CertificateRequests on start.
-			if err != nil {
-				log.Error(err, "failed to list all CertificateRequests, exiting error")
-				os.Exit(-1)
-			}
-
-			// Ignore requests that already have an Approved or Denied condition.
-			if apiutil.CertificateRequestIsApproved(&req) || apiutil.CertificateRequestIsDenied(&req) {
-				return false
-			}
-
-			return req.Spec.IssuerRef == a.issuerRef
-		})).
 		Complete(a)
 }
 
@@ -70,23 +41,33 @@ func (a *CertificateApprover) Register(ctx context.Context, mgr manager.Manager)
 // neither approved or denied yet, and matches the issuerRef configured.
 func (a *CertificateApprover) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logrus.WithFields(logrus.Fields{"namespace": req.NamespacedName.Namespace, "name": req.NamespacedName.Name})
-	log.Info("syncing certificaterequest")
-	defer log.Info("finished syncing certificaterequest")
 
-	var cr cmapi.CertificateRequest
-	if err := a.lister.Get(ctx, req.NamespacedName, &cr); err != nil {
+	var certReq cmapi.CertificateRequest
+	if err := a.lister.Get(ctx, req.NamespacedName, &certReq); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := a.Evaluate(&cr); err != nil {
+	// Ignore requests that already have an Approved or Denied condition.
+	if apiutil.CertificateRequestIsApproved(&certReq) || apiutil.CertificateRequestIsDenied(&certReq) || certReq.DeletionTimestamp != nil {
+		return ctrl.Result{}, nil
+	}
+
+	if certReq.Spec.IssuerRef != a.issuerRef {
+		return ctrl.Result{}, nil
+	}
+
+	log.Info("syncing certificaterequest")
+	defer log.Info("finished syncing certificaterequest")
+
+	if err := a.Evaluate(&certReq); err != nil {
 		log.Error("denying request: ", err)
-		apiutil.SetCertificateRequestCondition(&cr, cmapi.CertificateRequestConditionDenied, cmmeta.ConditionTrue, "credentials-operator.otterize.com", "Denied request: "+err.Error())
-		return ctrl.Result{}, a.client.Status().Update(ctx, &cr)
+		apiutil.SetCertificateRequestCondition(&certReq, cmapi.CertificateRequestConditionDenied, cmmeta.ConditionTrue, "credentials-operator.otterize.com", "Denied request: "+err.Error())
+		return ctrl.Result{}, a.client.Status().Update(ctx, &certReq)
 	}
 
 	log.Info("approving request")
-	apiutil.SetCertificateRequestCondition(&cr, cmapi.CertificateRequestConditionApproved, cmmeta.ConditionTrue, "credentials-operator.otterize.com", "Approved request")
-	return ctrl.Result{}, a.client.Status().Update(ctx, &cr)
+	apiutil.SetCertificateRequestCondition(&certReq, cmapi.CertificateRequestConditionApproved, cmmeta.ConditionTrue, "credentials-operator.otterize.com", "Approved request")
+	return ctrl.Result{}, a.client.Status().Update(ctx, &certReq)
 }
 
 // Evaluate evaluates whether a CertificateRequest should be approved or

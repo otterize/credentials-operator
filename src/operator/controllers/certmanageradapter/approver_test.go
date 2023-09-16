@@ -28,7 +28,6 @@ import (
 type CertApproverSuite struct {
 	suite.Suite
 	controller *gomock.Controller
-	client     client.Client
 	registry   *CertManagerWorkloadRegistry
 	pk         *ecdsa.PrivateKey
 }
@@ -48,6 +47,10 @@ func (s *CertApproverSuite) CheckReconcile(cr *cmapi.CertificateRequest, valid b
 	certReqName := types.NamespacedName{Namespace: "test-ns", Name: "test-cr"}
 	cr.SetNamespace(certReqName.Namespace)
 	cr.SetName(certReqName.Name)
+	cr.Spec.IssuerRef = cmmeta.ObjectReference{
+		Name: "my-issuer",
+		Kind: "ClusterIssuer",
+	}
 	objs := []client.Object{cr}
 
 	scheme := runtime.NewScheme()
