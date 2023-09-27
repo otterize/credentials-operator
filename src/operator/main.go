@@ -190,7 +190,7 @@ func main() {
 
 	client := mgr.GetClient()
 	podReconciler := controllers.NewPodReconciler(client, mgr.GetScheme(), workloadRegistry, secretsManager,
-		serviceIdResolver, eventRecorder, serviceaccount.NewServiceAccountEnsurer(client), provider == ProviderCloud)
+		serviceIdResolver, eventRecorder, serviceaccount.NewServiceAccountEnsurer(client, eventRecorder), provider == ProviderCloud)
 
 	if err = podReconciler.SetupWithManager(mgr); err != nil {
 		logrus.WithField("controller", "Pod").WithError(err).Error("unable to create controller")
