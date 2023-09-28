@@ -76,7 +76,7 @@ func (e *Ensurer) EnsureServiceAccount(ctx context.Context, pod *v1.Pod) error {
 
 func (e *Ensurer) createServiceAccount(ctx context.Context, serviceAccountName string, pod *v1.Pod) error {
 	serviceAccount := v1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{Name: serviceAccountName, Namespace: pod.Namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: serviceAccountName, Namespace: pod.Namespace, Labels: map[string]string{metadata.OtterizeServiceAccountLabel: serviceAccountName}},
 	}
 	return e.Client.Create(ctx, &serviceAccount)
 }
