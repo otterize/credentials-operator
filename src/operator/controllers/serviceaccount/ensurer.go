@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
+	"github.com/otterize/intents-operator/src/shared/awsagent"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -23,10 +24,19 @@ const (
 type Ensurer struct {
 	client.Client
 	recorder record.EventRecorder
+	awsAgent *awsagent.Agent
 }
 
-func NewServiceAccountEnsurer(client client.Client, eventRecorder record.EventRecorder) *Ensurer {
-	return &Ensurer{Client: client, recorder: eventRecorder}
+func NewServiceAccountEnsurer(
+	client client.Client,
+	eventRecorder record.EventRecorder,
+	awsAgent *awsagent.Agent,
+) *Ensurer {
+	return &Ensurer{
+		Client:   client,
+		recorder: eventRecorder,
+		awsAgent: awsAgent,
+	}
 }
 
 func isServiceAccountNameValid(name string) bool {
@@ -76,7 +86,14 @@ func (e *Ensurer) EnsureServiceAccount(ctx context.Context, pod *v1.Pod) error {
 
 func (e *Ensurer) createServiceAccount(ctx context.Context, serviceAccountName string, pod *v1.Pod) error {
 	serviceAccount := v1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{Name: serviceAccountName, Namespace: pod.Namespace, Labels: map[string]string{metadata.OtterizeServiceAccountLabel: serviceAccountName}},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceAccountName,
+			Namespace: pod.Namespace,
+			Labels: map[string]string{
+				metadata.OtterizeServiceAccountLabel: serviceAccountName,
+			},
+		},
 	}
+
 	return e.Client.Create(ctx, &serviceAccount)
 }
