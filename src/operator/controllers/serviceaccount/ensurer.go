@@ -72,14 +72,14 @@ func (e *Ensurer) EnsureServiceAccount(ctx context.Context, pod *v1.Pod) error {
 		return nil
 	}
 
-	logrus.Infof("creating service account named %s for pod %s", serviceAccountName, pod)
+	logrus.Infof("creating service account named %s for pod/%s/%s", serviceAccountName, pod.Namespace, pod.Name)
 	if err := e.createServiceAccount(ctx, serviceAccountName, pod); err != nil {
-		logrus.Errorf("failed creating service account for pod %s: %s", pod, err.Error())
+		logrus.WithError(err).Errorf("failed creating service account for pod/%s/%s", pod.Namespace, pod.Name)
 		e.recorder.Eventf(pod, v1.EventTypeWarning, ReasonCreatingServiceAccountFailed, "Failed creating service account: %s", err.Error())
 		return err
 	}
 	e.recorder.Eventf(pod, v1.EventTypeNormal, ReasonCreateServiceAccount, "Successfully created service account: %s", serviceAccountName)
-	logrus.Infof("successfuly created service account named %s for pod %s", serviceAccountName, pod)
+	logrus.Infof("successfuly created service account named %s for pod/%s/%s", serviceAccountName, pod.Namespace, pod.Name)
 
 	return nil
 }
