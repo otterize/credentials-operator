@@ -1,6 +1,8 @@
 module github.com/otterize/credentials-operator/src
 
-go 1.19
+go 1.21
+
+toolchain go1.21.3
 
 require (
 	github.com/Khan/genqlient v0.6.0
@@ -8,7 +10,7 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a
 	github.com/bombsimon/logrusr/v3 v3.0.0
 	github.com/cert-manager/cert-manager v1.12.3
-	github.com/otterize/intents-operator/src v0.0.0-20231011094432-8b59c079386a
+	github.com/otterize/intents-operator/src v0.0.0-20231025110121-f4692a432ce2
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.1
 	github.com/samber/lo v1.33.0
 	github.com/sirupsen/logrus v1.9.0
