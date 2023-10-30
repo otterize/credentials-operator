@@ -200,6 +200,22 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	// resolve pod to otterize service name
+	serviceID, err := r.serviceIdResolver.ResolvePodToServiceIdentity(ctx, pod)
+	if err != nil {
+		r.eventRecorder.Eventf(pod, corev1.EventTypeWarning, ReasonPodOwnerResolutionFailed, "Could not resolve pod to its owner: %s", err.Error())
+		return ctrl.Result{}, err
+	}
+
+	if r.databaseCredsAcquirer != nil && r.shouldCreateDBCredentialsSecretsForPod(pod) {
+		log.Info("Ensuring database credentials secrets for pod")
+		err := r.ensurePodDBCredentialsSecrets(ctx, pod, serviceID.Name)
+		if err != nil {
+			log.Error("Failed ensuring pod credentials")
+			return ctrl.Result{}, err
+		}
+	}
+
 	if !r.shouldRegisterEntryForPod(pod) {
 		return ctrl.Result{}, nil
 	}
@@ -209,13 +225,6 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	log.Info("updating workload entries & secrets for pod")
-
-	// resolve pod to otterize service name
-	serviceID, err := r.serviceIdResolver.ResolvePodToServiceIdentity(ctx, pod)
-	if err != nil {
-		r.eventRecorder.Eventf(pod, corev1.EventTypeWarning, ReasonPodOwnerResolutionFailed, "Could not resolve pod to its owner: %s", err.Error())
-		return ctrl.Result{}, err
-	}
 
 	// Ensure the RegisteredServiceNameLabel is set
 	result, err := r.updatePodLabel(ctx, pod, metadata.RegisteredServiceNameLabel, serviceID.Name)
@@ -264,15 +273,6 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	} else {
 		log.WithField("annotation.key", metadata.TLSSecretNameAnnotation).Info("skipping TLS secrets creation - annotation not found")
-	}
-
-	if r.databaseCredsAcquirer != nil && r.shouldCreateDBCredentialsSecretsForPod(pod) {
-		log.Debug("Ensuring database credentials secrets for pod")
-		err := r.ensurePodDBCredentialsSecrets(ctx, pod, serviceID.Name)
-		if err != nil {
-			log.Error("Failed ensuring pod credentials")
-			return ctrl.Result{}, err
-		}
 	}
 
 	return ctrl.Result{}, nil
