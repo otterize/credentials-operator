@@ -392,7 +392,7 @@ func (r *PodReconciler) shouldCreateDBCredentialsSecretsForPod(pod *corev1.Pod) 
 }
 
 func hasDatabaseAccessAnnotations(pod *corev1.Pod) bool {
-	for k, _ := range pod.Annotations {
+	for k := range pod.Annotations {
 		if strings.HasPrefix(k, metadata.DBCredentialsDatabasePrefixAnnotation) {
 			return true
 		}
@@ -447,7 +447,7 @@ func buildDatabaseCredentialsSecret(name, namespace string, creds *otterizegraph
 
 func extractDatabasesToAccessFromAnnotations(pod *corev1.Pod) []string {
 	databaseNames := make([]string, 0)
-	for k, _ := range pod.Annotations {
+	for k := range pod.Annotations {
 		if strings.HasPrefix(k, metadata.DBCredentialsDatabasePrefixAnnotation) {
 			databaseNames = append(databaseNames, strings.Split(k, metadata.DBCredentialsDatabasePrefixAnnotation)[1])
 		}
