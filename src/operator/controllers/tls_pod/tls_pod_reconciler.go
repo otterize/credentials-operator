@@ -201,14 +201,6 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	if !r.shouldRegisterEntryForPod(pod) {
-		return ctrl.Result{}, nil
-	}
-
-	if metadata.HasDeprecatedAnnotations(pod.Annotations) {
-		r.eventRecorder.Event(pod, corev1.EventTypeWarning, ReasonUsingDeprecatedAnnotations, "This pod using deprecated otterize-credentials annotations. Please check the documentation at https://docs.otterize.com/components/credentials-operator")
-	}
-
 	log.Info("updating workload entries & secrets for pod")
 
 	// Ensure the RegisteredServiceNameLabel is set
