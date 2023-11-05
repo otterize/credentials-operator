@@ -2,7 +2,6 @@ package otterizeclient
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/Khan/genqlient/graphql"
 	"github.com/amit7itz/goset"
@@ -17,15 +16,17 @@ type CloudClient struct {
 	injectablerecorder.InjectableRecorder
 }
 
-func NewCloudClient(ctx context.Context) (*CloudClient, error) {
+func NewCloudClient(ctx context.Context) (*CloudClient, bool, error) {
 	client, ok, err := otterizecloudclient.NewClient(ctx)
 	if err != nil {
-		return nil, err
-	} else if !ok {
-		return nil, errors.New("missing cloud client credentials")
+		return nil, false, err
 	}
 
-	return &CloudClient{graphqlClient: client}, err
+	if !ok {
+		return nil, false, nil
+	}
+
+	return &CloudClient{graphqlClient: client}, true, err
 }
 func (c *CloudClient) GetTLSKeyPair(ctx context.Context, serviceId string) (otterizegraphql.TLSKeyPair, error) {
 	res, err := otterizegraphql.GetTLSKeyPair(ctx, c.graphqlClient, &serviceId)

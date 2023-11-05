@@ -1,4 +1,4 @@
-package serviceaccount
+package service_account_pod
 
 import (
 	"context"
@@ -64,7 +64,7 @@ func (s *PodServiceAccountEnsurerSuite) TestCreate() {
 			})
 
 	s.client.EXPECT().Create(gomock.Any(), &serviceAccountMatcher{Name: serviceAccountName, Namespace: namespace})
-	s.mockEventRecorder.EXPECT().Eventf(gomock.Any(), gomock.Eq(v1.EventTypeNormal), gomock.Eq(ReasonCreateServiceAccount), gomock.Any(), gomock.Any())
+	s.mockEventRecorder.EXPECT().Eventf(gomock.Any(), gomock.Eq(v1.EventTypeNormal), gomock.Eq(ReasonServiceAccountCreated), gomock.Any(), gomock.Any())
 	err := s.ServiceAccountEnsurer.EnsureServiceAccount(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: namespace, Annotations: annotations}})
 	s.Require().NoError(err)
 
