@@ -26,6 +26,7 @@ import (
 	"github.com/otterize/credentials-operator/src/controllers/certificates/spirecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certmanageradapter"
 	"github.com/otterize/credentials-operator/src/controllers/otterizeclient"
+	"github.com/otterize/credentials-operator/src/controllers/poduserpassword"
 	"github.com/otterize/credentials-operator/src/controllers/secrets"
 	"github.com/otterize/credentials-operator/src/controllers/service_account_pod"
 	"github.com/otterize/credentials-operator/src/controllers/serviceaccount"
@@ -128,6 +129,7 @@ func main() {
 	var workloadRegistry tls_pod.WorkloadRegistry
 	var enableAWSServiceAccountManagement bool
 	var awsEksOidcProviderUrl string
+	var userAndPassAcquirer poduserpassword.CloudUserAndPasswordAcquirer
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":7071", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":7072", "The address the probe endpoint binds to.")
 	flag.StringVar(&spireServerAddr, "spire-server-address", "spire-server.spire:8081", "SPIRE server API address.")
@@ -173,6 +175,7 @@ func main() {
 			logrus.Fatal("using cloud, but cloud credentials not specified")
 		}
 		workloadRegistry = otterizeCloudClient
+		userAndPassAcquirer = otterizeCloudClient
 		otterizeclient.PeriodicallyReportConnectionToCloud(otterizeCloudClient)
 		otterizeCertManager := otterizecertgen.NewOtterizeCertificateGenerator(otterizeCloudClient)
 		secretsManager = secrets.NewDirectSecretsManager(mgr.GetClient(), serviceIdResolver, eventRecorder, otterizeCertManager)
@@ -217,7 +220,7 @@ func main() {
 			serviceIdResolver, eventRecorder, certProvider == CertProviderCloud)
 
 		if err = certPodReconciler.SetupWithManager(mgr); err != nil {
-			logrus.WithField("controller", "Pod").WithError(err).Error("unable to create controller")
+			logrus.WithField("controller", "certPod").WithError(err).Error("unable to create controller")
 			os.Exit(1)
 		}
 		go certPodReconciler.MaintenanceLoop(ctx)
@@ -229,6 +232,15 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	if userAndPassAcquirer != nil {
+		podUserAndPasswordReconciler := poduserpassword.NewReconciler(client, scheme, eventRecorder, serviceIdResolver, userAndPassAcquirer)
+		if err = podUserAndPasswordReconciler.SetupWithManager(mgr); err != nil {
+			logrus.WithField("controller", "podUserAndPassword").WithError(err).Error("unable to create controller")
+			os.Exit(1)
+		}
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
