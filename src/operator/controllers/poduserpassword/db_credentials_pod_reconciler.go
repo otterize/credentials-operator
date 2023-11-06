@@ -81,7 +81,7 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, err
 	}
 
-	err = e.ensurePodDBCredentialsSecrets(ctx, &pod, serviceID.Name, pod.Annotations[metadata.UserAndPasswordSecretNameAnnotation])
+	err = e.ensurePodUserAndPasswordSecret(ctx, &pod, serviceID.Name, pod.Annotations[metadata.UserAndPasswordSecretNameAnnotation])
 	if err != nil {
 		e.recorder.Eventf(&pod, v1.EventTypeWarning, ReasonEnsuringPodUserAndPasswordFailed, "Failed to ensure user-password credentials secret: %s", err.Error())
 		return ctrl.Result{}, err
@@ -91,7 +91,7 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return ctrl.Result{}, nil
 }
 
-func (e *Reconciler) ensurePodDBCredentialsSecrets(ctx context.Context, pod *v1.Pod, serviceName string, secretName string) error {
+func (e *Reconciler) ensurePodUserAndPasswordSecret(ctx context.Context, pod *v1.Pod, serviceName string, secretName string) error {
 	log := logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace})
 	err := e.client.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: secretName}, &v1.Secret{})
 	if apierrors.IsNotFound(err) {
@@ -101,7 +101,7 @@ func (e *Reconciler) ensurePodDBCredentialsSecrets(ctx context.Context, pod *v1.
 			return err
 		}
 
-		secret := buildDatabaseCredentialsSecret(secretName, pod.Namespace, creds)
+		secret := buildUserAndPasswordCredentialsSecret(secretName, pod.Namespace, creds)
 		log.WithField("secret", secretName).Debug("Creating new secret with user-password credentials")
 		if err := e.client.Create(ctx, secret); err != nil {
 			return err
@@ -116,7 +116,7 @@ func (e *Reconciler) ensurePodDBCredentialsSecrets(ctx context.Context, pod *v1.
 	return nil
 }
 
-func buildDatabaseCredentialsSecret(name, namespace string, creds *otterizegraphql.UserPasswordCredentials) *v1.Secret {
+func buildUserAndPasswordCredentialsSecret(name, namespace string, creds *otterizegraphql.UserPasswordCredentials) *v1.Secret {
 	return &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
