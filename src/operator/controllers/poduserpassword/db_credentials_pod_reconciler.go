@@ -25,7 +25,7 @@ const (
 )
 
 type CloudUserAndPasswordAcquirer interface {
-	AcquireServiceUserAndPassword(ctx context.Context, serviceName, namespace string) (*otterizegraphql.DatabaseCredentials, error)
+	AcquireServiceUserAndPassword(ctx context.Context, serviceName, namespace string) (*otterizegraphql.UserPasswordCredentials, error)
 }
 
 type Reconciler struct {
@@ -115,7 +115,7 @@ func (e *Reconciler) ensurePodDBCredentialsSecrets(ctx context.Context, pod *v1.
 	return nil
 }
 
-func buildDatabaseCredentialsSecret(name, namespace string, creds *otterizegraphql.DatabaseCredentials) *v1.Secret {
+func buildDatabaseCredentialsSecret(name, namespace string, creds *otterizegraphql.UserPasswordCredentials) *v1.Secret {
 	return &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,

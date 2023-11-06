@@ -6,7 +6,6 @@ import (
 	"github.com/amit7itz/goset"
 	"github.com/asaskevich/govalidator"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
-	"github.com/otterize/credentials-operator/src/controllers/otterizeclient/otterizegraphql"
 	secretstypes "github.com/otterize/credentials-operator/src/controllers/secrets/types"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/samber/lo"
@@ -47,10 +46,6 @@ type WorkloadRegistry interface {
 type SecretsManager interface {
 	EnsureTLSSecret(ctx context.Context, config secretstypes.SecretConfig, pod *corev1.Pod) error
 	RefreshTLSSecrets(ctx context.Context) error
-}
-
-type DatabaseCredentialsAcquirer interface {
-	AcquireServiceDatabaseCredentials(ctx context.Context, serviceName, databaseName, namespace string) (*otterizegraphql.DatabaseCredentials, error)
 }
 
 // PodReconciler reconciles a Pod object
