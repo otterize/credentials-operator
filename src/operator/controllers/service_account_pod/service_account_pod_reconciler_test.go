@@ -17,29 +17,33 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"net/http"
+	"reflect"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"testing"
 )
 
 type serviceAccountMatcher struct {
 	Name      string
 	Namespace string
+	Labels    map[string]string
 }
 
 func (m *serviceAccountMatcher) String() string {
-	return fmt.Sprintf("expected Name: %s Namespace: %s", m.Name, m.Namespace)
+	return fmt.Sprintf("expected Name: %s Namespace: %s Labels: %s", m.Name, m.Namespace, m.Labels)
 }
 
 func (m *serviceAccountMatcher) Matches(x interface{}) bool {
 	sa := x.(*v1.ServiceAccount)
-	return sa.Name == m.Name && sa.Namespace == m.Namespace
+	return sa.Name == m.Name && sa.Namespace == m.Namespace && reflect.DeepEqual(m.Labels, sa.Labels)
 }
 
 type PodServiceAccountEnsurerSuite struct {
 	suite.Suite
-	controller            *gomock.Controller
-	client                *mock_client.MockClient
-	ServiceAccountEnsurer *Ensurer
-	mockEventRecorder     *mock_record.MockEventRecorder
+	controller               *gomock.Controller
+	client                   *mock_client.MockClient
+	ServiceAccountReconciler *PodServiceAccountReconciler
+	mockEventRecorder        *mock_record.MockEventRecorder
 }
 
 func (s *PodServiceAccountEnsurerSuite) SetupTest() {
@@ -50,7 +54,7 @@ func (s *PodServiceAccountEnsurerSuite) SetupTest() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	s.client.EXPECT().Scheme().Return(scheme).AnyTimes()
 	s.mockEventRecorder = mock_record.NewMockEventRecorder(s.controller)
-	s.ServiceAccountEnsurer = NewServiceAccountEnsurer(s.client, s.mockEventRecorder, nil)
+	s.ServiceAccountReconciler = NewPodServiceAccountReconciler(s.client, scheme, s.mockEventRecorder, nil)
 }
 
 func (s *PodServiceAccountEnsurerSuite) TestCreate() {
@@ -63,24 +67,46 @@ func (s *PodServiceAccountEnsurerSuite) TestCreate() {
 				ErrStatus: metav1.Status{Status: metav1.StatusFailure, Code: http.StatusNotFound, Reason: metav1.StatusReasonNotFound},
 			})
 
-	s.client.EXPECT().Create(gomock.Any(), &serviceAccountMatcher{Name: serviceAccountName, Namespace: namespace})
+	s.client.EXPECT().Create(gomock.Any(), &serviceAccountMatcher{Name: serviceAccountName, Namespace: namespace, Labels: map[string]string{metadata.OtterizeServiceAccountLabel: serviceAccountName}})
 	s.mockEventRecorder.EXPECT().Eventf(gomock.Any(), gomock.Eq(v1.EventTypeNormal), gomock.Eq(ReasonServiceAccountCreated), gomock.Any(), gomock.Any())
-	err := s.ServiceAccountEnsurer.EnsureServiceAccount(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: namespace, Annotations: annotations}})
+	pod := v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: namespace, Annotations: annotations}}
+
+	s.client.EXPECT().
+		Get(gomock.Any(), gomock.Eq(types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}), gomock.AssignableToTypeOf(&v1.Pod{})).
+		Do(func(_, _ any, podPtr *v1.Pod, _ ...interface{}) {
+			*podPtr = pod
+		})
+
+	res, err := s.ServiceAccountReconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}})
 	s.Require().NoError(err)
+	s.Require().True(res.IsZero())
 
 }
 
-func (s *PodServiceAccountEnsurerSuite) TestDoesntCreateWhenFound() {
+func (s *PodServiceAccountEnsurerSuite) TestUpdateWhenFound() {
 	serviceAccountName := "cool.name"
 	annotations := map[string]string{metadata.ServiceAccountNameAnnotation: serviceAccountName}
 	namespace := "namespace"
+	serviceAccount := v1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{
+		Name:      serviceAccountName,
+		Namespace: namespace,
+	}}
 	s.client.EXPECT().Get(gomock.Any(), gomock.Eq(types.NamespacedName{Name: serviceAccountName, Namespace: namespace}), gomock.AssignableToTypeOf(&v1.ServiceAccount{})).
-		Return(nil)
+		Do(func(_, _ any, saPtr *v1.ServiceAccount, _ ...any) { *saPtr = serviceAccount })
 
-	s.mockEventRecorder.EXPECT().Eventf(gomock.Any(), gomock.Eq(v1.EventTypeNormal), gomock.Eq(ReasonCreateServiceAccountSkipped), gomock.Any(), gomock.Any())
+	s.client.EXPECT().Patch(gomock.Any(), &serviceAccountMatcher{Name: serviceAccountName, Namespace: namespace, Labels: map[string]string{metadata.OtterizeServiceAccountLabel: serviceAccountName}}, gomock.AssignableToTypeOf(client.MergeFrom(&serviceAccount)))
+	s.mockEventRecorder.EXPECT().Eventf(gomock.Any(), gomock.Eq(v1.EventTypeNormal), gomock.Eq(ReasonServiceAccountUpdated), gomock.Any(), gomock.Any())
+	pod := v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: namespace, Annotations: annotations}}
 
-	err := s.ServiceAccountEnsurer.EnsureServiceAccount(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: namespace, Annotations: annotations}})
+	s.client.EXPECT().
+		Get(gomock.Any(), gomock.Eq(types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}), gomock.AssignableToTypeOf(&v1.Pod{})).
+		Do(func(_, _ any, podPtr *v1.Pod, _ ...interface{}) {
+			*podPtr = pod
+		})
+
+	res, err := s.ServiceAccountReconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}})
 	s.Require().NoError(err)
+	s.Require().True(res.IsZero())
 
 }
 
@@ -88,26 +114,51 @@ func (s *PodServiceAccountEnsurerSuite) TestDoesntCreateWhenInvalidName() {
 	// Name with caps RFC 1123 subdomain
 	annotations := map[string]string{metadata.ServiceAccountNameAnnotation: "NameWithCapitalLetters"}
 	s.mockEventRecorder.EXPECT().Eventf(gomock.Any(), gomock.Eq(v1.EventTypeWarning), gomock.Eq(ReasonCreatingServiceAccountFailed), gomock.Any())
-	err := s.ServiceAccountEnsurer.EnsureServiceAccount(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: "namespace", Annotations: annotations}})
+	pod := v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: "namespace", Annotations: annotations}}
+	s.client.EXPECT().
+		Get(gomock.Any(), gomock.Eq(types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}), gomock.AssignableToTypeOf(&v1.Pod{})).
+		Do(func(_, _ any, podPtr *v1.Pod, _ ...interface{}) {
+			*podPtr = pod
+		})
+	_, err := s.ServiceAccountReconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}})
 	s.Require().Error(err)
 
 	// Very long Name (>253)
 	annotations = map[string]string{metadata.ServiceAccountNameAnnotation: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
 	s.mockEventRecorder.EXPECT().Eventf(gomock.Any(), gomock.Eq(v1.EventTypeWarning), gomock.Eq(ReasonCreatingServiceAccountFailed), gomock.Any())
-	err = s.ServiceAccountEnsurer.EnsureServiceAccount(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: "namespace", Annotations: annotations}})
+	pod = v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: "namespace", Annotations: annotations}}
+	s.client.EXPECT().
+		Get(gomock.Any(), gomock.Eq(types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}), gomock.AssignableToTypeOf(&v1.Pod{})).
+		Do(func(_, _ any, podPtr *v1.Pod, _ ...interface{}) {
+			*podPtr = pod
+		})
+	_, err = s.ServiceAccountReconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}})
 	s.Require().Error(err)
 
 	// Name with /
 	annotations = map[string]string{metadata.ServiceAccountNameAnnotation: "name/asd"}
 	s.mockEventRecorder.EXPECT().Eventf(gomock.Any(), gomock.Eq(v1.EventTypeWarning), gomock.Eq(ReasonCreatingServiceAccountFailed), gomock.Any())
-	err = s.ServiceAccountEnsurer.EnsureServiceAccount(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: "namespace", Annotations: annotations}})
+	pod = v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: "namespace", Annotations: annotations}}
+	s.client.EXPECT().
+		Get(gomock.Any(), gomock.Eq(types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}), gomock.AssignableToTypeOf(&v1.Pod{})).
+		Do(func(_, _ any, podPtr *v1.Pod, _ ...interface{}) {
+			*podPtr = pod
+		})
+	_, err = s.ServiceAccountReconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}})
 	s.Require().Error(err)
 
 }
 
 func (s *PodServiceAccountEnsurerSuite) TestDoesntCreateWhenNoAnnotation() {
-	err := s.ServiceAccountEnsurer.EnsureServiceAccount(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: "namespace"}})
+	pod := v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: "namespace"}}
+	s.client.EXPECT().
+		Get(gomock.Any(), gomock.Eq(types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}), gomock.AssignableToTypeOf(&v1.Pod{})).
+		Do(func(_, _ any, podPtr *v1.Pod, _ ...interface{}) {
+			*podPtr = pod
+		})
+	res, err := s.ServiceAccountReconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}})
 	s.Require().NoError(err)
+	s.Require().True(res.IsZero())
 }
 
 func (s *PodServiceAccountEnsurerSuite) TestEventOnErrorListing() {
@@ -118,7 +169,13 @@ func (s *PodServiceAccountEnsurerSuite) TestEventOnErrorListing() {
 		Return(errors.New("unexpected error"))
 
 	s.mockEventRecorder.EXPECT().Eventf(gomock.Any(), gomock.Eq(v1.EventTypeWarning), gomock.Eq(ReasonCreatingServiceAccountFailed), gomock.Any(), gomock.Any())
-	err := s.ServiceAccountEnsurer.EnsureServiceAccount(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: namespace, Annotations: annotations}})
+	pod := v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: namespace, Annotations: annotations}}
+	s.client.EXPECT().
+		Get(gomock.Any(), gomock.Eq(types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}), gomock.AssignableToTypeOf(&v1.Pod{})).
+		Do(func(_, _ any, podPtr *v1.Pod, _ ...interface{}) {
+			*podPtr = pod
+		})
+	_, err := s.ServiceAccountReconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}})
 	s.Require().Error(err)
 
 }
@@ -133,9 +190,15 @@ func (s *PodServiceAccountEnsurerSuite) TestEventOnErrorCreating() {
 				ErrStatus: metav1.Status{Status: metav1.StatusFailure, Code: http.StatusNotFound, Reason: metav1.StatusReasonNotFound},
 			})
 
-	s.client.EXPECT().Create(gomock.Any(), &serviceAccountMatcher{Name: serviceAccountName, Namespace: namespace}).Return(errors.New("unexpected error"))
+	s.client.EXPECT().Create(gomock.Any(), &serviceAccountMatcher{Name: serviceAccountName, Namespace: namespace, Labels: map[string]string{metadata.OtterizeServiceAccountLabel: serviceAccountName}}).Return(errors.New("unexpected error"))
 	s.mockEventRecorder.EXPECT().Eventf(gomock.Any(), gomock.Eq(v1.EventTypeWarning), gomock.Eq(ReasonCreatingServiceAccountFailed), gomock.Any(), gomock.Any())
-	err := s.ServiceAccountEnsurer.EnsureServiceAccount(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: namespace, Annotations: annotations}})
+	pod := v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "Pod", Namespace: namespace, Annotations: annotations}}
+	s.client.EXPECT().
+		Get(gomock.Any(), gomock.Eq(types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}), gomock.AssignableToTypeOf(&v1.Pod{})).
+		Do(func(_, _ any, podPtr *v1.Pod, _ ...interface{}) {
+			*podPtr = pod
+		})
+	_, err := s.ServiceAccountReconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}})
 	s.Require().Error(err)
 }
 

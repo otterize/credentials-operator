@@ -65,12 +65,12 @@ func (e *PodServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	serviceAccountName, annotationExists := pod.Annotations[metadata.ServiceAccountNameAnnotation]
 	if !annotationExists {
-		logrus.Debugf("pod %s doesn't have service account annotation, skipping ensure service account", pod)
+		logrus.Debugf("pod %v doesn't have service account annotation, skipping ensure service account", pod)
 		return ctrl.Result{}, nil
 	}
 
 	if !isServiceAccountNameValid(serviceAccountName) {
-		err := fmt.Errorf("service account name %s is invalid according to 'RFC 1123 subdomain'. skipping service account ensure for pod %s", serviceAccountName, pod)
+		err := fmt.Errorf("service account name %s is invalid according to 'RFC 1123 subdomain'. skipping service account ensure for pod %v", serviceAccountName, pod)
 		e.recorder.Eventf(&pod, v1.EventTypeWarning, ReasonCreatingServiceAccountFailed, err.Error())
 		return ctrl.Result{}, err
 	}
@@ -86,7 +86,7 @@ func (e *PodServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		}
 		e.recorder.Eventf(&pod, v1.EventTypeNormal, ReasonServiceAccountCreated, "Successfully created service account: %s", serviceAccountName)
 		logrus.Debugf("successfuly created service account named %s for pod/%s/%s", serviceAccountName, pod.Namespace, pod.Name)
-
+		return ctrl.Result{}, nil
 	}
 
 	if err != nil {
@@ -94,7 +94,7 @@ func (e *PodServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, err
 	}
 
-	logrus.Debugf("service account %s already exists, skipping service account creation", serviceAccountName)
+	logrus.Debugf("service account %s already exists, Updating it", serviceAccountName)
 	updatedServiceAccount := serviceAccount.DeepCopy()
 	if updatedServiceAccount.Labels == nil {
 		updatedServiceAccount.Labels = make(map[string]string)
