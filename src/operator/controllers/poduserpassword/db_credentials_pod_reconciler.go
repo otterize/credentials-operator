@@ -106,6 +106,7 @@ func (e *Reconciler) ensurePodDBCredentialsSecrets(ctx context.Context, pod *v1.
 		if err := e.client.Create(ctx, secret); err != nil {
 			return err
 		}
+		return nil
 	}
 
 	if err != nil {
