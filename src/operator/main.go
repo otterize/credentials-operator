@@ -131,7 +131,7 @@ func main() {
 	var secretsManager tls_pod.SecretsManager
 	var workloadRegistry tls_pod.WorkloadRegistry
 	var enableAWSServiceAccountManagement bool
-	var awsEksOidcProviderUrl string
+	var debug bool
 	var userAndPassAcquirer poduserpassword.CloudUserAndPasswordAcquirer
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":7071", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":7072", "The address the probe endpoint binds to.")
@@ -142,12 +142,16 @@ func main() {
 	flag.BoolVar(&certManagerUseClusterIssuer, "cert-manager-use-cluster-issuer", false, "Use ClusterIssuer instead of a (namespace bound) Issuer")
 	flag.BoolVar(&useCertManagerApprover, "cert-manager-approve-requests", false, "Make credentials-operator approve its own CertificateRequests")
 	flag.BoolVar(&enableAWSServiceAccountManagement, "enable-aws-serviceaccount-management", false, "Create and bind ServiceAccounts to AWS IAM roles")
-	flag.StringVar(&awsEksOidcProviderUrl, "eks-oidc-url", "", "EKS OIDC Provider URL")
+	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.Parse()
+
+	if debug {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
 
 	ctrl.SetLogger(logrusr.New(logrus.StandardLogger()))
 
@@ -233,14 +237,14 @@ func main() {
 				logrus.WithError(err).Fatal("failed writing certs to file system")
 			}
 
-			err = operatorwebhooks.UpdateValidationWebHookCA(context.Background(),
-				"otterize-credentials-validating-webhook-configuration", certBundle.CertPem)
+			err = operatorwebhooks.UpdateMutationWebHookCA(context.Background(),
+				"otterize-credentials-operator-mutating-webhook-configuration", certBundle.CertPem)
 			if err != nil {
 				logrus.WithError(err).Fatal("updating validation webhook certificate failed")
 			}
 		}
 
-		podAnnotatorWebhook := webhooks.NewPodWebhookAnnotatesPodServiceAccount(mgr, awsAgent)
+		podAnnotatorWebhook := webhooks.NewServiceAccountAnnotatingPodWebhook(mgr, awsAgent)
 		mgr.GetWebhookServer().Register("/mutate-v1-pod", &webhook.Admission{Handler: podAnnotatorWebhook})
 
 	}
