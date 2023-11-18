@@ -28,13 +28,14 @@ import (
 	"github.com/otterize/credentials-operator/src/controllers/otterizeclient"
 	"github.com/otterize/credentials-operator/src/controllers/poduserpassword"
 	"github.com/otterize/credentials-operator/src/controllers/secrets"
-	"github.com/otterize/credentials-operator/src/controllers/service_account_pod"
 	"github.com/otterize/credentials-operator/src/controllers/serviceaccount"
 	"github.com/otterize/credentials-operator/src/controllers/spireclient"
 	"github.com/otterize/credentials-operator/src/controllers/spireclient/bundles"
 	"github.com/otterize/credentials-operator/src/controllers/spireclient/entries"
 	"github.com/otterize/credentials-operator/src/controllers/spireclient/svids"
 	"github.com/otterize/credentials-operator/src/controllers/tls_pod"
+	"github.com/otterize/credentials-operator/src/controllers/webhooks"
+	operatorwebhooks "github.com/otterize/intents-operator/src/operator/webhooks"
 	"github.com/otterize/intents-operator/src/shared/awsagent"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/intents-operator/src/shared/telemetries/telemetriesgql"
@@ -43,6 +44,7 @@ import (
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 	"golang.org/x/exp/slices"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -123,6 +125,7 @@ func main() {
 	var spireServerAddr string
 	certProvider := CertProviderNone
 	var certManagerIssuer string
+	var selfSignedCert bool
 	var certManagerUseClusterIssuer bool
 	var useCertManagerApprover bool
 	var secretsManager tls_pod.SecretsManager
@@ -135,6 +138,7 @@ func main() {
 	flag.StringVar(&spireServerAddr, "spire-server-address", "spire-server.spire:8081", "SPIRE server API address.")
 	flag.Var(&certProvider, "certificate-provider", fmt.Sprintf("Certificate generation provider (%s)", certProvider.GetPrintableOptionalValues()))
 	flag.StringVar(&certManagerIssuer, "cert-manager-issuer", "ca-issuer", "Name of the Issuer to be used by cert-manager to sign certificates")
+	flag.BoolVar(&selfSignedCert, "self-signed-cert", true, "Whether to generate and update a self-signed cert for Webhooks")
 	flag.BoolVar(&certManagerUseClusterIssuer, "cert-manager-use-cluster-issuer", false, "Use ClusterIssuer instead of a (namespace bound) Issuer")
 	flag.BoolVar(&useCertManagerApprover, "cert-manager-approve-requests", false, "Make credentials-operator approve its own CertificateRequests")
 	flag.BoolVar(&enableAWSServiceAccountManagement, "enable-aws-serviceaccount-management", false, "Create and bind ServiceAccounts to AWS IAM roles")
@@ -161,6 +165,11 @@ func main() {
 	}
 
 	ctx := ctrl.SetupSignalHandler()
+	podNamespace := os.Getenv("POD_NAMESPACE")
+	if podNamespace == "" {
+		logrus.Fatal("'POD_NAMESPACE' environment variable is required")
+		os.Exit(1)
+	}
 
 	serviceIdResolver := serviceidresolver.NewResolver(mgr.GetClient())
 	eventRecorder := mgr.GetEventRecorderFor("credentials-operator")
@@ -202,17 +211,38 @@ func main() {
 	client := mgr.GetClient()
 
 	if enableAWSServiceAccountManagement {
-		awsAgent := awsagent.NewAWSAgent(ctx, awsEksOidcProviderUrl)
+		awsAgent, err := awsagent.NewAWSAgent(ctx)
+		if err != nil {
+			logrus.WithError(err).Error("failed to initialize AWS agent")
+		}
 		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, mgr.GetScheme(), awsAgent)
 		if err = serviceAccountReconciler.SetupWithManager(mgr); err != nil {
 			logrus.WithField("controller", "ServiceAccount").WithError(err).Error("unable to create controller")
 			os.Exit(1)
 		}
-		podServiceAccountReconciler := service_account_pod.NewPodServiceAccountReconciler(client, mgr.GetScheme(), eventRecorder, awsAgent)
-		if err = podServiceAccountReconciler.SetupWithManager(mgr); err != nil {
-			logrus.WithField("controller", "Pod").WithError(err).Error("unable to create service account reconciler for pods")
-			os.Exit(1)
+
+		if selfSignedCert {
+			logrus.Infoln("Creating self signing certs")
+			certBundle, err :=
+				operatorwebhooks.GenerateSelfSignedCertificate("credentials-operator-webhook-service", podNamespace)
+			if err != nil {
+				logrus.WithError(err).Fatal("unable to create self signed certs for webhook")
+			}
+			err = operatorwebhooks.WriteCertToFiles(certBundle)
+			if err != nil {
+				logrus.WithError(err).Fatal("failed writing certs to file system")
+			}
+
+			err = operatorwebhooks.UpdateValidationWebHookCA(context.Background(),
+				"otterize-credentials-validating-webhook-configuration", certBundle.CertPem)
+			if err != nil {
+				logrus.WithError(err).Fatal("updating validation webhook certificate failed")
+			}
 		}
+
+		podAnnotatorWebhook := webhooks.NewPodWebhookAnnotatesPodServiceAccount(mgr, awsAgent)
+		mgr.GetWebhookServer().Register("/mutate-v1-pod", &webhook.Admission{Handler: podAnnotatorWebhook})
+
 	}
 
 	if certProvider != CertProviderNone {

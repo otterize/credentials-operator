@@ -16,6 +16,10 @@ const (
 	// and IAM roles
 	ServiceAccountAWSRoleARNAnnotation = "eks.amazonaws.com/role-arn"
 
+	// OtterizeServiceAccountAWSRoleARNAnnotation is used to update a Pod in the mutating webhook with the role ARN
+	// so that reinvocation is triggered for the EKS pod identity mutating webhook.
+	OtterizeServiceAccountAWSRoleARNAnnotation = "credentials-operator.otterize.com/eks-role-arn"
+
 	// DNSNamesAnnotation is a comma-separated list of additional dns names to be registered as part of the
 	// SPIRE-server entry and encoded into the certificate data
 	DNSNamesAnnotation           = "credentials-operator.otterize.com/dns-names"
