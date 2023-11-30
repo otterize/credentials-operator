@@ -84,12 +84,16 @@ scalar String
 type AWSInfo {
 	region: String!
 	namespace: String!
+	eksClusterName: String!
+	awsAccountId: String!
 }
 
 input AWSInfoInput {
 	clusterId: ID!
 	region: String!
 	namespace: String!
+	eksClusterName: String!
+	awsAccountId: String!
 }
 
 type AWSResource {
@@ -126,9 +130,10 @@ enum CertificateProvider {
 	NONE
 }
 
-type Client {
-	id: ID!
-	secret: String!
+input CLICommand {
+	noun: String!
+	verb: String!
+	modifiers: [String!]
 }
 
 type ClientIntentsFileRepresentation {
@@ -141,6 +146,17 @@ type ClientIntentsRow {
 	text: String!
 	diff: RowDiff
 	calledServerId: ID
+}
+
+input CLIIdentifier {
+	version: String!
+	contextId: String!
+	cloudClientId: String
+}
+
+input CLITelemetry {
+	identifier: CLIIdentifier!
+	command: CLICommand!
 }
 
 type Cluster {
@@ -184,6 +200,14 @@ input ClusterFormSettingsInput {
 	enforcement: Boolean!
 }
 
+input Component {
+	componentType: TelemetryComponentType!
+	componentInstanceId: ID!
+	contextId: ID!
+	version: String!
+	cloudClientId: String
+}
+
 type ComponentStatus {
 	type: ComponentStatusType!
 	lastSeen: Time
@@ -216,11 +240,13 @@ enum CustomConstraint {
 }
 
 type DatabaseConfig {
+	dbname: String!
 	table: String!
 	operations: [DatabaseOperation!]
 }
 
 input DatabaseConfigInput {
+	dbname: String!
 	table: String!
 	operations: [DatabaseOperation!]!
 }
@@ -231,13 +257,11 @@ input DatabaseCredentialsInput {
 }
 
 type DatabaseInfo {
-	name: String!
 	address: String!
 	databaseType: DatabaseType!
 }
 
 input DatabaseInfoInput {
-	name: String!
 	address: String!
 	databaseType: DatabaseType!
 	credentials: DatabaseCredentialsInput!
@@ -319,6 +343,35 @@ type Environment {
 	appliedIntentsCount: Int!
 }
 
+enum EventType {
+	INTENTS_DELETED
+	INTENTS_APPLIED
+	INTENTS_APPLIED_KAFKA
+	INTENTS_APPLIED_HTTP
+	INTENTS_APPLIED_DATABASE
+	INTENTS_DISCOVERED
+	INTENTS_DISCOVERED_SOCKET_SCAN
+	INTENTS_DISCOVERED_CAPTURE
+	INTENTS_DISCOVERED_KAFKA
+	INTENTS_DISCOVERED_ISTIO
+	MAPPER_EXPORT
+	MAPPER_VISUALIZE
+	KAFKA_SERVER_CONFIG_APPLIED
+	KAFKA_SERVER_CONFIG_DELETED
+	NETWORK_POLICIES_CREATED
+	NETWORK_POLICIES_DELETED
+	KAFKA_ACLS_CREATED
+	KAFKA_ACLS_DELETED
+	ISTIO_POLICIES_CREATED
+	ISTIO_POLICIES_DELETED
+	STARTED
+	SERVICE_DISCOVERED
+	NAMESPACE_DISCOVERED
+	PROTECTED_SERVICE_APPLIED
+	PROTECTED_SERVICE_DELETED
+	ACTIVE
+}
+
 type HTTPConfig {
 	path: String!
 	methods: [HTTPMethod!]
@@ -388,6 +441,7 @@ type Intent {
 	kafkaTopics: [KafkaConfig!]
 	httpResources: [HTTPConfig!]
 	databaseResources: [DatabaseConfig!]
+	awsActions: [String!]
 	status: IntentStatus
 }
 
@@ -400,6 +454,7 @@ input IntentInput {
 	topics: [KafkaConfigInput!]
 	resources: [HTTPConfigInput!]
 	databaseResources: [DatabaseConfigInput!]
+	awsActions: [String!]
 	status: IntentStatusInput
 }
 
@@ -561,41 +616,6 @@ type MeMutation {
 type Mutation {
 """This is just a placeholder since currently GraphQL does not allow empty types"""
 	dummy: Boolean
-"""Create client"""
-	createClient: Client!
-"""Delete client"""
-	deleteClient(
-		id: ID!
-	): ID!
-"""Create user invite"""
-	createInvite(
-		email: String!
-	): Invite!
-"""Delete user invite"""
-	deleteInvite(
-		id: ID!
-	): ID!
-"""Accept user invite"""
-	acceptInvite(
-		id: ID!
-	): Invite!
-"""Operate on the current logged-in user"""
-	me: MeMutation!
-"""Create a new organization"""
-	createOrganization(
-		name: String
-	): Organization!
-"""Update organization"""
-	updateOrganization(
-		id: ID!
-		name: String
-		imageURL: String
-	): Organization!
-"""Remove user from organization"""
-	removeUserFromOrganization(
-		id: ID!
-		userId: ID!
-	): ID!
 """Register certificate-request details for kubernetes pod owner, returns the service associated with this pod owner"""
 	registerKubernetesPodOwnerCertificateRequest(
 		podOwner: NamespacedPodOwner!
@@ -619,6 +639,10 @@ type Mutation {
 		name: String
 		configuration: ClusterConfigurationInput
 	): Cluster!
+"""Register user-password request for a pod owner, returns the service associated with this pod owner"""
+	kubernetesServiceUserAndPasswordRequest(
+		podOwner: NamespacedPodOwner!
+	): Service!
 """Create a new environment"""
 	createEnvironment(
 		name: String!
@@ -709,18 +733,53 @@ type Mutation {
 		namespace: String!
 		policies: [NetworkPolicyInput!]!
 	): Boolean!
+"""Create user invite"""
+	createInvite(
+		email: String!
+	): Invite!
+"""Delete user invite"""
+	deleteInvite(
+		id: ID!
+	): ID!
+"""Accept user invite"""
+	acceptInvite(
+		id: ID!
+	): Invite!
 	reportKafkaServerConfigs(
 		namespace: String!
 		serverConfigs: [KafkaServerConfigInput!]!
 	): Boolean!
+"""Operate on the current logged-in user"""
+	me: MeMutation!
 """Associate namespace to environment"""
 	associateNamespaceToEnv(
 		id: ID!
 		environmentId: ID
 	): Namespace!
+"""Create a new organization"""
+	createOrganization(
+		name: String
+	): Organization!
+"""Update organization"""
+	updateOrganization(
+		id: ID!
+		name: String
+		imageURL: String
+	): Organization!
+"""Remove user from organization"""
+	removeUserFromOrganization(
+		id: ID!
+		userId: ID!
+	): ID!
 	reportProtectedServicesSnapshot(
 		namespace: String!
 		services: [ProtectedServiceInput!]!
+	): Boolean!
+	sendTelemetries(
+		telemetries: [TelemetryInput!]!
+	): Boolean!
+	sendCLITelemetries(
+		telemetries: [CLITelemetry!]!
 	): Boolean!
 }
 
@@ -763,38 +822,6 @@ input ProtectedServiceInput {
 type Query {
 """This is just a placeholder since currently GraphQL does not allow empty types"""
 	dummy: Boolean
-"""Get client"""
-	client(
-		id: ID!
-	): Client!
-"""List user invites"""
-	invites(
-		email: String
-		status: InviteStatus
-	): [Invite!]!
-"""Get user invite"""
-	invite(
-		id: ID!
-	): Invite!
-"""Get one user invite"""
-	oneInvite(
-		email: String
-		status: InviteStatus
-	): Invite!
-"""Get information regarding the current logged-in user"""
-	me: Me!
-"""List organizations"""
-	organizations: [Organization!]!
-"""Get organization"""
-	organization(
-		id: ID!
-	): Organization!
-"""List users"""
-	users: [User!]!
-"""Get user"""
-	user(
-		id: ID!
-	): User!
 """Get access graph"""
 	accessGraph(
 		filter: InputAccessGraphFilter
@@ -850,6 +877,25 @@ type Query {
 		clusterId: ID
 		name: String
 	): Integration!
+	testDatabaseConnection(
+		databaseInfo: DatabaseInfoInput!
+	): TestDatabaseConnectionResponse!
+"""List user invites"""
+	invites(
+		email: String
+		status: InviteStatus
+	): [Invite!]!
+"""Get user invite"""
+	invite(
+		id: ID!
+	): Invite!
+"""Get one user invite"""
+	oneInvite(
+		email: String
+		status: InviteStatus
+	): Invite!
+"""Get information regarding the current logged-in user"""
+	me: Me!
 """Get namespace"""
 	namespace(
 		id: ID!
@@ -866,6 +912,12 @@ type Query {
 		clusterId: ID
 		name: String
 	): Namespace!
+"""List organizations"""
+	organizations: [Organization!]!
+"""Get organization"""
+	organization(
+		id: ID!
+	): Organization!
 """Get service"""
 	service(
 		id: ID!
@@ -882,6 +934,12 @@ type Query {
 		namespaceId: ID
 		name: String
 	): Service
+"""List users"""
+	users: [User!]!
+"""Get user"""
+	user(
+		id: ID!
+	): User!
 }
 
 enum RowDiff {
@@ -936,6 +994,7 @@ enum ServerProtectionStatusReason {
 	SERVER_HAS_NO_KAFKA_SERVER_CONFIG
 	IGNORED_IN_CALCULATION
 	PROTECTED_BY_DATABASE_INTEGRATION
+	PROTECTED_BY_AWS_IAM_INTEGRATION
 }
 
 enum ServerProtectionStatusVerdict {
@@ -955,6 +1014,7 @@ type Service {
 	serviceAccount: String
 	awsResource: AWSResource
 	tlsKeyPair: KeyPair!
+	userAndPassword: UserAndPassword!
 }
 
 type ServiceAccessGraph {
@@ -987,6 +1047,28 @@ enum ServiceType {
 	DATABASE
 }
 
+enum TelemetryComponentType {
+	INTENTS_OPERATOR
+	CREDENTIALS_OPERATOR
+	NETWORK_MAPPER
+	CLI
+}
+
+input TelemetryData {
+	eventType: EventType!
+	count: Int
+}
+
+input TelemetryInput {
+	component: Component!
+	data: TelemetryData!
+}
+
+type TestDatabaseConnectionResponse {
+	success: Boolean!
+	errorMessage: String!
+}
+
 scalar Time
 
 type User {
@@ -1000,6 +1082,16 @@ type User {
 type UserAndPassword {
 	username: String!
 	password: String!
+}
+
+enum UserErrorType {
+	UNAUTHENTICATED
+	NOT_FOUND
+	INTERNAL_SERVER_ERROR
+	BAD_REQUEST
+	FORBIDDEN
+	CONFLICT
+	BAD_USER_INPUT
 }
 
 
