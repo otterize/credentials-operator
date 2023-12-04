@@ -45,16 +45,16 @@ func (c *CloudClient) RegisterK8SPod(ctx context.Context, namespace string, _ st
 	return res.RegisterKubernetesPodOwnerCertificateRequest.Id, nil
 }
 
-func (c *CloudClient) AcquireServiceUserAndPassword(ctx context.Context, serviceName, namespace string) (*otterizegraphql.UserPasswordCredentials, error) {
-	res, err := otterizegraphql.RequestUserAndPassword(ctx, c.graphqlClient, serviceName, namespace)
+func (c *CloudClient) AcquireServicePostgresUserAndPassword(ctx context.Context, serviceName, namespace string) (*otterizegraphql.UserPasswordCredentials, error) {
+	userAndPasswordResponse, err := otterizegraphql.RequestUserAndPassword(ctx, c.graphqlClient, serviceName, namespace)
 	if err != nil {
 		return nil, err
 	}
-	res2, err := otterizegraphql.GetUserAndPasswordCredentials(ctx, c.graphqlClient, res.KubernetesServiceUserAndPasswordRequest.Id)
+	getUserAndPasswordResponse, err := otterizegraphql.GetUserAndPasswordCredentials(ctx, c.graphqlClient, userAndPasswordResponse.RegisterKubernetesServicePostgresCredentialsRequest.Id)
 	if err != nil {
 		return nil, err
 	}
-	return &res2.Service.UserAndPassword.UserPasswordCredentials, nil
+	return &getUserAndPasswordResponse.Service.UserAndPassword.UserPasswordCredentials, nil
 }
 
 func (c *CloudClient) CleanupOrphanK8SPodEntries(ctx context.Context, _ string, existingServicesByNamespace map[string]*goset.Set[string]) error {

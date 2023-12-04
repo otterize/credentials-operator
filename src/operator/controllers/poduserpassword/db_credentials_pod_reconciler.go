@@ -25,7 +25,7 @@ const (
 )
 
 type CloudUserAndPasswordAcquirer interface {
-	AcquireServiceUserAndPassword(ctx context.Context, serviceName, namespace string) (*otterizegraphql.UserPasswordCredentials, error)
+	AcquireServicePostgresUserAndPassword(ctx context.Context, serviceName, namespace string) (*otterizegraphql.UserPasswordCredentials, error)
 }
 
 type Reconciler struct {
@@ -54,11 +54,11 @@ func (e *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (e *Reconciler) shouldCreateUserAndPasswordSecretForPod(pod v1.Pod) bool {
-	return pod.Annotations != nil && hasUserAndPasswordSecretAnnotation(pod)
+	return pod.Annotations != nil && hasPostgresUserAndPasswordSecretAnnotation(pod)
 }
 
-func hasUserAndPasswordSecretAnnotation(pod v1.Pod) bool {
-	_, ok := pod.Annotations[metadata.UserAndPasswordSecretNameAnnotation]
+func hasPostgresUserAndPasswordSecretAnnotation(pod v1.Pod) bool {
+	_, ok := pod.Annotations[metadata.PostgresUserAndPasswordSecretNameAnnotation]
 	return ok
 }
 
@@ -84,7 +84,7 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, err
 	}
 
-	err = e.ensurePodUserAndPasswordSecret(ctx, &pod, serviceID.Name, pod.Annotations[metadata.UserAndPasswordSecretNameAnnotation])
+	err = e.ensurePodUserAndPasswordPostgresSecret(ctx, &pod, serviceID.Name, pod.Annotations[metadata.PostgresUserAndPasswordSecretNameAnnotation])
 	if err != nil {
 		e.recorder.Eventf(&pod, v1.EventTypeWarning, ReasonEnsuringPodUserAndPasswordFailed, "Failed to ensure user-password credentials secret: %s", err.Error())
 		return ctrl.Result{}, err
@@ -94,12 +94,12 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return ctrl.Result{}, nil
 }
 
-func (e *Reconciler) ensurePodUserAndPasswordSecret(ctx context.Context, pod *v1.Pod, serviceName string, secretName string) error {
+func (e *Reconciler) ensurePodUserAndPasswordPostgresSecret(ctx context.Context, pod *v1.Pod, serviceName string, secretName string) error {
 	log := logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace})
 	err := e.client.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: secretName}, &v1.Secret{})
 	if apierrors.IsNotFound(err) {
 		log.Debug("Creating user-password credentials secret for pod")
-		creds, err := e.userAndPasswordAcquirer.AcquireServiceUserAndPassword(ctx, serviceName, pod.Namespace)
+		creds, err := e.userAndPasswordAcquirer.AcquireServicePostgresUserAndPassword(ctx, serviceName, pod.Namespace)
 		if err != nil {
 			return err
 		}

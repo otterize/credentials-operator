@@ -258,25 +258,25 @@ func (v *ReportComponentStatusResponse) GetReportIntegrationComponentStatus() bo
 	return v.ReportIntegrationComponentStatus
 }
 
-// RequestUserAndPasswordKubernetesServiceUserAndPasswordRequestService includes the requested fields of the GraphQL type Service.
-type RequestUserAndPasswordKubernetesServiceUserAndPasswordRequestService struct {
+// RequestUserAndPasswordRegisterKubernetesServicePostgresCredentialsRequestService includes the requested fields of the GraphQL type Service.
+type RequestUserAndPasswordRegisterKubernetesServicePostgresCredentialsRequestService struct {
 	Id string `json:"id"`
 }
 
-// GetId returns RequestUserAndPasswordKubernetesServiceUserAndPasswordRequestService.Id, and is useful for accessing the field via an interface.
-func (v *RequestUserAndPasswordKubernetesServiceUserAndPasswordRequestService) GetId() string {
+// GetId returns RequestUserAndPasswordRegisterKubernetesServicePostgresCredentialsRequestService.Id, and is useful for accessing the field via an interface.
+func (v *RequestUserAndPasswordRegisterKubernetesServicePostgresCredentialsRequestService) GetId() string {
 	return v.Id
 }
 
 // RequestUserAndPasswordResponse is returned by RequestUserAndPassword on success.
 type RequestUserAndPasswordResponse struct {
 	// Register user-password request for a pod owner, returns the service associated with this pod owner
-	KubernetesServiceUserAndPasswordRequest RequestUserAndPasswordKubernetesServiceUserAndPasswordRequestService `json:"kubernetesServiceUserAndPasswordRequest"`
+	RegisterKubernetesServicePostgresCredentialsRequest RequestUserAndPasswordRegisterKubernetesServicePostgresCredentialsRequestService `json:"registerKubernetesServicePostgresCredentialsRequest"`
 }
 
-// GetKubernetesServiceUserAndPasswordRequest returns RequestUserAndPasswordResponse.KubernetesServiceUserAndPasswordRequest, and is useful for accessing the field via an interface.
-func (v *RequestUserAndPasswordResponse) GetKubernetesServiceUserAndPasswordRequest() RequestUserAndPasswordKubernetesServiceUserAndPasswordRequestService {
-	return v.KubernetesServiceUserAndPasswordRequest
+// GetRegisterKubernetesServicePostgresCredentialsRequest returns RequestUserAndPasswordResponse.RegisterKubernetesServicePostgresCredentialsRequest, and is useful for accessing the field via an interface.
+func (v *RequestUserAndPasswordResponse) GetRegisterKubernetesServicePostgresCredentialsRequest() RequestUserAndPasswordRegisterKubernetesServicePostgresCredentialsRequestService {
+	return v.RegisterKubernetesServicePostgresCredentialsRequest
 }
 
 // TLSKeyPair includes the GraphQL fields of KeyPair requested by the fragment TLSKeyPair.
@@ -576,7 +576,7 @@ func ReportComponentStatus(
 // The query or mutation executed by RequestUserAndPassword.
 const RequestUserAndPassword_Operation = `
 mutation RequestUserAndPassword ($serviceName: String!, $namespace: String!) {
-	kubernetesServiceUserAndPasswordRequest(podOwner: {name:$serviceName,namespace:$namespace}) {
+	registerKubernetesServicePostgresCredentialsRequest(podOwner: {name:$serviceName,namespace:$namespace}) {
 		id
 	}
 }
