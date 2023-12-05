@@ -54,11 +54,11 @@ func (e *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (e *Reconciler) shouldCreateUserAndPasswordSecretForPod(pod v1.Pod) bool {
-	return pod.Annotations != nil && hasPostgresUserAndPasswordSecretAnnotation(pod)
+	return pod.Annotations != nil && hasUserAndPasswordSecretAnnotation(pod)
 }
 
-func hasPostgresUserAndPasswordSecretAnnotation(pod v1.Pod) bool {
-	_, ok := pod.Annotations[metadata.PostgresUserAndPasswordSecretNameAnnotation]
+func hasUserAndPasswordSecretAnnotation(pod v1.Pod) bool {
+	_, ok := pod.Annotations[metadata.UserAndPasswordSecretNameAnnotation]
 	return ok
 }
 
@@ -84,7 +84,7 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, err
 	}
 
-	err = e.ensurePodUserAndPasswordPostgresSecret(ctx, &pod, serviceID.Name, pod.Annotations[metadata.PostgresUserAndPasswordSecretNameAnnotation])
+	err = e.ensurePodUserAndPasswordPostgresSecret(ctx, &pod, serviceID.Name, pod.Annotations[metadata.UserAndPasswordSecretNameAnnotation])
 	if err != nil {
 		e.recorder.Eventf(&pod, v1.EventTypeWarning, ReasonEnsuringPodUserAndPasswordFailed, "Failed to ensure user-password credentials secret: %s", err.Error())
 		return ctrl.Result{}, err

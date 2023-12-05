@@ -694,7 +694,7 @@ type Mutation {
 		configuration: ClusterConfigurationInput
 	): Cluster!
 """Register user-password request for a pod owner, returns the service associated with this pod owner"""
-	registerKubernetesServicePostgresCredentialsRequest(
+	registerKubernetesServiceUserAndPasswordRequest(
 		podOwner: NamespacedPodOwner!
 	): Service!
 """Create a new environment"""
@@ -1178,6 +1178,7 @@ enum UserErrorType {
 	FORBIDDEN
 	CONFLICT
 	BAD_USER_INPUT
+	APPLIED_INTENTS_ERROR
 }
 
 

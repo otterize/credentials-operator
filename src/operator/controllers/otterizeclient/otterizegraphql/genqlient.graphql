@@ -31,7 +31,7 @@ mutation ReportActiveCertificateRequesters($existingPodOwners: [NamespacedPodOwn
 }
 
 mutation RequestUserAndPassword($serviceName: String!, $namespace: String!) {
-    registerKubernetesServicePostgresCredentialsRequest(podOwner: {name: $serviceName, namespace: $namespace}) {
+    registerKubernetesServiceUserAndPasswordRequest(podOwner: {name: $serviceName, namespace: $namespace}) {
         id
     }
 }

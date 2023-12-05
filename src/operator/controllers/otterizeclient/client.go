@@ -50,7 +50,7 @@ func (c *CloudClient) AcquireServicePostgresUserAndPassword(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	getUserAndPasswordResponse, err := otterizegraphql.GetUserAndPasswordCredentials(ctx, c.graphqlClient, userAndPasswordResponse.RegisterKubernetesServicePostgresCredentialsRequest.Id)
+	getUserAndPasswordResponse, err := otterizegraphql.GetUserAndPasswordCredentials(ctx, c.graphqlClient, userAndPasswordResponse.RegisterKubernetesServiceUserAndPasswordRequest.Id)
 	if err != nil {
 		return nil, err
 	}
