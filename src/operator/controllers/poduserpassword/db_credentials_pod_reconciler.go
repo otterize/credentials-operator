@@ -25,7 +25,7 @@ const (
 )
 
 type CloudUserAndPasswordAcquirer interface {
-	AcquireServicePostgresUserAndPassword(ctx context.Context, serviceName, namespace string) (*otterizegraphql.UserPasswordCredentials, error)
+	AcquireServiceUserAndPassword(ctx context.Context, serviceName, namespace string) (*otterizegraphql.UserPasswordCredentials, error)
 }
 
 type Reconciler struct {
@@ -99,7 +99,7 @@ func (e *Reconciler) ensurePodUserAndPasswordPostgresSecret(ctx context.Context,
 	err := e.client.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: secretName}, &v1.Secret{})
 	if apierrors.IsNotFound(err) {
 		log.Debug("Creating user-password credentials secret for pod")
-		creds, err := e.userAndPasswordAcquirer.AcquireServicePostgresUserAndPassword(ctx, serviceName, pod.Namespace)
+		creds, err := e.userAndPasswordAcquirer.AcquireServiceUserAndPassword(ctx, serviceName, pod.Namespace)
 		if err != nil {
 			return err
 		}

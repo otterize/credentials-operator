@@ -45,7 +45,7 @@ func (c *CloudClient) RegisterK8SPod(ctx context.Context, namespace string, _ st
 	return res.RegisterKubernetesPodOwnerCertificateRequest.Id, nil
 }
 
-func (c *CloudClient) AcquireServicePostgresUserAndPassword(ctx context.Context, serviceName, namespace string) (*otterizegraphql.UserPasswordCredentials, error) {
+func (c *CloudClient) AcquireServiceUserAndPassword(ctx context.Context, serviceName, namespace string) (*otterizegraphql.UserPasswordCredentials, error) {
 	userAndPasswordResponse, err := otterizegraphql.RequestUserAndPassword(ctx, c.graphqlClient, serviceName, namespace)
 	if err != nil {
 		return nil, err
