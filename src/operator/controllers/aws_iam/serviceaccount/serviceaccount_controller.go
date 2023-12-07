@@ -68,26 +68,20 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to remove service account: %w", err)
 		}
-		// intentionally no return - must continue to cleanup or new role creation
-	}
 
-	if serviceAccount.DeletionTimestamp != nil {
-		updatedServiceAccount := serviceAccount.DeepCopy()
-		if controllerutil.RemoveFinalizer(updatedServiceAccount, metadata.AWSRoleFinalizer) {
-			err := r.Client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
-			if err != nil {
-				if apierrors.IsConflict(err) {
-					return ctrl.Result{Requeue: true}, nil
+		if serviceAccount.DeletionTimestamp != nil {
+			updatedServiceAccount := serviceAccount.DeepCopy()
+			if controllerutil.RemoveFinalizer(updatedServiceAccount, metadata.AWSRoleFinalizer) {
+				err := r.Client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
+				if err != nil {
+					if apierrors.IsConflict(err) {
+						return ctrl.Result{Requeue: true}, nil
+					}
+					return ctrl.Result{}, err
 				}
-				return ctrl.Result{}, err
 			}
+
 		}
-
-		return ctrl.Result{}, nil
-	}
-
-	// if no longer referenced, don't continue to create a new IAM role.
-	if isNoLongerReferencedByPodsOrIsBeingDeleted {
 		return ctrl.Result{}, nil
 	}
 
