@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/bombsimon/logrusr/v3"
+	"github.com/bugsnag/bugsnag-go/v2"
 	certmanager "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/google/uuid"
 	"github.com/otterize/credentials-operator/src/controllers/aws_iam/pods"
@@ -56,8 +57,6 @@ import (
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"strings"
-	"time"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -131,6 +130,8 @@ func (cpf *CertProvider) String() string {
 
 func main() {
 	errorreporter.Init("credentials-operator", version.Version(), viper.GetString(operatorconfig.TelemetryErrorsAPIKeyKey))
+	defer bugsnag.AutoNotify(context.Background())
+
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
@@ -331,12 +332,16 @@ func getClusterContextId(ctx context.Context, mgr ctrl.Manager) string {
 }
 
 func exitDueToInitFailure(entry *logrus.Entry, message string) {
-	if entry != nil {
-		entry.Error(message)
-	} else {
-		logrus.Error(message)
+	if entry == nil {
+		panic(message)
 	}
-	// Wait to allow error reporter to notify the error
-	time.Sleep(15 * time.Millisecond)
-	os.Exit(1)
+
+	msg, err := entry.WithField("message", message).String()
+	if err != nil {
+		// Entry format error, just use the original message
+		msg, _ = logrus.WithField("error formatting message", err).WithField("message", message).String()
+	}
+
+	// Bugsnag panic synchronously, making sure the massage is sent before exiting
+	panic(msg)
 }
