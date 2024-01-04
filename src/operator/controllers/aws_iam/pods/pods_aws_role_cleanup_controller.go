@@ -85,7 +85,7 @@ func (r *PodAWSRoleCleanupReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		if pod.UID == filteredPod.UID {
 			return true
 		}
-		if pod.DeletionTimestamp == nil {
+		if filteredPod.DeletionTimestamp == nil {
 			return true
 		}
 
