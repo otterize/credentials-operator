@@ -170,5 +170,5 @@ func getServiceAccountLabelValue(serviceAccount *corev1.ServiceAccount) (hasPods
 	}
 
 	value, ok := serviceAccount.Labels[metadata.OtterizeServiceAccountLabel]
-	return value == "true", ok
+	return value == metadata.OtterizeServiceAccountHasPodsValue, ok
 }

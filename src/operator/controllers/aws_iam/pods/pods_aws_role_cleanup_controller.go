@@ -3,6 +3,7 @@ package pods
 import (
 	"context"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
+	"github.com/otterize/credentials-operator/src/shared/apiutils"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
@@ -27,24 +28,8 @@ func NewPodAWSRoleCleanupReconciler(client client.Client) *PodAWSRoleCleanupReco
 
 const podServiceAccountIndexField = "spec.serviceAccountName"
 
-func initPodServiceAccountIndexField(mgr ctrl.Manager) error {
-	err := mgr.GetCache().IndexField(
-		context.Background(),
-		&corev1.Pod{},
-		podServiceAccountIndexField,
-		func(object client.Object) []string {
-			pod := object.(*corev1.Pod)
-			return []string{pod.Spec.ServiceAccountName}
-		})
-	if err != nil {
-		return errors.Wrap(err)
-	}
-
-	return nil
-}
-
 func (r *PodAWSRoleCleanupReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	err := initPodServiceAccountIndexField(mgr)
+	err := apiutils.InitPodServiceAccountIndexField(mgr)
 	if err != nil {
 		return errors.Wrap(err)
 	}
@@ -75,31 +60,25 @@ func (r *PodAWSRoleCleanupReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, nil
 	}
 
-	var pods corev1.PodList
-	err = r.List(ctx, &pods,
-		client.MatchingFields{podServiceAccountIndexField: pod.Spec.ServiceAccountName},
-		&client.ListOptions{Namespace: pod.Namespace})
+	// Find all pods that have the same service account
+	saConsumers, err := apiutils.GetPodServiceAccountConsumers(ctx, r, pod)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err)
 	}
-	thisPodAndNonTerminatingPods := lo.Filter(pods.Items, func(filteredPod corev1.Pod, _ int) bool {
-		if pod.UID == filteredPod.UID {
-			return true
-		}
-		if filteredPod.DeletionTimestamp == nil {
-			return true
-		}
 
-		return false
+	// Get only the pods that are GCP consumers
+	awsSAConsumers := lo.Filter(saConsumers, func(filteredPod corev1.Pod, _ int) bool {
+		return r.podHasAWSLabels(filteredPod)
 	})
+
 	// check if this is the last pod linked to this SA.
-	if len(thisPodAndNonTerminatingPods) == 1 && thisPodAndNonTerminatingPods[0].UID == pod.UID {
+	if len(awsSAConsumers) == 1 && awsSAConsumers[0].UID == pod.UID {
 		var serviceAccount corev1.ServiceAccount
 		err := r.Get(ctx, types.NamespacedName{Name: pod.Spec.ServiceAccountName, Namespace: pod.Namespace}, &serviceAccount)
 		if err != nil {
 			// service account can be deleted before the pods go down, in which case cleanup has already occurred, so just let the pod terminate.
 			if apierrors.IsNotFound(err) {
-				return r.removeFinalizerFromPod(ctx, pod)
+				return apiutils.RemoveFinalizerFromPod(ctx, r, pod, metadata.AWSRoleFinalizer)
 			}
 			return ctrl.Result{}, errors.Wrap(err)
 		}
@@ -118,26 +97,23 @@ func (r *PodAWSRoleCleanupReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			}
 			// service account can be deleted before the pods go down, in which case cleanup has already occurred, so just let the pod terminate.
 			if apierrors.IsNotFound(err) {
-				return r.removeFinalizerFromPod(ctx, pod)
+				return apiutils.RemoveFinalizerFromPod(ctx, r, pod, metadata.AWSRoleFinalizer)
 			}
 			return ctrl.Result{}, errors.Wrap(err)
 		}
 	}
+
 	// in case there's more than 1 pod, this is not the last pod so we can just let the pod terminate.
-	return r.removeFinalizerFromPod(ctx, pod)
+	return apiutils.RemoveFinalizerFromPod(ctx, r, pod, metadata.AWSRoleFinalizer)
 }
 
-func (r *PodAWSRoleCleanupReconciler) removeFinalizerFromPod(ctx context.Context, pod corev1.Pod) (ctrl.Result, error) {
-	updatedPod := pod.DeepCopy()
-	if controllerutil.RemoveFinalizer(updatedPod, metadata.AWSRoleFinalizer) {
-		err := r.Client.Patch(ctx, updatedPod, client.MergeFrom(&pod))
-		if err != nil {
-			if apierrors.IsConflict(err) {
-				return ctrl.Result{Requeue: true}, nil
-			}
-			return ctrl.Result{}, errors.Wrap(err)
-		}
+func (r *PodAWSRoleCleanupReconciler) podHasAWSLabels(pod corev1.Pod) bool {
+	if pod.Labels == nil {
+		return false
 	}
-
-	return ctrl.Result{}, nil
+	_, labelExists := pod.Labels[metadata.CreateAWSRoleLabel]
+	if !labelExists {
+		return false
+	}
+	return true
 }

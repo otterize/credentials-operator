@@ -29,6 +29,8 @@ import (
 	"github.com/otterize/credentials-operator/src/controllers/certificates/otterizecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certificates/spirecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certmanageradapter"
+	"github.com/otterize/credentials-operator/src/controllers/gcp_iam/gcp_pods"
+	"github.com/otterize/credentials-operator/src/controllers/gcp_iam/gcp_service_accounts"
 	"github.com/otterize/credentials-operator/src/controllers/otterizeclient"
 	"github.com/otterize/credentials-operator/src/controllers/poduserpassword"
 	"github.com/otterize/credentials-operator/src/controllers/secrets"
@@ -41,6 +43,7 @@ import (
 	operatorwebhooks "github.com/otterize/intents-operator/src/operator/webhooks"
 	"github.com/otterize/intents-operator/src/shared/awsagent"
 	"github.com/otterize/intents-operator/src/shared/errors"
+	"github.com/otterize/intents-operator/src/shared/gcp_agent"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/intents-operator/src/shared/telemetries/componentinfo"
 	"github.com/otterize/intents-operator/src/shared/telemetries/errorreporter"
@@ -54,7 +57,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/metadata"
-	"os"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"strings"
 	"time"
@@ -63,6 +65,8 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	gcpiamv1 "github.com/GoogleCloudPlatform/k8s-config-connector/pkg/clients/generated/apis/iam/v1beta1"
+	gcpk8sv1 "github.com/GoogleCloudPlatform/k8s-config-connector/pkg/clients/generated/apis/k8s/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -82,6 +86,9 @@ const (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(certmanager.AddToScheme(scheme))
+
+	utilruntime.Must(gcpiamv1.AddToScheme(scheme))
+	utilruntime.Must(gcpk8sv1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
@@ -146,6 +153,7 @@ func main() {
 	var secretsManager tls_pod.SecretsManager
 	var workloadRegistry tls_pod.WorkloadRegistry
 	var enableAWSServiceAccountManagement bool
+	var enableGCPServiceAccountManagement bool
 	var debug bool
 	var userAndPassAcquirer poduserpassword.CloudUserAndPasswordAcquirer
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":7071", "The address the metric endpoint binds to.")
@@ -157,7 +165,8 @@ func main() {
 	flag.BoolVar(&certManagerUseClusterIssuer, "cert-manager-use-cluster-issuer", false, "Use ClusterIssuer instead of a (namespace bound) Issuer")
 	flag.BoolVar(&useCertManagerApprover, "cert-manager-approve-requests", false, "Make credentials-operator approve its own CertificateRequests")
 	flag.BoolVar(&enableAWSServiceAccountManagement, "enable-aws-serviceaccount-management", false, "Create and bind ServiceAccounts to AWS IAM roles")
-	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
+	flag.BoolVar(&enableGCPServiceAccountManagement, "enable-gcp-serviceaccount-management", true, "Create and bind ServiceAccounts to GCP IAM roles")
+	flag.BoolVar(&debug, "debug", true, "Enable debug logging")
 
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
@@ -186,7 +195,8 @@ func main() {
 	}
 
 	ctx := ctrl.SetupSignalHandler()
-	podNamespace := os.Getenv("POD_NAMESPACE")
+	//podNamespace := os.Getenv("POD_NAMESPACE")
+	podNamespace := "otterize-system"
 	if podNamespace == "" {
 		logrus.Panic("POD_NAMESPACE environment variable is required")
 	}
@@ -263,15 +273,32 @@ func main() {
 				logrus.WithError(err).Panic("failed writing certs to file system")
 			}
 
-			err = operatorwebhooks.UpdateMutationWebHookCA(context.Background(),
-				"otterize-credentials-operator-mutating-webhook-configuration", certBundle.CertPem)
+			//err = operatorwebhooks.UpdateMutationWebHookCA(context.Background(),
+			//	"otterize-credentials-operator-mutating-webhook-configuration", certBundle.CertPem)
 			if err != nil {
 				logrus.WithError(err).Panic("updating validation webhook certificate failed")
 			}
 			podAnnotatorWebhook := webhooks.NewServiceAccountAnnotatingPodWebhook(mgr, awsAgent)
 			mgr.GetWebhookServer().Register("/mutate-v1-pod", &webhook.Admission{Handler: podAnnotatorWebhook})
 		}
+	}
 
+	// TODO: mark as false by default
+	if enableGCPServiceAccountManagement {
+		gcpAgent, err := gcp_agent.NewGCPAgent(ctx)
+		if err != nil {
+			logrus.WithError(err).Panic("failed to initialize GCP agent")
+		}
+
+		gcpPodReconciler := gcp_pods.NewReconciler(client, gcpAgent)
+		if err = gcpPodReconciler.SetupWithManager(mgr); err != nil {
+			logrus.WithField("controller", "gcpPodReconciler").WithError(err).Panic("unable to create controller")
+		}
+
+		gcpSAReconciler := gcp_service_accounts.NewReconciler(client, gcpAgent)
+		if err = gcpSAReconciler.SetupWithManager(mgr); err != nil {
+			logrus.WithField("controller", "gcpSAReconciler").WithError(err).Panic("unable to create controller")
+		}
 	}
 
 	if certProvider != CertProviderNone {
