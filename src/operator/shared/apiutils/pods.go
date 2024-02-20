@@ -9,6 +9,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"strings"
 )
 
 const podServiceAccountIndexField = "spec.serviceAccountName"
@@ -23,6 +24,9 @@ func InitPodServiceAccountIndexField(mgr ctrl.Manager) error {
 			return []string{pod.Spec.ServiceAccountName}
 		})
 	if err != nil {
+		if strings.Contains(err.Error(), "indexer conflict") {
+			return nil
+		}
 		return errors.Wrap(err)
 	}
 

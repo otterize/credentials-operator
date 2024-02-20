@@ -77,18 +77,22 @@ func (r *Reconciler) HandleServiceCleanup(ctx context.Context, req ctrl.Request,
 		return ctrl.Result{}, errors.Errorf("failed to remove service account: %w", err)
 	}
 
-	if serviceAccount.DeletionTimestamp != nil {
-		updatedServiceAccount := serviceAccount.DeepCopy()
-		if controllerutil.RemoveFinalizer(updatedServiceAccount, metadata.GCPSAFinalizer) {
-			err := r.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
-			if err != nil {
-				if apierrors.IsConflict(err) {
-					return ctrl.Result{Requeue: true}, nil
-				}
-				return ctrl.Result{}, errors.Wrap(err)
+	// Remove the finalizer even if the service account is not deleted since it already got cleaned up
+	updatedServiceAccount := serviceAccount.DeepCopy()
+	if controllerutil.RemoveFinalizer(updatedServiceAccount, metadata.GCPSAFinalizer) {
+		// Remove the service account label and annotation
+		delete(updatedServiceAccount.Labels, metadata.OtterizeGCPServiceAccountLabel)
+		delete(updatedServiceAccount.Annotations, k8s.WorkloadIdentityAnnotation)
+
+		err = r.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
+		if err != nil {
+			if apierrors.IsConflict(err) {
+				return ctrl.Result{Requeue: true}, nil
 			}
+			return ctrl.Result{}, errors.Wrap(err)
 		}
 	}
+
 	return ctrl.Result{}, nil
 }
 
