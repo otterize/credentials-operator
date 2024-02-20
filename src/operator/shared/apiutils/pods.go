@@ -40,13 +40,9 @@ func GetPodServiceAccountConsumers(ctx context.Context, c client.Client, pod cor
 	}
 
 	thisPodAndNonTerminatingPods := lo.Filter(pods.Items, func(filteredPod corev1.Pod, _ int) bool {
-		if pod.UID == filteredPod.UID {
+		if pod.UID == filteredPod.UID || filteredPod.DeletionTimestamp == nil {
 			return true
 		}
-		if filteredPod.DeletionTimestamp == nil {
-			return true
-		}
-
 		return false
 	})
 

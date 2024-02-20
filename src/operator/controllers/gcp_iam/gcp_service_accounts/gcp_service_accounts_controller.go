@@ -6,7 +6,6 @@ import (
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/samber/lo"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -17,9 +16,9 @@ import (
 
 type GCPRolePolicyManager interface {
 	GetGSAFullName(namespace string, name string) string
-	DeleteGSA(ctx context.Context, namespace string, name string) error
+	DeleteGSA(ctx context.Context, c client.Client, namespaceName string, ksaName string) error
 	CreateAndConnectGSA(ctx context.Context, client client.Client, namespaceName, accountName string) error
-	AnnotateEKSNamespace(ctx context.Context, client client.Client, namespaceName string) (requeue bool, err error)
+	AnnotateGKENamespace(ctx context.Context, client client.Client, namespaceName string) (requeue bool, err error)
 }
 
 type Reconciler struct {
@@ -42,10 +41,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := logrus.WithFields(logrus.Fields{"serviceAccount": req.Name, "namespace": req.Namespace})
-
 	serviceAccount := corev1.ServiceAccount{}
-
 	err := r.client.Get(ctx, req.NamespacedName, &serviceAccount)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -54,34 +50,53 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, errors.Wrap(err)
 	}
 
-	// Handle service account cleanup
-	isReferencedByPods, exists := getServiceAccountTagging(&serviceAccount)
-	if !exists {
-		logger.Debugf("serviceAccount not labeled with %s, skipping", metadata.OtterizeServiceAccountLabel)
+	isReferencedByPods, hasLabel := r.serviceHasGCPLabels(serviceAccount)
+	if !hasLabel {
 		return ctrl.Result{}, nil
 	}
 
-	isNoLongerReferencedByPodsOrIsBeingDeleted := serviceAccount.DeletionTimestamp != nil || !isReferencedByPods
+	// Perform cleanup if the service account is being deleted or no longer referenced by pods
+	if serviceAccount.DeletionTimestamp != nil || !isReferencedByPods {
+		return r.HandleServiceCleanup(ctx, req, serviceAccount)
+	}
 
-	if isNoLongerReferencedByPodsOrIsBeingDeleted {
-		err = r.gcpAgent.DeleteGSA(ctx, req.Namespace, req.Name)
-		if err != nil {
-			return ctrl.Result{}, errors.Errorf("failed to remove service account: %w", err)
-		}
+	return r.HandleServiceUpdate(ctx, req, serviceAccount)
+}
 
-		if serviceAccount.DeletionTimestamp != nil {
-			updatedServiceAccount := serviceAccount.DeepCopy()
-			// TODO: check finalizer logic
-			if controllerutil.RemoveFinalizer(updatedServiceAccount, metadata.GCPSAFinalizer) {
-				err := r.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
-				if err != nil {
-					if apierrors.IsConflict(err) {
-						return ctrl.Result{Requeue: true}, nil
-					}
-					return ctrl.Result{}, errors.Wrap(err)
+func (r *Reconciler) serviceHasGCPLabels(serviceAccount corev1.ServiceAccount) (bool, bool) {
+	if serviceAccount.Labels == nil {
+		return false, false
+	}
+	labelValue, hasLabel := serviceAccount.Labels[metadata.OtterizeGCPServiceAccountLabel]
+	return labelValue == metadata.OtterizeServiceAccountHasPodsValue, hasLabel
+}
+
+func (r *Reconciler) HandleServiceCleanup(ctx context.Context, req ctrl.Request, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
+	err := r.gcpAgent.DeleteGSA(ctx, r.client, req.Namespace, req.Name)
+	if err != nil {
+		return ctrl.Result{}, errors.Errorf("failed to remove service account: %w", err)
+	}
+
+	if serviceAccount.DeletionTimestamp != nil {
+		updatedServiceAccount := serviceAccount.DeepCopy()
+		if controllerutil.RemoveFinalizer(updatedServiceAccount, metadata.GCPSAFinalizer) {
+			err := r.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
+			if err != nil {
+				if apierrors.IsConflict(err) {
+					return ctrl.Result{Requeue: true}, nil
 				}
+				return ctrl.Result{}, errors.Wrap(err)
 			}
 		}
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *Reconciler) HandleServiceUpdate(ctx context.Context, req ctrl.Request, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
+	// Check if we should update the service account - if the annotation is not set
+	annotationValue, hasAnnotation := serviceAccount.Annotations[k8s.WorkloadIdentityAnnotation]
+	shouldUpdate := annotationValue == metadata.GCPWorkloadIdentityNotSet
+	if !hasAnnotation || !shouldUpdate {
 		return ctrl.Result{}, nil
 	}
 
@@ -98,9 +113,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Annotate the namespace to connect workload identity
-	requeue, err := r.gcpAgent.AnnotateEKSNamespace(ctx, r.client, req.Namespace)
+	requeue, err := r.gcpAgent.AnnotateGKENamespace(ctx, r.client, req.Namespace)
 	if err != nil {
-		return ctrl.Result{}, errors.Errorf("failed to remove service account: %w", err)
+		return ctrl.Result{}, errors.Errorf("failed to annotate namespace: %w", err)
 	}
 	if requeue {
 		// TODO: maybe do apierrors.IsConflict(err) check instead?
@@ -126,16 +141,4 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func getServiceAccountTagging(serviceAccount *corev1.ServiceAccount) (hasPods bool, exists bool) {
-	// TODO: rethink logic
-	if serviceAccount.Labels == nil {
-		return false, false
-	}
-
-	labelValue, hasLabel := serviceAccount.Labels[metadata.OtterizeServiceAccountLabel]
-	annotationValue, hasAnnotation := serviceAccount.Annotations[k8s.WorkloadIdentityAnnotation]
-	shouldUpdate := annotationValue == metadata.GCPWorkloadIdentityNotSet
-	return labelValue == metadata.OtterizeServiceAccountHasPodsValue, hasLabel && hasAnnotation && shouldUpdate
 }

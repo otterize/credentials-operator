@@ -73,9 +73,9 @@ func (r *Reconciler) HandlePodDeletion(ctx context.Context, pod corev1.Pod) (ctr
 		return ctrl.Result{}, errors.Wrap(err)
 	}
 
-	// Get only the pods that are GCP consumers
+	// Get only the pods that are GCP consumers - also handles case where label was removed from the pod.
 	gcpSAConsumers := lo.Filter(saConsumers, func(filteredPod corev1.Pod, _ int) bool {
-		return r.podHasGCPLabels(filteredPod)
+		return r.podHasGCPLabels(filteredPod) || pod.UID == filteredPod.UID
 	})
 
 	// Check if this is the last pod linked to this SA.
@@ -142,14 +142,13 @@ func (r *Reconciler) HandlePodUpdate(ctx context.Context, pod corev1.Pod) (ctrl.
 		return ctrl.Result{}, errors.Wrap(err)
 	}
 
-	// Skip if the service account is already tagged
+	// Skip if the service account is already labeled
 	_, labeled := serviceAccount.Labels[metadata.OtterizeGCPServiceAccountLabel]
-	_, annotated := serviceAccount.Annotations[k8s.WorkloadIdentityAnnotation]
-	if labeled && annotated {
+	if labeled {
 		return ctrl.Result{}, nil
 	}
 
-	logrus.Debugf("Tagging the pod (%s) service account (%s) with GCP data: ", pod.Name, serviceAccount.Name)
+	logrus.Debugf("Tagging the pod (%s) service account (%s) for GCP workload identity: ", pod.Name, serviceAccount.Name)
 	updatedServiceAccount := serviceAccount.DeepCopy()
 	if updatedServiceAccount.Annotations == nil {
 		updatedServiceAccount.Annotations = make(map[string]string)
