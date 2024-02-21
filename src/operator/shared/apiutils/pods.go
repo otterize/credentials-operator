@@ -12,13 +12,13 @@ import (
 	"strings"
 )
 
-const podServiceAccountIndexField = "spec.serviceAccountName"
+const PodServiceAccountIndexField = "spec.serviceAccountName"
 
 func InitPodServiceAccountIndexField(mgr ctrl.Manager) error {
 	err := mgr.GetCache().IndexField(
 		context.Background(),
 		&corev1.Pod{},
-		podServiceAccountIndexField,
+		PodServiceAccountIndexField,
 		func(object client.Object) []string {
 			pod := object.(*corev1.Pod)
 			return []string{pod.Spec.ServiceAccountName}
@@ -36,7 +36,7 @@ func InitPodServiceAccountIndexField(mgr ctrl.Manager) error {
 func GetPodServiceAccountConsumers(ctx context.Context, c client.Client, pod corev1.Pod) ([]corev1.Pod, error) {
 	pods := corev1.PodList{}
 	err := c.List(ctx, &pods,
-		client.MatchingFields{podServiceAccountIndexField: pod.Spec.ServiceAccountName},
+		client.MatchingFields{PodServiceAccountIndexField: pod.Spec.ServiceAccountName},
 		&client.ListOptions{Namespace: pod.Namespace},
 	)
 	if err != nil {

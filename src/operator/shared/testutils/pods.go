@@ -7,13 +7,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-const (
-	testPodName            = "pod"
-	testNamespace          = "namespace"
-	testServiceAccountName = "serviceaccount"
-	testPodUID             = "pod-uid"
-)
-
 func GetTestRequestSchema() ctrl.Request {
 	return ctrl.Request{
 		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testPodName},
