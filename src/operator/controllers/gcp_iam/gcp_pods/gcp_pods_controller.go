@@ -17,16 +17,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-type GCPRolePolicyManager interface {
+type GCPServiceAccountManager interface {
 	GetGSAFullName(namespace string, name string) string
 }
 
 type Reconciler struct {
 	client   client.Client
-	gcpAgent GCPRolePolicyManager
+	gcpAgent GCPServiceAccountManager
 }
 
-func NewReconciler(client client.Client, gcpAgent GCPRolePolicyManager) *Reconciler {
+func NewReconciler(client client.Client, gcpAgent GCPServiceAccountManager) *Reconciler {
 	return &Reconciler{
 		client:   client,
 		gcpAgent: gcpAgent,
@@ -63,7 +63,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 func (r *Reconciler) HandlePodDeletion(ctx context.Context, pod corev1.Pod) (ctrl.Result, error) {
 	if !controllerutil.ContainsFinalizer(&pod, metadata.GCPSAFinalizer) {
-		logrus.Debugf("pod %v does not have the Otterize finalizer, skipping", pod.Name)
 		return ctrl.Result{}, nil
 	}
 

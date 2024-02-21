@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-type GCPRolePolicyManager interface {
+type GCPServiceAccountManager interface {
 	GetGSAFullName(namespace string, name string) string
 	DeleteGSA(ctx context.Context, c client.Client, namespaceName string, ksaName string) error
 	CreateAndConnectGSA(ctx context.Context, client client.Client, namespaceName, accountName string) error
@@ -23,10 +23,10 @@ type GCPRolePolicyManager interface {
 
 type Reconciler struct {
 	client   client.Client
-	gcpAgent GCPRolePolicyManager
+	gcpAgent GCPServiceAccountManager
 }
 
-func NewReconciler(client client.Client, gcpAgent GCPRolePolicyManager) *Reconciler {
+func NewReconciler(client client.Client, gcpAgent GCPServiceAccountManager) *Reconciler {
 	return &Reconciler{
 		client:   client,
 		gcpAgent: gcpAgent,

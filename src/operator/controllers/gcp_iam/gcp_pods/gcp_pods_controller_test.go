@@ -1,0 +1,60 @@
+package gcp_pods
+
+import (
+	"context"
+	mock_client "github.com/otterize/credentials-operator/src/mocks/controller-runtime/client"
+	mock_gcp "github.com/otterize/credentials-operator/src/mocks/gcp"
+	"github.com/otterize/credentials-operator/src/shared/testutils"
+	"github.com/stretchr/testify/suite"
+	"go.uber.org/mock/gomock"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"testing"
+)
+
+const (
+	testPodName            = "pod"
+	testNamespace          = "namespace"
+	testServiceAccountName = "serviceaccount"
+	testPodUID             = "pod-uid"
+)
+
+type TestGcpPodsControllerSuite struct {
+	suite.Suite
+	controller   *gomock.Controller
+	client       *mock_client.MockClient
+	mockGCPAgent *mock_gcp.MockGCPServiceAccountManager
+	reconciler   *Reconciler
+}
+
+func (s *TestGcpPodsControllerSuite) SetupTest() {
+	s.controller = gomock.NewController(s.T())
+	s.client = mock_client.NewMockClient(s.controller)
+	s.mockGCPAgent = mock_gcp.NewMockGCPServiceAccountManager(s.controller)
+	s.reconciler = NewReconciler(s.client, s.mockGCPAgent)
+}
+
+func (s *TestGcpPodsControllerSuite) TestPodWithoutLabelsNotAffected() {
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testPodName},
+	}
+
+	pod := testutils.GetTestPodSchema()
+
+	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
+		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
+			pod.DeepCopyInto(arg2)
+			return nil
+		},
+	)
+
+	res, err := s.reconciler.Reconcile(context.Background(), req)
+	s.Require().NoError(err)
+	s.Require().Empty(res)
+}
+
+func TestRunServiceAccountControllerSuite(t *testing.T) {
+	suite.Run(t, new(TestGcpPodsControllerSuite))
+}
