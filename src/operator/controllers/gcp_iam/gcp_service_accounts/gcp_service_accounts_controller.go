@@ -63,14 +63,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return r.HandleServiceUpdate(ctx, req, serviceAccount)
 }
 
-func (r *Reconciler) serviceHasGCPLabels(serviceAccount corev1.ServiceAccount) (bool, bool) {
-	if serviceAccount.Labels == nil {
-		return false, false
-	}
-	labelValue, hasLabel := serviceAccount.Labels[metadata.OtterizeGCPServiceAccountLabel]
-	return labelValue == metadata.OtterizeServiceAccountHasPodsValue, hasLabel
-}
-
 func (r *Reconciler) HandleServiceCleanup(ctx context.Context, req ctrl.Request, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
 	err := r.gcpAgent.DeleteGSA(ctx, r.client, req.Namespace, req.Name)
 	if err != nil {
@@ -145,4 +137,12 @@ func (r *Reconciler) HandleServiceUpdate(ctx context.Context, req ctrl.Request, 
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *Reconciler) serviceHasGCPLabels(serviceAccount corev1.ServiceAccount) (bool, bool) {
+	if serviceAccount.Labels == nil {
+		return false, false
+	}
+	labelValue, hasLabel := serviceAccount.Labels[metadata.OtterizeGCPServiceAccountLabel]
+	return labelValue == metadata.OtterizeServiceAccountHasPodsValue, hasLabel
 }

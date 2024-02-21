@@ -9,6 +9,7 @@ replace github.com/hashicorp/terraform-provider-google-beta => ./third_party/git
 replace github.com/GoogleCloudPlatform/k8s-config-connector/mockgcp => ./mockgcp
 
 require (
+	github.com/GoogleCloudPlatform/k8s-config-connector v1.113.0
 	github.com/Khan/genqlient v0.6.0
 	github.com/amit7itz/goset v1.2.1
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a
@@ -40,7 +41,6 @@ require (
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20220621081337-cb9428e4ac1e // indirect
 	github.com/DataDog/datadog-go v3.2.0+incompatible // indirect
-	github.com/GoogleCloudPlatform/k8s-config-connector v1.113.0 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.23.0 // indirect

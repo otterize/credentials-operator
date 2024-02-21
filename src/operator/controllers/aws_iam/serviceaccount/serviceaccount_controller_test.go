@@ -14,7 +14,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"testing"
@@ -54,15 +53,10 @@ const (
 func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountNotTerminatingAndHasPodsNotAffected() {
 	req := testutils.GetTestServiceRequestSchema()
 
-	serviceAccount := corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        testServiceAccountName,
-			Namespace:   testNamespace,
-			Annotations: map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
-			Labels:      map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue},
-			Finalizers:  []string{metadata.AWSRoleFinalizer},
-		},
-	}
+	serviceAccount := testutils.GetTestServiceSchema()
+	serviceAccount.Annotations = map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN}
+	serviceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
+	serviceAccount.Finalizers = []string{metadata.AWSRoleFinalizer}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.ServiceAccount, arg3 ...client.GetOption) error {
@@ -83,19 +77,12 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountNotTermi
 }
 
 func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountTerminatingWithNoLabelIsNotAffected() {
-	req := ctrl.Request{
-		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testServiceAccountName},
-	}
+	req := testutils.GetTestServiceRequestSchema()
 
-	serviceAccount := corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              testServiceAccountName,
-			Namespace:         testNamespace,
-			Annotations:       map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
-			DeletionTimestamp: lo.ToPtr(metav1.Now()),
-			Finalizers:        []string{metadata.AWSRoleFinalizer},
-		},
-	}
+	serviceAccount := testutils.GetTestServiceSchema()
+	serviceAccount.DeletionTimestamp = lo.ToPtr(metav1.Now())
+	serviceAccount.Finalizers = []string{metadata.AWSRoleFinalizer}
+	serviceAccount.Annotations = map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.ServiceAccount, arg3 ...client.GetOption) error {
@@ -110,9 +97,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountTerminat
 }
 
 func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountTerminatingWithLabelAndFinalizerRemovesRoleAndFinalizer() {
-	req := ctrl.Request{
-		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testServiceAccountName},
-	}
+	req := testutils.GetTestServiceRequestSchema()
 
 	serviceAccount := corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -144,9 +129,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountTerminat
 }
 
 func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountServiceAccountLabeledNoPodsDeletesRoleAndDoesntRemoveFinalizer() {
-	req := ctrl.Request{
-		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testServiceAccountName},
-	}
+	req := testutils.GetTestServiceRequestSchema()
 
 	serviceAccount := corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -173,9 +156,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountServiceA
 }
 
 func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountServiceAccountTerminatingButRoleDeletionFailsSoDoesntRemoveFinalizer() {
-	req := ctrl.Request{
-		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testServiceAccountName},
-	}
+	req := testutils.GetTestServiceRequestSchema()
 
 	serviceAccount := corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{

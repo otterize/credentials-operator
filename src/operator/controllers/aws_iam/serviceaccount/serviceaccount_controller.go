@@ -81,7 +81,6 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					return ctrl.Result{}, errors.Wrap(err)
 				}
 			}
-
 		}
 		return ctrl.Result{}, nil
 	}
