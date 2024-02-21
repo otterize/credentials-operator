@@ -57,6 +57,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/metadata"
+	"os"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"strings"
 	"time"
@@ -165,8 +166,8 @@ func main() {
 	flag.BoolVar(&certManagerUseClusterIssuer, "cert-manager-use-cluster-issuer", false, "Use ClusterIssuer instead of a (namespace bound) Issuer")
 	flag.BoolVar(&useCertManagerApprover, "cert-manager-approve-requests", false, "Make credentials-operator approve its own CertificateRequests")
 	flag.BoolVar(&enableAWSServiceAccountManagement, "enable-aws-serviceaccount-management", false, "Create and bind ServiceAccounts to AWS IAM roles")
-	flag.BoolVar(&enableGCPServiceAccountManagement, "enable-gcp-serviceaccount-management", true, "Create and bind ServiceAccounts to GCP IAM roles")
-	flag.BoolVar(&debug, "debug", true, "Enable debug logging")
+	flag.BoolVar(&enableGCPServiceAccountManagement, "enable-gcp-serviceaccount-management", false, "Create and bind ServiceAccounts to GCP IAM roles")
+	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
@@ -195,8 +196,7 @@ func main() {
 	}
 
 	ctx := ctrl.SetupSignalHandler()
-	//podNamespace := os.Getenv("POD_NAMESPACE")
-	podNamespace := "otterize-system"
+	podNamespace := os.Getenv("POD_NAMESPACE")
 	if podNamespace == "" {
 		logrus.Panic("POD_NAMESPACE environment variable is required")
 	}
@@ -273,8 +273,8 @@ func main() {
 				logrus.WithError(err).Panic("failed writing certs to file system")
 			}
 
-			//err = operatorwebhooks.UpdateMutationWebHookCA(context.Background(),
-			//	"otterize-credentials-operator-mutating-webhook-configuration", certBundle.CertPem)
+			err = operatorwebhooks.UpdateMutationWebHookCA(context.Background(),
+				"otterize-credentials-operator-mutating-webhook-configuration", certBundle.CertPem)
 			if err != nil {
 				logrus.WithError(err).Panic("updating validation webhook certificate failed")
 			}
@@ -283,7 +283,6 @@ func main() {
 		}
 	}
 
-	// TODO: mark as false by default
 	if enableGCPServiceAccountManagement {
 		gcpAgent, err := gcp_agent.NewGCPAgent(ctx)
 		if err != nil {
