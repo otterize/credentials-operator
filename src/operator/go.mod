@@ -4,8 +4,6 @@ go 1.21.5
 
 toolchain go1.21.6
 
-replace github.com/otterize/intents-operator/src => /Users/davidrobert/intents-operator/src/
-
 replace github.com/hashicorp/terraform-provider-google-beta => ./third_party/github.com/hashicorp/terraform-provider-google-beta
 
 replace github.com/GoogleCloudPlatform/k8s-config-connector/mockgcp => ./mockgcp
