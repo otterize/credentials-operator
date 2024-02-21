@@ -7,7 +7,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-func GetTestRequestSchema() ctrl.Request {
+func GetTestPodRequestSchema() ctrl.Request {
 	return ctrl.Request{
 		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testPodName},
 	}

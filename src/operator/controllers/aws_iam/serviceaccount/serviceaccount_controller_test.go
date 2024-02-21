@@ -7,6 +7,7 @@ import (
 	"github.com/otterize/credentials-operator/src/controllers/aws_iam/serviceaccount/mocks"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	mock_client "github.com/otterize/credentials-operator/src/mocks/controller-runtime/client"
+	"github.com/otterize/credentials-operator/src/shared/testutils"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
@@ -51,9 +52,7 @@ const (
 // 5. SA with finalizer causes update to role but role update returns error so is retried, and terminates successfully on second attempt.
 
 func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountNotTerminatingAndHasPodsNotAffected() {
-	req := ctrl.Request{
-		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testServiceAccountName},
-	}
+	req := testutils.GetTestServiceRequestSchema()
 
 	serviceAccount := corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{

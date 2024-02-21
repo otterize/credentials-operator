@@ -106,14 +106,3 @@ func (r *PodAWSRoleCleanupReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// in case there's more than 1 pod, this is not the last pod so we can just let the pod terminate.
 	return apiutils.RemoveFinalizerFromPod(ctx, r, pod, metadata.AWSRoleFinalizer)
 }
-
-func (r *PodAWSRoleCleanupReconciler) podHasAWSLabels(pod corev1.Pod) bool {
-	if pod.Labels == nil {
-		return false
-	}
-	_, labelExists := pod.Labels[metadata.CreateAWSRoleLabel]
-	if !labelExists {
-		return false
-	}
-	return true
-}

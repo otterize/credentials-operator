@@ -17,8 +17,8 @@ import (
 type GCPServiceAccountManager interface {
 	GetGSAFullName(namespace string, name string) string
 	DeleteGSA(ctx context.Context, c client.Client, namespaceName string, ksaName string) error
-	CreateAndConnectGSA(ctx context.Context, client client.Client, namespaceName, accountName string) error
-	AnnotateGKENamespace(ctx context.Context, client client.Client, namespaceName string) (requeue bool, err error)
+	CreateAndConnectGSA(ctx context.Context, c client.Client, namespaceName, ksaName string) error
+	AnnotateGKENamespace(ctx context.Context, c client.Client, namespaceName string) (bool, error)
 }
 
 type Reconciler struct {

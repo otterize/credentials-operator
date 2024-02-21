@@ -39,7 +39,7 @@ func (s *TestGcpPodsControllerSuite) SetupTest() {
 }
 
 func (s *TestGcpPodsControllerSuite) TestPodWithoutLabelsNotAffected() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 	pod := testutils.GetTestPodSchema()
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
@@ -55,7 +55,7 @@ func (s *TestGcpPodsControllerSuite) TestPodWithoutLabelsNotAffected() {
 }
 
 func (s *TestGcpPodsControllerSuite) TestLabeledPodTriggersSettingServiceAccountLabel() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
 
@@ -94,7 +94,7 @@ func (s *TestGcpPodsControllerSuite) TestLabeledPodTriggersSettingServiceAccount
 }
 
 func (s *TestGcpPodsControllerSuite) TestLabeledPodIsNotReTaggingServiceAccount() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.Labels = map[string]string{metadata.OtterizeGCPServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
@@ -128,7 +128,7 @@ func (s *TestGcpPodsControllerSuite) TestLabeledPodIsNotReTaggingServiceAccount(
 }
 
 func (s *TestGcpPodsControllerSuite) TestPodTerminatingWithNoFinalizerIsNotAffected() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	pod := testutils.GetTestPodSchema()
 	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
@@ -146,7 +146,7 @@ func (s *TestGcpPodsControllerSuite) TestPodTerminatingWithNoFinalizerIsNotAffec
 }
 
 func (s *TestGcpPodsControllerSuite) TestLastPodTerminatingButDifferentPodUIDDoesNotLabelServiceAccountAndRemovesFinalizer() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.Labels = map[string]string{metadata.OtterizeGCPServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
@@ -189,7 +189,7 @@ func (s *TestGcpPodsControllerSuite) TestLastPodTerminatingButDifferentPodUIDDoe
 }
 
 func (s *TestGcpPodsControllerSuite) TestLastPodTerminatingWithFinalizerLabelsServiceAccountAndRemovesFinalizer() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.Labels = map[string]string{metadata.OtterizeGCPServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
@@ -219,10 +219,8 @@ func (s *TestGcpPodsControllerSuite) TestLastPodTerminatingWithFinalizerLabelsSe
 		},
 	)
 
-	s.client.EXPECT().Get(gomock.Any(), types.NamespacedName{
-		Namespace: serviceAccount.Namespace,
-		Name:      serviceAccount.Name,
-	}, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
+	saNamespacedName := types.NamespacedName{Namespace: serviceAccount.Namespace, Name: serviceAccount.Name}
+	s.client.EXPECT().Get(gomock.Any(), saNamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.ServiceAccount, arg3 ...client.GetOption) error {
 			serviceAccount.DeepCopyInto(arg2)
 			return nil
@@ -245,7 +243,7 @@ func (s *TestGcpPodsControllerSuite) TestLastPodTerminatingWithFinalizerLabelsSe
 }
 
 func (s *TestGcpPodsControllerSuite) TestNonLastPodTerminatingDoesNotLabelServiceAccountAndRemovesFinalizer() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.Labels = map[string]string{metadata.OtterizeGCPServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
@@ -290,7 +288,7 @@ func (s *TestGcpPodsControllerSuite) TestNonLastPodTerminatingDoesNotLabelServic
 }
 
 func (s *TestGcpPodsControllerSuite) TestLastPodTerminatingWithFinalizerServiceAccountGoneAndRemovesFinalizerAnyway() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.Labels = map[string]string{metadata.OtterizeGCPServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
@@ -319,10 +317,10 @@ func (s *TestGcpPodsControllerSuite) TestLastPodTerminatingWithFinalizerServiceA
 		},
 	)
 
-	s.client.EXPECT().Get(gomock.Any(), types.NamespacedName{
-		Namespace: serviceAccount.Namespace,
-		Name:      serviceAccount.Name,
-	}, gomock.AssignableToTypeOf(&serviceAccount)).Return(k8serrors.NewNotFound(schema.GroupResource{}, serviceAccount.Name))
+	saNamespacedName := types.NamespacedName{Namespace: serviceAccount.Namespace, Name: serviceAccount.Name}
+	s.client.EXPECT().Get(gomock.Any(), saNamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).Return(
+		k8serrors.NewNotFound(schema.GroupResource{}, serviceAccount.Name),
+	)
 
 	updatedPod := pod.DeepCopy()
 	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, metadata.GCPSAFinalizer))
@@ -335,7 +333,7 @@ func (s *TestGcpPodsControllerSuite) TestLastPodTerminatingWithFinalizerServiceA
 }
 
 func (s *TestGcpPodsControllerSuite) TestLastPodTerminatingWithFinalizerLabelsServiceAccountButIsConflictSoRequeues() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.Labels = map[string]string{metadata.OtterizeGCPServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
@@ -365,10 +363,8 @@ func (s *TestGcpPodsControllerSuite) TestLastPodTerminatingWithFinalizerLabelsSe
 		},
 	)
 
-	s.client.EXPECT().Get(gomock.Any(), types.NamespacedName{
-		Namespace: serviceAccount.Namespace,
-		Name:      serviceAccount.Name,
-	}, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
+	saNamespacedName := types.NamespacedName{Namespace: serviceAccount.Namespace, Name: serviceAccount.Name}
+	s.client.EXPECT().Get(gomock.Any(), saNamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.ServiceAccount, arg3 ...client.GetOption) error {
 			serviceAccount.DeepCopyInto(arg2)
 			return nil

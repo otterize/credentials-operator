@@ -172,8 +172,5 @@ func (r *Reconciler) podHasGCPLabels(pod corev1.Pod) bool {
 		return false
 	}
 	_, labelExists := pod.Labels[metadata.CreateGCPRoleLabel]
-	if !labelExists {
-		return false
-	}
-	return true
+	return labelExists
 }

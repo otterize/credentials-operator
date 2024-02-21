@@ -34,7 +34,7 @@ func (s *TestPodsRoleCleanupControllerSuite) SetupTest() {
 }
 
 func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_PodNotTerminatingNotAffected() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 	pod := testutils.GetTestPodSchema()
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
@@ -50,7 +50,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_PodNo
 }
 
 func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_PodTerminatingWithNoFinalizerIsNotAffected() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	pod := testutils.GetTestPodSchema()
 	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
@@ -68,7 +68,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_PodTe
 }
 
 func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastPodTerminatingButDifferentPodUIDDoesNotLabelServiceAccountAndRemovesFinalizer() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
@@ -111,7 +111,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 }
 
 func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastPodTerminatingWithFinalizerLabelsServiceAccountAndRemovesFinalizer() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
@@ -167,7 +167,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 }
 
 func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_NonLastPodTerminatingDoesNotLabelServiceAccountAndRemovesFinalizer() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
@@ -212,7 +212,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_NonLa
 }
 
 func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastPodTerminatingWithFinalizerServiceAccountGoneAndRemovesFinalizerAnyway() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
@@ -257,7 +257,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 }
 
 func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastPodTerminatingWithFinalizerLabelsServiceAccountButIsConflictSoRequeues() {
-	req := testutils.GetTestRequestSchema()
+	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
