@@ -3,6 +3,8 @@ package testutils
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
@@ -11,6 +13,12 @@ const (
 	testServiceAccountName = "serviceaccount"
 	testPodUID             = "pod-uid"
 )
+
+func GetTestRequestSchema() ctrl.Request {
+	return ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testPodName},
+	}
+}
 
 func GetTestPodSchema() corev1.Pod {
 	return corev1.Pod{

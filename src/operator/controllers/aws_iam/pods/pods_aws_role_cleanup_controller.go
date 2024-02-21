@@ -68,7 +68,7 @@ func (r *PodAWSRoleCleanupReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	// Get only the pods that are AWS consumers - also handles case where label was removed from the pod.
 	awsSAConsumers := lo.Filter(saConsumers, func(filteredPod corev1.Pod, _ int) bool {
-		return r.podHasAWSLabels(filteredPod) || pod.UID == filteredPod.UID
+		return controllerutil.ContainsFinalizer(&pod, metadata.AWSRoleFinalizer) || pod.UID == filteredPod.UID
 	})
 
 	// check if this is the last pod linked to this SA.

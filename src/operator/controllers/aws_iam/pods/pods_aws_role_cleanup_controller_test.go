@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	mock_client "github.com/otterize/credentials-operator/src/mocks/controller-runtime/client"
+	"github.com/otterize/credentials-operator/src/shared/testutils"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
@@ -41,19 +42,8 @@ const (
 )
 
 func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_PodNotTerminatingNotAffected() {
-	req := ctrl.Request{
-		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testPodName},
-	}
-
-	pod := corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              testPodName,
-			Namespace:         testNamespace,
-			UID:               testPodUID,
-			DeletionTimestamp: nil,
-		},
-		Spec: corev1.PodSpec{ServiceAccountName: testServiceAccountName},
-	}
+	req := testutils.GetTestRequestSchema()
+	pod := testutils.GetTestPodSchema()
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
@@ -68,19 +58,10 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_PodNo
 }
 
 func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_PodTerminatingWithNoFinalizerIsNotAffected() {
-	req := ctrl.Request{
-		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testPodName},
-	}
+	req := testutils.GetTestRequestSchema()
 
-	pod := corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              testPodName,
-			Namespace:         testNamespace,
-			UID:               testPodUID,
-			DeletionTimestamp: lo.ToPtr(metav1.Now()),
-		},
-		Spec: corev1.PodSpec{ServiceAccountName: testServiceAccountName},
-	}
+	pod := testutils.GetTestPodSchema()
+	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {

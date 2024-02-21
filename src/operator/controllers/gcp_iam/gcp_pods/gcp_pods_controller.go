@@ -74,7 +74,7 @@ func (r *Reconciler) HandlePodDeletion(ctx context.Context, pod corev1.Pod) (ctr
 
 	// Get only the pods that are GCP consumers - also handles case where label was removed from the pod.
 	gcpSAConsumers := lo.Filter(saConsumers, func(filteredPod corev1.Pod, _ int) bool {
-		return r.podHasGCPLabels(filteredPod) || pod.UID == filteredPod.UID
+		return controllerutil.ContainsFinalizer(&pod, metadata.GCPSAFinalizer) || pod.UID == filteredPod.UID
 	})
 
 	// Check if this is the last pod linked to this SA.

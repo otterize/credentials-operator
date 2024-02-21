@@ -5,11 +5,12 @@ import (
 	mock_client "github.com/otterize/credentials-operator/src/mocks/controller-runtime/client"
 	mock_gcp "github.com/otterize/credentials-operator/src/mocks/gcp"
 	"github.com/otterize/credentials-operator/src/shared/testutils"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"testing"
 )
@@ -37,11 +38,26 @@ func (s *TestGcpPodsControllerSuite) SetupTest() {
 }
 
 func (s *TestGcpPodsControllerSuite) TestPodWithoutLabelsNotAffected() {
-	req := ctrl.Request{
-		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testPodName},
-	}
+	req := testutils.GetTestRequestSchema()
+	pod := testutils.GetTestPodSchema()
+
+	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
+		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
+			pod.DeepCopyInto(arg2)
+			return nil
+		},
+	)
+
+	res, err := s.reconciler.Reconcile(context.Background(), req)
+	s.Require().NoError(err)
+	s.Require().Empty(res)
+}
+
+func (s *TestGcpPodsControllerSuite) TestPodTerminatingWithNoFinalizerIsNotAffected() {
+	req := testutils.GetTestRequestSchema()
 
 	pod := testutils.GetTestPodSchema()
+	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {

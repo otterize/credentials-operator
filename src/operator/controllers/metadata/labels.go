@@ -21,5 +21,5 @@ const (
 	CreateAWSRoleLabel = "credentials-operator.otterize.com/create-aws-role"
 
 	// CreateAWSRoleLabel by using this annotation a pod marks that the operator should create an AWS IAM role for its service account
-	CreateGCPRoleLabel = "credentials-operator.otterize.com/create-gcp-role"
+	CreateGCPRoleLabel = "credentials-operator.otterize.com/create-gcp-sa"
 )
