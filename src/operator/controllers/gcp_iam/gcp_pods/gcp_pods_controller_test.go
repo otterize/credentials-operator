@@ -3,7 +3,6 @@ package gcp_pods
 import (
 	"context"
 	"errors"
-	"github.com/GoogleCloudPlatform/k8s-config-connector/operator/pkg/k8s"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	mockclient "github.com/otterize/credentials-operator/src/mocks/controller-runtime/client"
 	mockgcp "github.com/otterize/credentials-operator/src/mocks/gcp"
@@ -84,7 +83,7 @@ func (s *TestGcpPodsControllerSuite) TestLabeledPodTriggersSettingServiceAccount
 
 	// Should tag the service account with the required labels and annotations
 	updatedServiceAccount := serviceAccount.DeepCopy()
-	updatedServiceAccount.Annotations = map[string]string{k8s.WorkloadIdentityAnnotation: metadata.GCPWorkloadIdentityNotSet}
+	updatedServiceAccount.Annotations = map[string]string{metadata.GCPWorkloadIdentityAnnotation: metadata.GCPWorkloadIdentityNotSet}
 	updatedServiceAccount.Labels = map[string]string{metadata.OtterizeGCPServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
 	s.client.EXPECT().Patch(gomock.Any(), updatedServiceAccount, gomock.Any())
 

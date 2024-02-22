@@ -3,7 +3,6 @@ package gcp_service_accounts
 import (
 	"context"
 	"errors"
-	"github.com/GoogleCloudPlatform/k8s-config-connector/operator/pkg/k8s"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	mockclient "github.com/otterize/credentials-operator/src/mocks/controller-runtime/client"
 	mockgcp "github.com/otterize/credentials-operator/src/mocks/gcp"
@@ -57,7 +56,7 @@ func (s *TestGcpServiceAccountsControllerSuite) TestServiceAccountHasGSAAndHasPo
 	req := testutils.GetTestServiceRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
-	serviceAccount.Annotations = map[string]string{k8s.WorkloadIdentityAnnotation: "has-gsa"}
+	serviceAccount.Annotations = map[string]string{metadata.GCPWorkloadIdentityAnnotation: "has-gsa"}
 	serviceAccount.Labels = map[string]string{metadata.OtterizeGCPServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
 	serviceAccount.Finalizers = []string{metadata.GCPSAFinalizer}
 
@@ -77,7 +76,7 @@ func (s *TestGcpServiceAccountsControllerSuite) TestServiceAccountNoGSANamespace
 	req := testutils.GetTestServiceRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
-	serviceAccount.Annotations = map[string]string{k8s.WorkloadIdentityAnnotation: metadata.GCPWorkloadIdentityNotSet}
+	serviceAccount.Annotations = map[string]string{metadata.GCPWorkloadIdentityAnnotation: metadata.GCPWorkloadIdentityNotSet}
 	serviceAccount.Labels = map[string]string{metadata.OtterizeGCPServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
@@ -104,7 +103,7 @@ func (s *TestGcpServiceAccountsControllerSuite) TestServiceAccountNoGSACreatesAl
 	req := testutils.GetTestServiceRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
-	serviceAccount.Annotations = map[string]string{k8s.WorkloadIdentityAnnotation: metadata.GCPWorkloadIdentityNotSet}
+	serviceAccount.Annotations = map[string]string{metadata.GCPWorkloadIdentityAnnotation: metadata.GCPWorkloadIdentityNotSet}
 	serviceAccount.Labels = map[string]string{metadata.OtterizeGCPServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
@@ -129,7 +128,7 @@ func (s *TestGcpServiceAccountsControllerSuite) TestServiceAccountNoGSACreatesAl
 	gsaName := "new-gsa-name"
 	updatedSA := updatedSAFinalizer.DeepCopy()
 	s.mockGCPAgent.EXPECT().GetGSAFullName(serviceAccount.Namespace, serviceAccount.Name).Return(gsaName)
-	updatedSA.Annotations[k8s.WorkloadIdentityAnnotation] = gsaName
+	updatedSA.Annotations[metadata.GCPWorkloadIdentityAnnotation] = gsaName
 	s.client.EXPECT().Patch(gomock.Any(), updatedSA, gomock.Any())
 
 	res, err := s.reconciler.Reconcile(context.Background(), req)
@@ -160,7 +159,7 @@ func (s *TestGcpServiceAccountsControllerSuite) TestServiceAccountTerminatingWit
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.DeletionTimestamp = lo.ToPtr(metav1.Now())
-	serviceAccount.Annotations = map[string]string{k8s.WorkloadIdentityAnnotation: "test"}
+	serviceAccount.Annotations = map[string]string{metadata.GCPWorkloadIdentityAnnotation: "test"}
 	serviceAccount.Labels = map[string]string{metadata.OtterizeGCPServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
 	serviceAccount.Finalizers = []string{metadata.GCPSAFinalizer}
 
@@ -189,7 +188,7 @@ func (s *TestGcpServiceAccountsControllerSuite) TestServiceAccountTerminatingBut
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.DeletionTimestamp = lo.ToPtr(metav1.Now())
-	serviceAccount.Annotations = map[string]string{k8s.WorkloadIdentityAnnotation: "test"}
+	serviceAccount.Annotations = map[string]string{metadata.GCPWorkloadIdentityAnnotation: "test"}
 	serviceAccount.Labels = map[string]string{metadata.OtterizeGCPServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
 	serviceAccount.Finalizers = []string{metadata.GCPSAFinalizer}
 

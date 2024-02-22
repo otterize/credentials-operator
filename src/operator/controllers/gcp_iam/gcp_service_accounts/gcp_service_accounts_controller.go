@@ -2,7 +2,6 @@ package gcp_service_accounts
 
 import (
 	"context"
-	"github.com/GoogleCloudPlatform/k8s-config-connector/operator/pkg/k8s"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/samber/lo"
@@ -74,7 +73,7 @@ func (r *Reconciler) HandleServiceCleanup(ctx context.Context, req ctrl.Request,
 	if controllerutil.RemoveFinalizer(updatedServiceAccount, metadata.GCPSAFinalizer) {
 		// Remove the service account label and annotation
 		delete(updatedServiceAccount.Labels, metadata.OtterizeGCPServiceAccountLabel)
-		delete(updatedServiceAccount.Annotations, k8s.WorkloadIdentityAnnotation)
+		delete(updatedServiceAccount.Annotations, metadata.GCPWorkloadIdentityAnnotation)
 
 		err = r.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
 		if err != nil {
@@ -90,7 +89,7 @@ func (r *Reconciler) HandleServiceCleanup(ctx context.Context, req ctrl.Request,
 
 func (r *Reconciler) HandleServiceUpdate(ctx context.Context, req ctrl.Request, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
 	// Check if we should update the service account - if the annotation is not set
-	annotationValue, hasAnnotation := serviceAccount.Annotations[k8s.WorkloadIdentityAnnotation]
+	annotationValue, hasAnnotation := serviceAccount.Annotations[metadata.GCPWorkloadIdentityAnnotation]
 	shouldUpdate := annotationValue == metadata.GCPWorkloadIdentityNotSet
 	if !hasAnnotation || !shouldUpdate {
 		return ctrl.Result{}, nil
@@ -127,7 +126,7 @@ func (r *Reconciler) HandleServiceUpdate(ctx context.Context, req ctrl.Request, 
 	// Annotate the service account with the GCP IAM role
 	// TODO: is it ok to re-use the same updatedServiceAccount?
 	gsaFullName := r.gcpAgent.GetGSAFullName(req.Namespace, req.Name)
-	updatedServiceAccount.Annotations[k8s.WorkloadIdentityAnnotation] = gsaFullName
+	updatedServiceAccount.Annotations[metadata.GCPWorkloadIdentityAnnotation] = gsaFullName
 	err = r.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
 	if err != nil {
 		if apierrors.IsConflict(err) {

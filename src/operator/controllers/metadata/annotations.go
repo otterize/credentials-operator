@@ -24,8 +24,9 @@ const (
 	// GCPSAFinalizer indicates that cleanup on GCP is needed upon termination.
 	GCPSAFinalizer = "credentials-operator.otterize.com/gcp-sa"
 
-	// GCPWorkloadIdentityNotSet is a default label value used to indicate that the service account needs gcp setup
-	GCPWorkloadIdentityNotSet = "false"
+	// GCPWorkloadIdentityAnnotation is used by GCP workload identity to link between service accounts
+	GCPWorkloadIdentityAnnotation = "iam.gke.io/gcp-service-account"
+	GCPWorkloadIdentityNotSet     = "false"
 
 	// DNSNamesAnnotation is a comma-separated list of additional dns names to be registered as part of the
 	// SPIRE-server entry and encoded into the certificate data

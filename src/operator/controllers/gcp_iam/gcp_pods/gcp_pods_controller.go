@@ -2,7 +2,6 @@ package gcp_pods
 
 import (
 	"context"
-	"github.com/GoogleCloudPlatform/k8s-config-connector/operator/pkg/k8s"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	"github.com/otterize/credentials-operator/src/shared/apiutils"
 	"github.com/otterize/intents-operator/src/shared/errors"
@@ -157,7 +156,7 @@ func (r *Reconciler) HandlePodUpdate(ctx context.Context, pod corev1.Pod) (ctrl.
 	}
 
 	// Tag the service account with the required labels and annotations
-	updatedServiceAccount.Annotations[k8s.WorkloadIdentityAnnotation] = metadata.GCPWorkloadIdentityNotSet
+	updatedServiceAccount.Annotations[metadata.GCPWorkloadIdentityAnnotation] = metadata.GCPWorkloadIdentityNotSet
 	updatedServiceAccount.Labels[metadata.OtterizeGCPServiceAccountLabel] = metadata.OtterizeServiceAccountHasPodsValue
 	err = r.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
 	if err != nil {
