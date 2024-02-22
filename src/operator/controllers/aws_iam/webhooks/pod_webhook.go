@@ -74,6 +74,12 @@ func (a *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod
 	// we don't actually create the role here, so that the webhook returns quickly - a ServiceAccount reconciler takes care of it for us.
 	updatedServiceAccount.Annotations[metadata.ServiceAccountAWSRoleARNAnnotation] = roleArn
 	updatedServiceAccount.Labels[metadata.OtterizeServiceAccountLabel] = metadata.OtterizeServiceAccountHasPodsValue
+
+	_, dontDeleteRole := pod.Labels[metadata.OtterizeDontDeleteAWSRoleLabel]
+	if dontDeleteRole {
+		updatedServiceAccount.Labels[metadata.OtterizeDontDeleteAWSRoleLabel] = "true"
+	}
+
 	if !dryRun {
 		err = a.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
 		if err != nil {

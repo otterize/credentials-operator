@@ -146,6 +146,7 @@ func main() {
 	var secretsManager tls_pod.SecretsManager
 	var workloadRegistry tls_pod.WorkloadRegistry
 	var enableAWSServiceAccountManagement bool
+	var markAwsRolesAndPoliciesAsUnusedInsteadOfDelete bool
 	var debug bool
 	var userAndPassAcquirer poduserpassword.CloudUserAndPasswordAcquirer
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":7071", "The address the metric endpoint binds to.")
@@ -157,6 +158,7 @@ func main() {
 	flag.BoolVar(&certManagerUseClusterIssuer, "cert-manager-use-cluster-issuer", false, "Use ClusterIssuer instead of a (namespace bound) Issuer")
 	flag.BoolVar(&useCertManagerApprover, "cert-manager-approve-requests", false, "Make credentials-operator approve its own CertificateRequests")
 	flag.BoolVar(&enableAWSServiceAccountManagement, "enable-aws-serviceaccount-management", false, "Create and bind ServiceAccounts to AWS IAM roles")
+	flag.BoolVar(&markAwsRolesAndPoliciesAsUnusedInsteadOfDelete, "mark-aws-roles-as-unused-instead-of-delete", false, "Mark AWS roles and policies as unused instead of deleting them")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -246,7 +248,7 @@ func main() {
 		if err != nil {
 			logrus.WithError(err).Panic("failed to initialize AWS agent")
 		}
-		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, awsAgent)
+		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, awsAgent, markAwsRolesAndPoliciesAsUnusedInsteadOfDelete)
 		if err = serviceAccountReconciler.SetupWithManager(mgr); err != nil {
 			logrus.WithField("controller", "ServiceAccount").WithError(err).Panic("unable to create controller")
 		}

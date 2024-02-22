@@ -20,18 +20,20 @@ type AWSRolePolicyManager interface {
 	DeleteOtterizeIAMRole(ctx context.Context, namespace string, name string) error
 	GenerateRoleARN(namespace string, name string) string
 	GetOtterizeRole(ctx context.Context, namespaceName, accountName string) (bool, *types.Role, error)
-	CreateOtterizeIAMRole(ctx context.Context, namespace string, name string) (*types.Role, error)
+	CreateOtterizeIAMRole(ctx context.Context, namespace string, name string, markAsUnusedInsteadOfDelete bool) (*types.Role, error)
 }
 
 type ServiceAccountReconciler struct {
 	client.Client
-	awsAgent AWSRolePolicyManager
+	awsAgent                         AWSRolePolicyManager
+	markRolesAsUnusedInsteadOfDelete bool
 }
 
-func NewServiceAccountReconciler(client client.Client, awsAgent AWSRolePolicyManager) *ServiceAccountReconciler {
+func NewServiceAccountReconciler(client client.Client, awsAgent AWSRolePolicyManager, markRolesAsUnusedInsteadOfDelete bool) *ServiceAccountReconciler {
 	return &ServiceAccountReconciler{
-		Client:   client,
-		awsAgent: awsAgent,
+		Client:                           client,
+		awsAgent:                         awsAgent,
+		markRolesAsUnusedInsteadOfDelete: markRolesAsUnusedInsteadOfDelete,
 	}
 }
 
@@ -65,7 +67,6 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if isNoLongerReferencedByPodsOrIsBeingDeleted {
 		err = r.awsAgent.DeleteOtterizeIAMRole(ctx, req.Namespace, req.Name)
-
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to remove service account: %w", err)
 		}
@@ -146,13 +147,25 @@ func (r *ServiceAccountReconciler) reconcileAWSRole(ctx context.Context, service
 		}
 	}
 
-	role, err = r.awsAgent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name)
+	role, err = r.awsAgent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, r.shouldMarkAsUnusedInsteadOfDeleteAWSResources(serviceAccount))
 	if err != nil {
 		return true, nil, fmt.Errorf("failed creating AWS role for service account: %w", err)
 	}
 
 	logger.WithField("arn", *role.Arn).Info("created AWS role for ServiceAccount")
 	return true, role, nil
+}
+
+func (r *ServiceAccountReconciler) shouldMarkAsUnusedInsteadOfDeleteAWSResources(serviceAccount *corev1.ServiceAccount) bool {
+	if r.markRolesAsUnusedInsteadOfDelete {
+		return true
+	}
+	if serviceAccount.Labels == nil {
+		return false
+	}
+
+	_, shouldSoftDelete := serviceAccount.Labels[metadata.OtterizeDontDeleteAWSRoleLabel]
+	return shouldSoftDelete
 }
 
 func hasAWSAnnotation(serviceAccount *corev1.ServiceAccount) (string, bool) {
