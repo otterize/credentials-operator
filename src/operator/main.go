@@ -161,7 +161,8 @@ func main() {
 	flag.BoolVar(&useCertManagerApprover, "cert-manager-approve-requests", false, "Make credentials-operator approve its own CertificateRequests")
 	flag.BoolVar(&enableAWSServiceAccountManagement, "enable-aws-serviceaccount-management", false, "Create and bind ServiceAccounts to AWS IAM roles")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
-	flag.StringVar(&trustAnchorArn, "trust-anchor-arn", "", "ARN of the trust anchor to be used for AWS RolesAnywhere")
+	//flag.StringVar(&trustAnchorArn, "trust-anchor-arn", "", "ARN of the trust anchor to be used for AWS RolesAnywhere")
+	trustAnchorArn = os.Getenv("OTTERIZE_TRUST_ANCHOR_ARN")
 
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
@@ -246,7 +247,7 @@ func main() {
 	}
 
 	if enableAWSServiceAccountManagement {
-		awsAgent, err := awsagent.NewAWSAgent(ctx)
+		awsAgent, err := awsagent.NewAWSAgent(ctx, trustAnchorArn)
 		if err != nil {
 			logrus.WithError(err).Panic("failed to initialize AWS agent")
 		}
@@ -270,10 +271,6 @@ func main() {
 			reconciler := mutatingwebhookconfiguration.NewMutatingWebhookConfigsReconciler(client, mgr.GetScheme(), certBundle.CertPem, filters.CredentialsOperatorLabelPredicate())
 			if err = reconciler.SetupWithManager(mgr); err != nil {
 				logrus.WithField("controller", "MutatingWebhookConfigs").WithError(err).Panic("unable to create controller")
-			}
-
-			if trustAnchorArn == "" {
-				logrus.Panic("trustAnchorArn is required for AWS RolesAnywhere")
 			}
 
 			podAnnotatorWebhook := sa_pod_webhook2.NewSPIFFEAWSRolePodWebhook(mgr, awsAgent, trustAnchorArn)
