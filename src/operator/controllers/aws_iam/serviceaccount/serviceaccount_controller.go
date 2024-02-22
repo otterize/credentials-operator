@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
+	rolesanywhereTypes "github.com/aws/aws-sdk-go-v2/service/rolesanywhere/types"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/samber/lo"
@@ -21,6 +22,7 @@ type AWSRolePolicyManager interface {
 	GenerateRoleARN(namespace string, name string) string
 	GetOtterizeRole(ctx context.Context, namespaceName, accountName string) (bool, *types.Role, error)
 	CreateOtterizeIAMRole(ctx context.Context, namespace string, name string) (*types.Role, error)
+	CreateRolesAnywhereProfileForRole(ctx context.Context, role types.Role, namespace string, serviceAccountName string) (*rolesanywhereTypes.ProfileDetail, error)
 }
 
 type ServiceAccountReconciler struct {
@@ -96,8 +98,7 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, errors.Wrap(err)
 		}
 	}
-	shouldUpdateAnnotation, role, err := r.reconcileAWSRole(ctx, &serviceAccount)
-
+	shouldUpdateAnnotation, role, _, err := r.reconcileAWSRole(ctx, &serviceAccount)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err)
 	}
@@ -125,7 +126,7 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // - modified: if AWS state was modified (and the ServiceAccount should be re-queued)
 // - role: the AWS IAM role
 // - err
-func (r *ServiceAccountReconciler) reconcileAWSRole(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updateAnnotation bool, role *types.Role, err error) {
+func (r *ServiceAccountReconciler) reconcileAWSRole(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updateAnnotation bool, role *types.Role, profile *rolesanywhereTypes.ProfileDetail, err error) {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
 
 	if roleARN, ok := hasAWSAnnotation(serviceAccount); ok {
@@ -133,26 +134,32 @@ func (r *ServiceAccountReconciler) reconcileAWSRole(ctx context.Context, service
 		found, role, err := r.awsAgent.GetOtterizeRole(ctx, serviceAccount.Namespace, serviceAccount.Name)
 
 		if err != nil {
-			return false, nil, fmt.Errorf("failed getting AWS role: %w", err)
+			return false, nil, nil, fmt.Errorf("failed getting AWS role: %w", err)
 		}
 
 		if found {
 			if generatedRoleARN != roleARN {
 				logger.WithField("arn", *role.Arn).Debug("ServiceAccount AWS role exists, but annotation is misconfigured, should be updated")
-				return true, role, nil
+				return true, role, nil, nil
 			}
 			logger.WithField("arn", *role.Arn).Debug("ServiceAccount has matching AWS role")
-			return false, role, nil
+			return false, role, nil, nil
 		}
 	}
 
 	role, err = r.awsAgent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name)
 	if err != nil {
-		return true, nil, fmt.Errorf("failed creating AWS role for service account: %w", err)
+		return false, nil, nil, fmt.Errorf("failed creating AWS role for service account: %w", err)
 	}
-
 	logger.WithField("arn", *role.Arn).Info("created AWS role for ServiceAccount")
-	return true, role, nil
+
+	profile, err = r.awsAgent.CreateRolesAnywhereProfileForRole(ctx, *role, serviceAccount.Namespace, serviceAccount.Name)
+	if err != nil {
+		return false, nil, nil, fmt.Errorf("failed creating rolesanywhere profile for role: %w", err)
+	}
+	logger.WithField("arn", *profile.ProfileId).Info("created AWS role for ServiceAccount")
+
+	return true, role, profile, nil
 }
 
 func hasAWSAnnotation(serviceAccount *corev1.ServiceAccount) (string, bool) {

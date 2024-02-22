@@ -25,10 +25,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/otterize/credentials-operator/src/controllers/aws_iam/pods"
 	"github.com/otterize/credentials-operator/src/controllers/aws_iam/serviceaccount"
-	"github.com/otterize/credentials-operator/src/controllers/aws_iam/webhooks"
+	sa_pod_webhook2 "github.com/otterize/credentials-operator/src/controllers/aws_iam/spiffe_pod_webhook"
 	"github.com/otterize/credentials-operator/src/controllers/certificates/otterizecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certificates/spirecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certmanageradapter"
+	mutatingwebhookconfiguration "github.com/otterize/credentials-operator/src/controllers/mutating_webhook_controller"
 	"github.com/otterize/credentials-operator/src/controllers/otterizeclient"
 	"github.com/otterize/credentials-operator/src/controllers/poduserpassword"
 	"github.com/otterize/credentials-operator/src/controllers/secrets"
@@ -41,6 +42,7 @@ import (
 	operatorwebhooks "github.com/otterize/intents-operator/src/operator/webhooks"
 	"github.com/otterize/intents-operator/src/shared/awsagent"
 	"github.com/otterize/intents-operator/src/shared/errors"
+	"github.com/otterize/intents-operator/src/shared/filters"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/intents-operator/src/shared/telemetries/componentinfo"
 	"github.com/otterize/intents-operator/src/shared/telemetries/errorreporter"
@@ -148,6 +150,7 @@ func main() {
 	var enableAWSServiceAccountManagement bool
 	var debug bool
 	var userAndPassAcquirer poduserpassword.CloudUserAndPasswordAcquirer
+	var trustAnchorArn string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":7071", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":7072", "The address the probe endpoint binds to.")
 	flag.StringVar(&spireServerAddr, "spire-server-address", "spire-server.spire:8081", "SPIRE server API address.")
@@ -158,6 +161,7 @@ func main() {
 	flag.BoolVar(&useCertManagerApprover, "cert-manager-approve-requests", false, "Make credentials-operator approve its own CertificateRequests")
 	flag.BoolVar(&enableAWSServiceAccountManagement, "enable-aws-serviceaccount-management", false, "Create and bind ServiceAccounts to AWS IAM roles")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
+	flag.StringVar(&trustAnchorArn, "trust-anchor-arn", "", "ARN of the trust anchor to be used for AWS RolesAnywhere")
 
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
@@ -263,12 +267,16 @@ func main() {
 				logrus.WithError(err).Panic("failed writing certs to file system")
 			}
 
-			err = operatorwebhooks.UpdateMutationWebHookCA(context.Background(),
-				"otterize-credentials-operator-mutating-webhook-configuration", certBundle.CertPem)
-			if err != nil {
-				logrus.WithError(err).Panic("updating validation webhook certificate failed")
+			reconciler := mutatingwebhookconfiguration.NewMutatingWebhookConfigsReconciler(client, mgr.GetScheme(), certBundle.CertPem, filters.CredentialsOperatorLabelPredicate())
+			if err = reconciler.SetupWithManager(mgr); err != nil {
+				logrus.WithField("controller", "MutatingWebhookConfigs").WithError(err).Panic("unable to create controller")
 			}
-			podAnnotatorWebhook := webhooks.NewServiceAccountAnnotatingPodWebhook(mgr, awsAgent)
+
+			if trustAnchorArn == "" {
+				logrus.Panic("trustAnchorArn is required for AWS RolesAnywhere")
+			}
+
+			podAnnotatorWebhook := sa_pod_webhook2.NewSPIFFEAWSRolePodWebhook(mgr, awsAgent, trustAnchorArn)
 			mgr.GetWebhookServer().Register("/mutate-v1-pod", &webhook.Admission{Handler: podAnnotatorWebhook})
 		}
 
