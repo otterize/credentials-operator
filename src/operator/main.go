@@ -43,7 +43,7 @@ import (
 	operatorwebhooks "github.com/otterize/intents-operator/src/operator/webhooks"
 	"github.com/otterize/intents-operator/src/shared/awsagent"
 	"github.com/otterize/intents-operator/src/shared/errors"
-	"github.com/otterize/intents-operator/src/shared/gcp_agent"
+	"github.com/otterize/intents-operator/src/shared/gcpagent"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/intents-operator/src/shared/telemetries/componentinfo"
 	"github.com/otterize/intents-operator/src/shared/telemetries/errorreporter"
@@ -273,8 +273,8 @@ func main() {
 				logrus.WithError(err).Panic("failed writing certs to file system")
 			}
 
-			err = operatorwebhooks.UpdateMutationWebHookCA(context.Background(),
-				"otterize-credentials-operator-mutating-webhook-configuration", certBundle.CertPem)
+			//err = operatorwebhooks.UpdateMutationWebHookCA(context.Background(),
+			//	"otterize-credentials-operator-mutating-webhook-configuration", certBundle.CertPem)
 			if err != nil {
 				logrus.WithError(err).Panic("updating validation webhook certificate failed")
 			}
@@ -284,7 +284,7 @@ func main() {
 	}
 
 	if enableGCPServiceAccountManagement {
-		gcpAgent, err := gcp_agent.NewGCPAgent(ctx)
+		gcpAgent, err := gcpagent.NewGCPAgent(ctx, client)
 		if err != nil {
 			logrus.WithError(err).Panic("failed to initialize GCP agent")
 		}

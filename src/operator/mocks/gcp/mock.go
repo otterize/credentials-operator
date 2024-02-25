@@ -2,8 +2,6 @@ package mock_gcp
 
 import (
 	"context"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	gomock "go.uber.org/mock/gomock"
 	"reflect"
 )
@@ -41,41 +39,41 @@ func (mr *MockGCPServiceAccountManagerRecorder) GetGSAFullName(namespace string,
 }
 
 // DeleteGSA mocks base method.
-func (m *MockGCPServiceAccountManager) DeleteGSA(ctx context.Context, c client.Client, namespaceName string, ksaName string) error {
+func (m *MockGCPServiceAccountManager) DeleteGSA(ctx context.Context, namespaceName string, ksaName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteGSA", ctx, c, namespaceName, ksaName)
+	ret := m.ctrl.Call(m, "DeleteGSA", ctx, namespaceName, ksaName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
-func (mr *MockGCPServiceAccountManagerRecorder) DeleteGSA(ctx context.Context, c client.Client, namespaceName string, ksaName string) *gomock.Call {
+func (mr *MockGCPServiceAccountManagerRecorder) DeleteGSA(ctx context.Context, namespaceName string, ksaName string) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	reflection := reflect.TypeOf((*MockGCPServiceAccountManager)(nil).DeleteGSA)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteGSA", reflection, ctx, c, namespaceName, ksaName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteGSA", reflection, ctx, namespaceName, ksaName)
 }
 
 // CreateAndConnectGSA mocks base method.
-func (m *MockGCPServiceAccountManager) CreateAndConnectGSA(ctx context.Context, c client.Client, namespaceName string, ksaName string) error {
+func (m *MockGCPServiceAccountManager) CreateAndConnectGSA(ctx context.Context, namespaceName string, ksaName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateAndConnectGSA", ctx, c, namespaceName, ksaName)
+	ret := m.ctrl.Call(m, "CreateAndConnectGSA", ctx, namespaceName, ksaName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
-func (mr *MockGCPServiceAccountManagerRecorder) CreateAndConnectGSA(ctx context.Context, c client.Client, namespaceName string, ksaName string) *gomock.Call {
+func (mr *MockGCPServiceAccountManagerRecorder) CreateAndConnectGSA(ctx context.Context, namespaceName string, ksaName string) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	reflection := reflect.TypeOf((*MockGCPServiceAccountManager)(nil).CreateAndConnectGSA)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAndConnectGSA", reflection, ctx, c, namespaceName, ksaName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAndConnectGSA", reflection, ctx, namespaceName, ksaName)
 }
 
 // AnnotateGKENamespace mocks base method.
-func (m *MockGCPServiceAccountManager) AnnotateGKENamespace(ctx context.Context, c client.Client, namespaceName string) (bool, error) {
+func (m *MockGCPServiceAccountManager) AnnotateGKENamespace(ctx context.Context, namespaceName string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AnnotateGKENamespace", ctx, c, namespaceName)
+	ret := m.ctrl.Call(m, "AnnotateGKENamespace", ctx, namespaceName)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[0].(error)
 	return ret0, ret1
 }
-func (mr *MockGCPServiceAccountManagerRecorder) AnnotateGKENamespace(ctx context.Context, c client.Client, namespaceName string) *gomock.Call {
+func (mr *MockGCPServiceAccountManagerRecorder) AnnotateGKENamespace(ctx context.Context, namespaceName string) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	reflection := reflect.TypeOf((*MockGCPServiceAccountManager)(nil).AnnotateGKENamespace)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AnnotateGKENamespace", reflection, ctx, c, namespaceName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AnnotateGKENamespace", reflection, ctx, namespaceName)
 }

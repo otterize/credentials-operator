@@ -15,9 +15,9 @@ import (
 
 type GCPServiceAccountManager interface {
 	GetGSAFullName(namespace string, name string) string
-	DeleteGSA(ctx context.Context, c client.Client, namespaceName string, ksaName string) error
-	CreateAndConnectGSA(ctx context.Context, c client.Client, namespaceName, ksaName string) error
-	AnnotateGKENamespace(ctx context.Context, c client.Client, namespaceName string) (bool, error)
+	DeleteGSA(ctx context.Context, namespaceName string, ksaName string) error
+	CreateAndConnectGSA(ctx context.Context, namespaceName, ksaName string) error
+	AnnotateGKENamespace(ctx context.Context, namespaceName string) (bool, error)
 }
 
 type Reconciler struct {
@@ -63,7 +63,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 }
 
 func (r *Reconciler) HandleServiceCleanup(ctx context.Context, req ctrl.Request, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
-	err := r.gcpAgent.DeleteGSA(ctx, r.client, req.Namespace, req.Name)
+	err := r.gcpAgent.DeleteGSA(ctx, req.Namespace, req.Name)
 	if err != nil {
 		return ctrl.Result{}, errors.Errorf("failed to remove service account: %w", err)
 	}
@@ -108,7 +108,7 @@ func (r *Reconciler) HandleServiceUpdate(ctx context.Context, req ctrl.Request, 
 	}
 
 	// Annotate the namespace to connect workload identity
-	requeue, err := r.gcpAgent.AnnotateGKENamespace(ctx, r.client, req.Namespace)
+	requeue, err := r.gcpAgent.AnnotateGKENamespace(ctx, req.Namespace)
 	if err != nil {
 		return ctrl.Result{}, errors.Errorf("failed to annotate namespace: %w", err)
 	}
@@ -118,7 +118,7 @@ func (r *Reconciler) HandleServiceUpdate(ctx context.Context, req ctrl.Request, 
 	}
 
 	// Create IAMServiceAccount (Creates a GCP service account)
-	err = r.gcpAgent.CreateAndConnectGSA(ctx, r.client, req.Namespace, req.Name)
+	err = r.gcpAgent.CreateAndConnectGSA(ctx, req.Namespace, req.Name)
 	if err != nil {
 		return ctrl.Result{}, errors.Errorf("failed to create and connect GSA: %w", err)
 	}

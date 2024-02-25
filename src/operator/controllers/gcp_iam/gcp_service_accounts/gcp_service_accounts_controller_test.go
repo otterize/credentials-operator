@@ -92,7 +92,7 @@ func (s *TestGcpServiceAccountsControllerSuite) TestServiceAccountNoGSANamespace
 	s.client.EXPECT().Patch(gomock.Any(), updatedSAFinalizer, gomock.Any())
 
 	// Annotating the namespace fails
-	s.mockGCPAgent.EXPECT().AnnotateGKENamespace(context.Background(), s.client, serviceAccount.Namespace).Return(true, nil)
+	s.mockGCPAgent.EXPECT().AnnotateGKENamespace(context.Background(), serviceAccount.Namespace).Return(true, nil)
 
 	res, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().NoError(err)
@@ -119,10 +119,10 @@ func (s *TestGcpServiceAccountsControllerSuite) TestServiceAccountNoGSACreatesAl
 	s.client.EXPECT().Patch(gomock.Any(), updatedSAFinalizer, gomock.Any())
 
 	// Should annotate namespace
-	s.mockGCPAgent.EXPECT().AnnotateGKENamespace(context.Background(), s.client, serviceAccount.Namespace).Return(false, nil)
+	s.mockGCPAgent.EXPECT().AnnotateGKENamespace(context.Background(), serviceAccount.Namespace).Return(false, nil)
 
 	// Should create and connect GSA
-	s.mockGCPAgent.EXPECT().CreateAndConnectGSA(context.Background(), s.client, serviceAccount.Namespace, serviceAccount.Name).Return(nil)
+	s.mockGCPAgent.EXPECT().CreateAndConnectGSA(context.Background(), serviceAccount.Namespace, serviceAccount.Name).Return(nil)
 
 	// Should annotate the service account with the GCP IAM role
 	gsaName := "new-gsa-name"
@@ -170,7 +170,7 @@ func (s *TestGcpServiceAccountsControllerSuite) TestServiceAccountTerminatingWit
 		},
 	)
 
-	s.mockGCPAgent.EXPECT().DeleteGSA(context.Background(), s.client, serviceAccount.Namespace, serviceAccount.Name).Return(nil)
+	s.mockGCPAgent.EXPECT().DeleteGSA(context.Background(), serviceAccount.Namespace, serviceAccount.Name).Return(nil)
 
 	updatedServiceAccount := serviceAccount.DeepCopy()
 	updatedServiceAccount.Labels = map[string]string{}
@@ -199,7 +199,7 @@ func (s *TestGcpServiceAccountsControllerSuite) TestServiceAccountTerminatingBut
 		},
 	)
 
-	s.mockGCPAgent.EXPECT().DeleteGSA(context.Background(), s.client, serviceAccount.Namespace, serviceAccount.Name).Return(errors.New("role deletion failed"))
+	s.mockGCPAgent.EXPECT().DeleteGSA(context.Background(), serviceAccount.Namespace, serviceAccount.Name).Return(errors.New("role deletion failed"))
 
 	res, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().ErrorContains(err, "role deletion failed")

@@ -4,6 +4,8 @@ go 1.21.5
 
 toolchain go1.21.6
 
+replace github.com/otterize/intents-operator/src => /Users/davidrobert/intents-operator/src/
+
 replace github.com/hashicorp/terraform-provider-google-beta => ./third_party/github.com/hashicorp/terraform-provider-google-beta
 
 replace github.com/GoogleCloudPlatform/k8s-config-connector/mockgcp => ./mockgcp
@@ -16,7 +18,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/iam v1.27.2
 	github.com/bombsimon/logrusr/v3 v3.0.0
 	github.com/cert-manager/cert-manager v1.12.3
-	github.com/google/uuid v1.3.1
+	github.com/google/uuid v1.5.0
 	github.com/otterize/intents-operator/src v0.0.0-20240120095016-f38bc9575d65
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.1
 	github.com/samber/lo v1.33.0
