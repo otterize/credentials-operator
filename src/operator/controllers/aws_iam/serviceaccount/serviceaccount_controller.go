@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
+	"github.com/otterize/intents-operator/src/shared/awsagent"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
@@ -132,13 +133,14 @@ func (r *ServiceAccountReconciler) reconcileAWSRole(ctx context.Context, service
 	if roleARN, ok := hasAWSAnnotation(serviceAccount); ok {
 		generatedRoleARN := r.awsAgent.GenerateRoleARN(serviceAccount.Namespace, serviceAccount.Name)
 		found, role, err := r.awsAgent.GetOtterizeRole(ctx, serviceAccount.Namespace, serviceAccount.Name)
-		// TODO: check tags for soft deletion
 
 		if err != nil {
 			return false, nil, fmt.Errorf("failed getting AWS role: %w", err)
 		}
 
-		if found {
+		shouldCreateOrUpdateRole := !found || (r.shouldMarkAsUnusedInsteadOfDeleteAWSResources(serviceAccount) != awsagent.HasMarkAsUnusedInCaseOfDeletionTagSet(role.Tags))
+
+		if !shouldCreateOrUpdateRole {
 			if generatedRoleARN != roleARN {
 				logger.WithField("arn", *role.Arn).Debug("ServiceAccount AWS role exists, but annotation is misconfigured, should be updated")
 				return true, role, nil
