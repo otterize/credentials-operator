@@ -132,6 +132,7 @@ func (r *ServiceAccountReconciler) reconcileAWSRole(ctx context.Context, service
 	if roleARN, ok := hasAWSAnnotation(serviceAccount); ok {
 		generatedRoleARN := r.awsAgent.GenerateRoleARN(serviceAccount.Namespace, serviceAccount.Name)
 		found, role, err := r.awsAgent.GetOtterizeRole(ctx, serviceAccount.Namespace, serviceAccount.Name)
+		// TODO: check tags for soft deletion
 
 		if err != nil {
 			return false, nil, fmt.Errorf("failed getting AWS role: %w", err)

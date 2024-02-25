@@ -31,7 +31,7 @@ func (s *TestServiceAccountSuite) SetupTest() {
 	s.controller = gomock.NewController(s.T())
 	s.client = mock_client.NewMockClient(s.controller)
 	s.mockAWS = mock_serviceaccount.NewMockAWSRolePolicyManager(s.controller)
-	s.reconciler = NewServiceAccountReconciler(s.client, s.mockAWS)
+	s.reconciler = NewServiceAccountReconciler(s.client, s.mockAWS, false)
 }
 
 const (
@@ -201,6 +201,64 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountServiceA
 	res, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().ErrorContains(err, "role deletion failed")
 	s.Require().Empty(res)
+}
+
+func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRole() {
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testServiceAccountName},
+	}
+
+	serviceAccount := corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        testServiceAccountName,
+			Namespace:   testNamespace,
+			Annotations: map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
+			Labels:      map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue},
+			Finalizers:  []string{metadata.AWSRoleFinalizer},
+		},
+	}
+	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
+		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.ServiceAccount, arg3 ...client.GetOption) error {
+			serviceAccount.DeepCopyInto(arg2)
+			return nil
+		},
+	)
+
+	s.mockAWS.EXPECT().GenerateRoleARN(testNamespace, testServiceAccountName).Return(testRoleARN)
+	s.mockAWS.EXPECT().GetOtterizeRole(gomock.Any(), testNamespace, testServiceAccountName).Return(false, nil, nil)
+	s.mockAWS.EXPECT().CreateOtterizeIAMRole(gomock.Any(), testNamespace, testServiceAccountName, false).Return(&awstypes.Role{Arn: lo.ToPtr(testRoleARN)}, nil)
+	s.client.EXPECT().Patch(gomock.Any(), gomock.Eq(&serviceAccount), gomock.Any())
+
+	s.reconciler.Reconcile(context.Background(), req)
+}
+
+func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRoleWithMarkAsUnusedLabel() {
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testServiceAccountName},
+	}
+
+	serviceAccount := corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        testServiceAccountName,
+			Namespace:   testNamespace,
+			Annotations: map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
+			Labels:      map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue, metadata.OtterizeDontDeleteAWSRoleLabel: "true"},
+			Finalizers:  []string{metadata.AWSRoleFinalizer},
+		},
+	}
+	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
+		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.ServiceAccount, arg3 ...client.GetOption) error {
+			serviceAccount.DeepCopyInto(arg2)
+			return nil
+		},
+	)
+
+	s.mockAWS.EXPECT().GenerateRoleARN(testNamespace, testServiceAccountName).Return(testRoleARN)
+	s.mockAWS.EXPECT().GetOtterizeRole(gomock.Any(), testNamespace, testServiceAccountName).Return(false, nil, nil)
+	s.mockAWS.EXPECT().CreateOtterizeIAMRole(gomock.Any(), testNamespace, testServiceAccountName, true).Return(&awstypes.Role{Arn: lo.ToPtr(testRoleARN)}, nil)
+	s.client.EXPECT().Patch(gomock.Any(), gomock.Eq(&serviceAccount), gomock.Any())
+
+	s.reconciler.Reconcile(context.Background(), req)
 }
 
 func TestRunServiceAccountControllerSuite(t *testing.T) {
