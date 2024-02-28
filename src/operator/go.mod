@@ -4,8 +4,6 @@ go 1.21.5
 
 toolchain go1.21.6
 
-replace github.com/otterize/intents-operator/src => /Users/davidrobert/intents-operator/src/
-
 replace github.com/hashicorp/terraform-provider-google-beta => ./third_party/github.com/hashicorp/terraform-provider-google-beta
 
 replace github.com/GoogleCloudPlatform/k8s-config-connector/mockgcp => ./mockgcp
@@ -39,6 +37,8 @@ require (
 )
 
 require (
+	cloud.google.com/go/compute v1.23.0 // indirect
+	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20220621081337-cb9428e4ac1e // indirect
 	github.com/DataDog/datadog-go v3.2.0+incompatible // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
