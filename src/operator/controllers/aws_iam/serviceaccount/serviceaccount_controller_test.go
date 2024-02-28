@@ -258,7 +258,8 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRoleWithMarkA
 	s.mockAWS.EXPECT().CreateOtterizeIAMRole(gomock.Any(), testNamespace, testServiceAccountName, true).Return(&awstypes.Role{Arn: lo.ToPtr(testRoleARN)}, nil)
 	s.client.EXPECT().Patch(gomock.Any(), gomock.Eq(&serviceAccount), gomock.Any())
 
-	s.reconciler.Reconcile(context.Background(), req)
+	_, err := s.reconciler.Reconcile(context.Background(), req)
+	s.Require().NoError(err)
 }
 
 func TestRunServiceAccountControllerSuite(t *testing.T) {
