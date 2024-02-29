@@ -18,7 +18,7 @@ const (
 	// CreateAWSRoleLabel by using this annotation a pod marks that the operator should create an AWS IAM role for its service account
 	CreateAWSRoleLabel = "credentials-operator.otterize.com/create-aws-role"
 
-	// OtterizeDontDeleteAWSRoleLabel is used to mark workloads that should not have their corresponding roles deleted,
-	// but should be tagged as unused instead
-	OtterizeDontDeleteAWSRoleLabel = "credentials-operator.otterize.com/dont-delete-aws-role"
+	// OtterizeSoftDeleteStrategy is used to mark workloads that should not have their corresponding roles deleted,
+	// but should be tagged as deleted instead (aka soft delete strategy).
+	OtterizeSoftDeleteStrategy = "credentials-operator.otterize.com/soft-delete-strategy"
 )

@@ -21,7 +21,7 @@ type AWSRolePolicyManager interface {
 	DeleteOtterizeIAMRole(ctx context.Context, namespace string, name string) error
 	GenerateRoleARN(namespace string, name string) string
 	GetOtterizeRole(ctx context.Context, namespaceName, accountName string) (bool, *types.Role, error)
-	CreateOtterizeIAMRole(ctx context.Context, namespace string, name string, markAsUnusedInsteadOfDelete bool) (*types.Role, error)
+	CreateOtterizeIAMRole(ctx context.Context, namespace string, name string, useSoftDeleteStrategy bool) (*types.Role, error)
 }
 
 type ServiceAccountReconciler struct {
@@ -138,7 +138,7 @@ func (r *ServiceAccountReconciler) reconcileAWSRole(ctx context.Context, service
 			return false, nil, fmt.Errorf("failed getting AWS role: %w", err)
 		}
 
-		shouldCreateOrUpdateRole := !found || (r.shouldMarkAsUnusedInsteadOfDeleteAWSResources(serviceAccount) != awsagent.HasMarkAsUnusedInCaseOfDeletionTagSet(role.Tags))
+		shouldCreateOrUpdateRole := !found || (r.shouldUseSoftDeleteStrategy(serviceAccount) != awsagent.HasSoftDeleteStrategyTagSet(role.Tags))
 
 		if !shouldCreateOrUpdateRole {
 			if generatedRoleARN != roleARN {
@@ -150,7 +150,7 @@ func (r *ServiceAccountReconciler) reconcileAWSRole(ctx context.Context, service
 		}
 	}
 
-	role, err = r.awsAgent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, r.shouldMarkAsUnusedInsteadOfDeleteAWSResources(serviceAccount))
+	role, err = r.awsAgent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, r.shouldUseSoftDeleteStrategy(serviceAccount))
 	if err != nil {
 		return true, nil, fmt.Errorf("failed creating AWS role for service account: %w", err)
 	}
@@ -159,7 +159,7 @@ func (r *ServiceAccountReconciler) reconcileAWSRole(ctx context.Context, service
 	return true, role, nil
 }
 
-func (r *ServiceAccountReconciler) shouldMarkAsUnusedInsteadOfDeleteAWSResources(serviceAccount *corev1.ServiceAccount) bool {
+func (r *ServiceAccountReconciler) shouldUseSoftDeleteStrategy(serviceAccount *corev1.ServiceAccount) bool {
 	if r.markRolesAsUnusedInsteadOfDelete {
 		return true
 	}
@@ -167,7 +167,7 @@ func (r *ServiceAccountReconciler) shouldMarkAsUnusedInsteadOfDeleteAWSResources
 		return false
 	}
 
-	_, shouldSoftDelete := serviceAccount.Labels[metadata.OtterizeDontDeleteAWSRoleLabel]
+	_, shouldSoftDelete := serviceAccount.Labels[metadata.OtterizeSoftDeleteStrategy]
 	return shouldSoftDelete
 }
 

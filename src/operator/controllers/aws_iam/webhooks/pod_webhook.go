@@ -75,9 +75,13 @@ func (a *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod
 	updatedServiceAccount.Annotations[metadata.ServiceAccountAWSRoleARNAnnotation] = roleArn
 	updatedServiceAccount.Labels[metadata.OtterizeServiceAccountLabel] = metadata.OtterizeServiceAccountHasPodsValue
 
-	_, dontDeleteRole := pod.Labels[metadata.OtterizeDontDeleteAWSRoleLabel]
-	if dontDeleteRole {
-		updatedServiceAccount.Labels[metadata.OtterizeDontDeleteAWSRoleLabel] = "true"
+	_, dontDeleteRole := pod.Labels[metadata.OtterizeSoftDeleteStrategy]
+	_, softDeleteStrategyExists := updatedServiceAccount.Labels[metadata.OtterizeSoftDeleteStrategy]
+	if dontDeleteRole && !softDeleteStrategyExists {
+		updatedServiceAccount.Labels[metadata.OtterizeSoftDeleteStrategy] = "true"
+	}
+	if !dontDeleteRole && softDeleteStrategyExists {
+		delete(updatedServiceAccount.Labels, metadata.OtterizeSoftDeleteStrategy)
 	}
 
 	if !dryRun {

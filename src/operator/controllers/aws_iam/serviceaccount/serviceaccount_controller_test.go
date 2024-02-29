@@ -243,7 +243,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRoleWithMarkA
 			Name:        testServiceAccountName,
 			Namespace:   testNamespace,
 			Annotations: map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
-			Labels:      map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue, metadata.OtterizeDontDeleteAWSRoleLabel: "true"},
+			Labels:      map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue, metadata.OtterizeSoftDeleteStrategy: "true"},
 			Finalizers:  []string{metadata.AWSRoleFinalizer},
 		},
 	}
