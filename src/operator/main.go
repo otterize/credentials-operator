@@ -158,7 +158,7 @@ func main() {
 	flag.BoolVar(&certManagerUseClusterIssuer, "cert-manager-use-cluster-issuer", false, "Use ClusterIssuer instead of a (namespace bound) Issuer")
 	flag.BoolVar(&useCertManagerApprover, "cert-manager-approve-requests", false, "Make credentials-operator approve its own CertificateRequests")
 	flag.BoolVar(&enableAWSServiceAccountManagement, "enable-aws-serviceaccount-management", false, "Create and bind ServiceAccounts to AWS IAM roles")
-	flag.BoolVar(&awsUseSoftDeleteStrategy, "aws-use-soft-delete-strategy", false, "Mark AWS roles and policies as deleted instead of actually deleting them")
+	flag.BoolVar(&awsUseSoftDeleteStrategy, "aws-use-soft-delete", false, "Mark AWS roles and policies as deleted instead of actually deleting them")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
