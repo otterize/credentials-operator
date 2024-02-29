@@ -167,7 +167,7 @@ func (r *ServiceAccountReconciler) shouldUseSoftDeleteStrategy(serviceAccount *c
 		return false
 	}
 
-	_, shouldSoftDelete := serviceAccount.Labels[metadata.OtterizeSoftDeleteStrategy]
+	_, shouldSoftDelete := serviceAccount.Labels[metadata.OtterizeAWSUseSoftDelete]
 	return shouldSoftDelete
 }
 
