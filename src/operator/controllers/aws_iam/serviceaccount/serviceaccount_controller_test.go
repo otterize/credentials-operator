@@ -71,12 +71,8 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountNotTermi
 			return nil
 		},
 	)
-
-	s.mockAWS.EXPECT().GenerateRoleARN(testNamespace, testServiceAccountName).Return(testRoleARN)
-	s.mockAWS.EXPECT().GetOtterizeRole(gomock.Any(), testNamespace, testServiceAccountName).Return(true, &awstypes.Role{
-		Arn:      lo.ToPtr(testRoleARN),
-		RoleName: lo.ToPtr(testRoleName),
-	}, nil)
+	// Create happens even if the role was not modified
+	s.mockAWS.EXPECT().CreateOtterizeIAMRole(gomock.Any(), testNamespace, testServiceAccountName, false).Return(&awstypes.Role{Arn: lo.ToPtr(testRoleARN)}, nil)
 
 	res, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().NoError(err)
@@ -203,7 +199,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountServiceA
 	s.Require().Empty(res)
 }
 
-func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRole() {
+func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRole_SameARN_NoPatch() {
 	req := ctrl.Request{
 		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testServiceAccountName},
 	}
@@ -223,17 +219,39 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRole() {
 			return nil
 		},
 	)
-
-	s.mockAWS.EXPECT().GenerateRoleARN(testNamespace, testServiceAccountName).Return(testRoleARN)
-	s.mockAWS.EXPECT().GetOtterizeRole(gomock.Any(), testNamespace, testServiceAccountName).Return(false, nil, nil)
 	s.mockAWS.EXPECT().CreateOtterizeIAMRole(gomock.Any(), testNamespace, testServiceAccountName, false).Return(&awstypes.Role{Arn: lo.ToPtr(testRoleARN)}, nil)
-	s.client.EXPECT().Patch(gomock.Any(), gomock.Eq(&serviceAccount), gomock.Any())
 
 	_, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().NoError(err)
 }
 
-func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRoleWithMarkAsUnusedLabel() {
+func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRole_NoArn_Patch() {
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testServiceAccountName},
+	}
+
+	serviceAccount := corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       testServiceAccountName,
+			Namespace:  testNamespace,
+			Labels:     map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue},
+			Finalizers: []string{metadata.AWSRoleFinalizer},
+		},
+	}
+	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
+		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.ServiceAccount, arg3 ...client.GetOption) error {
+			serviceAccount.DeepCopyInto(arg2)
+			return nil
+		},
+	)
+	s.mockAWS.EXPECT().CreateOtterizeIAMRole(gomock.Any(), testNamespace, testServiceAccountName, false).Return(&awstypes.Role{Arn: lo.ToPtr(testRoleARN)}, nil)
+	s.client.EXPECT().Patch(gomock.Any(), gomock.Any(), gomock.Any())
+
+	_, err := s.reconciler.Reconcile(context.Background(), req)
+	s.Require().NoError(err)
+}
+
+func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRoleWithMarkAsUnusedLabel_SameArn() {
 	req := ctrl.Request{
 		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testServiceAccountName},
 	}
@@ -254,10 +272,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRoleWithMarkA
 		},
 	)
 
-	s.mockAWS.EXPECT().GenerateRoleARN(testNamespace, testServiceAccountName).Return(testRoleARN)
-	s.mockAWS.EXPECT().GetOtterizeRole(gomock.Any(), testNamespace, testServiceAccountName).Return(false, nil, nil)
 	s.mockAWS.EXPECT().CreateOtterizeIAMRole(gomock.Any(), testNamespace, testServiceAccountName, true).Return(&awstypes.Role{Arn: lo.ToPtr(testRoleARN)}, nil)
-	s.client.EXPECT().Patch(gomock.Any(), gomock.Eq(&serviceAccount), gomock.Any())
 
 	_, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().NoError(err)

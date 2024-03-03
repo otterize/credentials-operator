@@ -128,30 +128,18 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // - err
 func (r *ServiceAccountReconciler) reconcileAWSRole(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updateAnnotation bool, role *types.Role, err error) {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
+	roleARN, ok := hasAWSAnnotation(serviceAccount)
 
-	if roleARN, ok := hasAWSAnnotation(serviceAccount); ok {
-		generatedRoleARN := r.awsAgent.GenerateRoleARN(serviceAccount.Namespace, serviceAccount.Name)
-		found, role, err := r.awsAgent.GetOtterizeRole(ctx, serviceAccount.Namespace, serviceAccount.Name)
-
-		if err != nil {
-			return false, nil, fmt.Errorf("failed getting AWS role: %w", err)
-		}
-
-		if found && generatedRoleARN != roleARN {
-			logger.WithField("arn", *role.Arn).Debug("ServiceAccount AWS role exists, but annotation is misconfigured, should be updated")
-			return true, role, nil
-		}
-		// No return because we want to call create even if the role exists because it may be soft deleted ot with
-		// a different soft-delete strategy
-	}
-
+	// calling create in any case because this way we validate it is not soft-deleted and it is configured with the correct soft-delete strategy
 	role, err = r.awsAgent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, r.shouldUseSoftDeleteStrategy(serviceAccount))
 	if err != nil {
-		return true, nil, fmt.Errorf("failed creating AWS role for service account: %w", err)
+		return false, nil, fmt.Errorf("failed creating AWS role for service account: %w", err)
 	}
-
 	logger.WithField("arn", *role.Arn).Info("created AWS role for ServiceAccount")
-	return true, role, nil
+
+	// update annotation if it doesn't exist or if it is misconfigured
+	shouldUpdate := !ok || roleARN != *role.Arn
+	return shouldUpdate, role, nil
 }
 
 func (r *ServiceAccountReconciler) shouldUseSoftDeleteStrategy(serviceAccount *corev1.ServiceAccount) bool {
