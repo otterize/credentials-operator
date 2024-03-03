@@ -75,13 +75,14 @@ func (a *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod
 	updatedServiceAccount.Annotations[metadata.ServiceAccountAWSRoleARNAnnotation] = roleArn
 	updatedServiceAccount.Labels[metadata.OtterizeServiceAccountLabel] = metadata.OtterizeServiceAccountHasPodsValue
 
-	_, dontDeleteRole := pod.Labels[metadata.OtterizeAWSUseSoftDelete]
-	_, softDeleteStrategyExists := updatedServiceAccount.Labels[metadata.OtterizeAWSUseSoftDelete]
-	if dontDeleteRole && !softDeleteStrategyExists {
-		updatedServiceAccount.Labels[metadata.OtterizeAWSUseSoftDelete] = "true"
-	}
-	if !dontDeleteRole && softDeleteStrategyExists {
-		delete(updatedServiceAccount.Labels, metadata.OtterizeAWSUseSoftDelete)
+	podUseSoftDeleteLabelValue, podUseSoftDeleteLabelExists := pod.Labels[metadata.OtterizeAWSUseSoftDeleteKey]
+	shouldMarkForSoftDelete := podUseSoftDeleteLabelExists && podUseSoftDeleteLabelValue == metadata.OtterizeAWSUseSoftDeleteValue
+	logrus.Debugf("pod %s, namespace %s, should mark for soft delete: %v, labels: %v", pod.Name, pod.Namespace, shouldMarkForSoftDelete, pod.Labels)
+	if shouldMarkForSoftDelete {
+		logrus.Debugf("Add soft-delete label to service account %s, namespace %s", updatedServiceAccount.Name, updatedServiceAccount.Namespace)
+		updatedServiceAccount.Labels[metadata.OtterizeAWSUseSoftDeleteKey] = metadata.OtterizeAWSUseSoftDeleteValue
+	} else {
+		delete(updatedServiceAccount.Labels, metadata.OtterizeAWSUseSoftDeleteKey)
 	}
 
 	if !dryRun {

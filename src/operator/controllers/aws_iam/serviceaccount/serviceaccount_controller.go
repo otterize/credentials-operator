@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
-	"github.com/otterize/intents-operator/src/shared/awsagent"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
@@ -138,16 +137,12 @@ func (r *ServiceAccountReconciler) reconcileAWSRole(ctx context.Context, service
 			return false, nil, fmt.Errorf("failed getting AWS role: %w", err)
 		}
 
-		shouldCreateOrUpdateRole := !found || (r.shouldUseSoftDeleteStrategy(serviceAccount) != awsagent.HasSoftDeleteStrategyTagSet(role.Tags))
-
-		if !shouldCreateOrUpdateRole {
-			if generatedRoleARN != roleARN {
-				logger.WithField("arn", *role.Arn).Debug("ServiceAccount AWS role exists, but annotation is misconfigured, should be updated")
-				return true, role, nil
-			}
-			logger.WithField("arn", *role.Arn).Debug("ServiceAccount has matching AWS role")
-			return false, role, nil
+		if found && generatedRoleARN != roleARN {
+			logger.WithField("arn", *role.Arn).Debug("ServiceAccount AWS role exists, but annotation is misconfigured, should be updated")
+			return true, role, nil
 		}
+		// No return because we want to call create even if the role exists because it may be soft deleted ot with
+		// a different soft-delete strategy
 	}
 
 	role, err = r.awsAgent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, r.shouldUseSoftDeleteStrategy(serviceAccount))
@@ -167,8 +162,8 @@ func (r *ServiceAccountReconciler) shouldUseSoftDeleteStrategy(serviceAccount *c
 		return false
 	}
 
-	_, shouldSoftDelete := serviceAccount.Labels[metadata.OtterizeAWSUseSoftDelete]
-	return shouldSoftDelete
+	softDeleteValue, shouldSoftDelete := serviceAccount.Labels[metadata.OtterizeAWSUseSoftDeleteKey]
+	return shouldSoftDelete && softDeleteValue == metadata.OtterizeAWSUseSoftDeleteValue
 }
 
 func hasAWSAnnotation(serviceAccount *corev1.ServiceAccount) (string, bool) {
