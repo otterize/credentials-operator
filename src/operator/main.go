@@ -23,14 +23,15 @@ import (
 	"github.com/bombsimon/logrusr/v3"
 	certmanager "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/google/uuid"
-	"github.com/otterize/credentials-operator/src/controllers/aws_iam/pods"
-	"github.com/otterize/credentials-operator/src/controllers/aws_iam/serviceaccount"
-	"github.com/otterize/credentials-operator/src/controllers/aws_iam/webhooks"
+	"github.com/otterize/credentials-operator/src/controllers/iam/pods"
+	"github.com/otterize/intents-operator/src/shared/azureagent"
+
 	"github.com/otterize/credentials-operator/src/controllers/certificates/otterizecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certificates/spirecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certmanageradapter"
-	"github.com/otterize/credentials-operator/src/controllers/gcp_iam/gcp_pods"
-	"github.com/otterize/credentials-operator/src/controllers/gcp_iam/gcp_service_accounts"
+	"github.com/otterize/credentials-operator/src/controllers/iam"
+	serviceaccount "github.com/otterize/credentials-operator/src/controllers/iam/serviceaccounts"
+	"github.com/otterize/credentials-operator/src/controllers/iam/webhooks"
 	"github.com/otterize/credentials-operator/src/controllers/otterizeclient"
 	"github.com/otterize/credentials-operator/src/controllers/poduserpassword"
 	"github.com/otterize/credentials-operator/src/controllers/secrets"
@@ -155,6 +156,10 @@ func main() {
 	var workloadRegistry tls_pod.WorkloadRegistry
 	var enableAWSServiceAccountManagement bool
 	var enableGCPServiceAccountManagement bool
+	var enableAzureServiceAccountManagement bool
+	var azureSubscriptionId string
+	var azureResourceGroup string
+	var azureAKSClusterName string
 	var debug bool
 	var userAndPassAcquirer poduserpassword.CloudUserAndPasswordAcquirer
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":7071", "The address the metric endpoint binds to.")
@@ -167,6 +172,10 @@ func main() {
 	flag.BoolVar(&useCertManagerApprover, "cert-manager-approve-requests", false, "Make credentials-operator approve its own CertificateRequests")
 	flag.BoolVar(&enableAWSServiceAccountManagement, "enable-aws-serviceaccount-management", false, "Create and bind ServiceAccounts to AWS IAM roles")
 	flag.BoolVar(&enableGCPServiceAccountManagement, "enable-gcp-serviceaccount-management", false, "Create and bind ServiceAccounts to GCP IAM roles")
+	flag.BoolVar(&enableAzureServiceAccountManagement, "enable-azure-serviceaccount-management", false, "Create and bind ServiceAccounts to Azure IAM roles")
+	flag.StringVar(&azureSubscriptionId, "azure-subscription-id", "", "Azure subscription ID")
+	flag.StringVar(&azureResourceGroup, "azure-resource-group", "", "Azure resource group")
+	flag.StringVar(&azureAKSClusterName, "azure-aks-cluster-name", "", "Azure AKS cluster name")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -246,17 +255,46 @@ func main() {
 	}
 	client := mgr.GetClient()
 
-	podCleanupReconciler := pods.NewPodAWSRoleCleanupReconciler(client)
-	if err = podCleanupReconciler.SetupWithManager(mgr); err != nil {
-		logrus.WithField("controller", "PodAWSRoleCleanup").WithError(err).Panic("unable to create controller")
-	}
+	iamAgents := make([]iam.IAMCredentialsAgent, 0)
 
 	if enableAWSServiceAccountManagement {
 		awsAgent, err := awsagent.NewAWSAgent(ctx)
 		if err != nil {
 			logrus.WithError(err).Panic("failed to initialize AWS agent")
 		}
-		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, awsAgent)
+		iamAgents = append(iamAgents, awsAgent)
+	}
+
+	if enableGCPServiceAccountManagement {
+		gcpAgent, err := gcpagent.NewGCPAgent(ctx, client)
+		if err != nil {
+			logrus.WithError(err).Panic("failed to initialize GCP agent")
+		}
+
+		iamAgents = append(iamAgents, gcpAgent)
+	}
+
+	if enableAzureServiceAccountManagement {
+		config := azureagent.Config{
+			SubscriptionID: azureSubscriptionId,
+			ResourceGroup:  azureResourceGroup,
+			AKSClusterName: azureAKSClusterName,
+		}
+
+		azureAgent, err := azureagent.NewAzureAgent(ctx, config)
+		if err != nil {
+			logrus.WithError(err).Panic("failed to initialize Azure agent")
+		}
+		iamAgents = append(iamAgents, azureAgent)
+	}
+
+	if len(iamAgents) > 0 {
+		podReconciler := pods.NewPodReconciler(client)
+		if err = podReconciler.SetupWithManager(mgr); err != nil {
+			logrus.WithField("controller", "PodReconciler").WithError(err).Panic("unable to create controller")
+		}
+
+		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, iamAgents)
 		if err = serviceAccountReconciler.SetupWithManager(mgr); err != nil {
 			logrus.WithField("controller", "ServiceAccount").WithError(err).Panic("unable to create controller")
 		}
@@ -273,31 +311,10 @@ func main() {
 				logrus.WithError(err).Panic("failed writing certs to file system")
 			}
 
-			//err = operatorwebhooks.UpdateMutationWebHookCA(context.Background(),
-			//	"otterize-credentials-operator-mutating-webhook-configuration", certBundle.CertPem)
-			if err != nil {
-				logrus.WithError(err).Panic("updating validation webhook certificate failed")
-			}
-			podAnnotatorWebhook := webhooks.NewServiceAccountAnnotatingPodWebhook(mgr, awsAgent)
+			podAnnotatorWebhook := webhooks.NewServiceAccountAnnotatingPodWebhook(mgr, iamAgents)
 			mgr.GetWebhookServer().Register("/mutate-v1-pod", &webhook.Admission{Handler: podAnnotatorWebhook})
 		}
-	}
 
-	if enableGCPServiceAccountManagement {
-		gcpAgent, err := gcpagent.NewGCPAgent(ctx, client)
-		if err != nil {
-			logrus.WithError(err).Panic("failed to initialize GCP agent")
-		}
-
-		gcpPodReconciler := gcp_pods.NewReconciler(client, gcpAgent)
-		if err = gcpPodReconciler.SetupWithManager(mgr); err != nil {
-			logrus.WithField("controller", "gcpPodReconciler").WithError(err).Panic("unable to create controller")
-		}
-
-		gcpSAReconciler := gcp_service_accounts.NewReconciler(client, gcpAgent)
-		if err = gcpSAReconciler.SetupWithManager(mgr); err != nil {
-			logrus.WithField("controller", "gcpSAReconciler").WithError(err).Panic("unable to create controller")
-		}
 	}
 
 	if certProvider != CertProviderNone {

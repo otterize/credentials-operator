@@ -14,19 +14,8 @@ const (
 	// and IAM roles
 	ServiceAccountAWSRoleARNAnnotation = "eks.amazonaws.com/role-arn"
 
-	// AWSRoleFinalizer indicates that cleanup on AWS is needed upon termination.
-	AWSRoleFinalizer = "credentials-operator.otterize.com/aws-role"
-
-	// OtterizeServiceAccountAWSRoleARNAnnotation is used to update a Pod in the mutating webhook with the role ARN
-	// so that reinvocation is triggered for the EKS pod identity mutating webhook.
-	OtterizeServiceAccountAWSRoleARNAnnotation = "credentials-operator.otterize.com/eks-role-arn"
-
-	// GCPSAFinalizer indicates that cleanup on GCP is needed upon termination.
-	GCPSAFinalizer = "credentials-operator.otterize.com/gcp-sa"
-
-	// GCPWorkloadIdentityAnnotation is used by GCP workload identity to link between service accounts
-	GCPWorkloadIdentityAnnotation = "iam.gke.io/gcp-service-account"
-	GCPWorkloadIdentityNotSet     = "false"
+	// IAMRoleFinalizer indicates that cleanup on IAM roles is needed upon termination.
+	IAMRoleFinalizer = "credentials-operator.otterize.com/iam-role"
 
 	// DNSNamesAnnotation is a comma-separated list of additional dns names to be registered as part of the
 	// SPIRE-server entry and encoded into the certificate data

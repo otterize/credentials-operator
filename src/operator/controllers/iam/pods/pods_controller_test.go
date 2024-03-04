@@ -20,20 +20,20 @@ import (
 	"testing"
 )
 
-type TestPodsRoleCleanupControllerSuite struct {
+type TestPodsControllerSuite struct {
 	suite.Suite
 	controller *gomock.Controller
 	client     *mock_client.MockClient
-	reconciler *PodAWSRoleCleanupReconciler
+	reconciler *PodReconciler
 }
 
-func (s *TestPodsRoleCleanupControllerSuite) SetupTest() {
+func (s *TestPodsControllerSuite) SetupTest() {
 	s.controller = gomock.NewController(s.T())
 	s.client = mock_client.NewMockClient(s.controller)
-	s.reconciler = NewPodAWSRoleCleanupReconciler(s.client)
+	s.reconciler = NewPodReconciler(s.client)
 }
 
-func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_PodNotTerminatingNotAffected() {
+func (s *TestPodsControllerSuite) TestPodWithoutLabelsNotAffected() {
 	req := testutils.GetTestPodRequestSchema()
 	pod := testutils.GetTestPodSchema()
 
@@ -49,7 +49,23 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_PodNo
 	s.Require().Empty(res)
 }
 
-func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_PodTerminatingWithNoFinalizerIsNotAffected() {
+func (s *TestPodsControllerSuite) TestPodNotTerminatingNotAffected() {
+	req := testutils.GetTestPodRequestSchema()
+	pod := testutils.GetTestPodSchema()
+
+	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
+		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
+			pod.DeepCopyInto(arg2)
+			return nil
+		},
+	)
+
+	res, err := s.reconciler.Reconcile(context.Background(), req)
+	s.Require().NoError(err)
+	s.Require().Empty(res)
+}
+
+func (s *TestPodsControllerSuite) TestPodTerminatingWithNoFinalizerIsNotAffected() {
 	req := testutils.GetTestPodRequestSchema()
 
 	pod := testutils.GetTestPodSchema()
@@ -67,7 +83,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_PodTe
 	s.Require().Empty(res)
 }
 
-func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastPodTerminatingButDifferentPodUIDDoesNotLabelServiceAccountAndRemovesFinalizer() {
+func (s *TestPodsControllerSuite) TestLastPodTerminatingButDifferentPodUIDDoesNotLabelServiceAccountAndRemovesFinalizer() {
 	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
@@ -75,7 +91,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 
 	pod := testutils.GetTestPodSchema()
 	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
-	pod.Finalizers = []string{metadata.AWSRoleFinalizer}
+	pod.Finalizers = []string{metadata.IAMRoleFinalizer}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
@@ -101,7 +117,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 
 	// should not update serviceaccount because UID was different
 	updatedPod := pod.DeepCopy()
-	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, metadata.AWSRoleFinalizer))
+	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, metadata.IAMRoleFinalizer))
 
 	s.client.EXPECT().Patch(gomock.Any(), updatedPod, gomock.Any())
 
@@ -110,7 +126,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 	s.Require().Empty(res)
 }
 
-func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastPodTerminatingWithFinalizerLabelsServiceAccountAndRemovesFinalizer() {
+func (s *TestPodsControllerSuite) TestLastPodTerminatingWithFinalizerLabelsServiceAccountAndRemovesFinalizer() {
 	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
@@ -118,7 +134,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 
 	pod := testutils.GetTestPodSchema()
 	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
-	pod.Finalizers = []string{metadata.AWSRoleFinalizer}
+	pod.Finalizers = []string{metadata.IAMRoleFinalizer}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
@@ -157,7 +173,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 	s.client.EXPECT().Patch(gomock.Any(), updatedServiceAccount, gomock.Any())
 
 	updatedPod := pod.DeepCopy()
-	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, metadata.AWSRoleFinalizer))
+	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, metadata.IAMRoleFinalizer))
 
 	s.client.EXPECT().Patch(gomock.Any(), updatedPod, gomock.Any())
 
@@ -166,7 +182,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 	s.Require().Empty(res)
 }
 
-func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_NonLastPodTerminatingDoesNotLabelServiceAccountAndRemovesFinalizer() {
+func (s *TestPodsControllerSuite) TestNonLastPodTerminatingDoesNotLabelServiceAccountAndRemovesFinalizer() {
 	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
@@ -174,7 +190,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_NonLa
 
 	pod := testutils.GetTestPodSchema()
 	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
-	pod.Finalizers = []string{metadata.AWSRoleFinalizer}
+	pod.Finalizers = []string{metadata.IAMRoleFinalizer}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
@@ -202,7 +218,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_NonLa
 
 	// should not update serviceaccount because it's not the last pod
 	updatedPod := pod.DeepCopy()
-	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, metadata.AWSRoleFinalizer))
+	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, metadata.IAMRoleFinalizer))
 
 	s.client.EXPECT().Patch(gomock.Any(), updatedPod, gomock.Any())
 
@@ -211,7 +227,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_NonLa
 	s.Require().Empty(res)
 }
 
-func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastPodTerminatingWithFinalizerServiceAccountGoneAndRemovesFinalizerAnyway() {
+func (s *TestPodsControllerSuite) TestLastPodTerminatingWithFinalizerServiceAccountGoneAndRemovesFinalizerAnyway() {
 	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
@@ -219,7 +235,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 
 	pod := testutils.GetTestPodSchema()
 	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
-	pod.Finalizers = []string{metadata.AWSRoleFinalizer}
+	pod.Finalizers = []string{metadata.IAMRoleFinalizer}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
@@ -247,7 +263,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 	}, gomock.AssignableToTypeOf(&serviceAccount)).Return(k8serrors.NewNotFound(schema.GroupResource{}, serviceAccount.Name))
 
 	updatedPod := pod.DeepCopy()
-	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, metadata.AWSRoleFinalizer))
+	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, metadata.IAMRoleFinalizer))
 
 	s.client.EXPECT().Patch(gomock.Any(), updatedPod, gomock.Any())
 
@@ -256,7 +272,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 	s.Require().Empty(res)
 }
 
-func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastPodTerminatingWithFinalizerLabelsServiceAccountButIsConflictSoRequeues() {
+func (s *TestPodsControllerSuite) TestLastPodTerminatingWithFinalizerLabelsServiceAccountButIsConflictSoRequeues() {
 	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
@@ -264,7 +280,7 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 
 	pod := testutils.GetTestPodSchema()
 	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
-	pod.Finalizers = []string{metadata.AWSRoleFinalizer}
+	pod.Finalizers = []string{metadata.IAMRoleFinalizer}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
@@ -308,5 +324,5 @@ func (s *TestPodsRoleCleanupControllerSuite) TestPodsRoleCleanupController_LastP
 }
 
 func TestRunServiceAccountControllerSuite(t *testing.T) {
-	suite.Run(t, new(TestPodsRoleCleanupControllerSuite))
+	suite.Run(t, new(TestPodsControllerSuite))
 }

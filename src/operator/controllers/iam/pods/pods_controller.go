@@ -16,19 +16,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-type PodAWSRoleCleanupReconciler struct {
+type PodReconciler struct {
 	client.Client
 }
 
-func NewPodAWSRoleCleanupReconciler(client client.Client) *PodAWSRoleCleanupReconciler {
-	return &PodAWSRoleCleanupReconciler{
+func NewPodReconciler(client client.Client) *PodReconciler {
+	return &PodReconciler{
 		Client: client,
 	}
 }
 
 const podServiceAccountIndexField = "spec.serviceAccountName"
 
-func (r *PodAWSRoleCleanupReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	err := apiutils.InitPodServiceAccountIndexField(mgr)
 	if err != nil {
 		return errors.Wrap(err)
@@ -40,7 +40,8 @@ func (r *PodAWSRoleCleanupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *PodAWSRoleCleanupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := logrus.WithField("name", req.Name).WithField("namespace", req.Namespace)
 	pod := corev1.Pod{}
 
 	err := r.Get(ctx, req.NamespacedName, &pod)
@@ -55,8 +56,8 @@ func (r *PodAWSRoleCleanupReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, nil
 	}
 
-	if !controllerutil.ContainsFinalizer(&pod, metadata.AWSRoleFinalizer) {
-		logrus.Debugf("pod %v does not have the Otterize finalizer, skipping", pod.Name)
+	if !controllerutil.ContainsFinalizer(&pod, metadata.IAMRoleFinalizer) {
+		logger.Debug("pod does not have the Otterize finalizer, skipping")
 		return ctrl.Result{}, nil
 	}
 
@@ -66,19 +67,19 @@ func (r *PodAWSRoleCleanupReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, errors.Wrap(err)
 	}
 
-	// Get only the pods that are AWS consumers - also handles case where label was removed from the pod.
-	awsSAConsumers := lo.Filter(saConsumers, func(filteredPod corev1.Pod, _ int) bool {
-		return controllerutil.ContainsFinalizer(&pod, metadata.AWSRoleFinalizer) || pod.UID == filteredPod.UID
+	// Get only the pods that are IAM consumers - also handles case where label was removed from the pod.
+	iamSAConsumers := lo.Filter(saConsumers, func(filteredPod corev1.Pod, _ int) bool {
+		return controllerutil.ContainsFinalizer(&pod, metadata.IAMRoleFinalizer) || pod.UID == filteredPod.UID
 	})
 
 	// check if this is the last pod linked to this SA.
-	if len(awsSAConsumers) == 1 && awsSAConsumers[0].UID == pod.UID {
+	if len(iamSAConsumers) == 1 && iamSAConsumers[0].UID == pod.UID {
 		var serviceAccount corev1.ServiceAccount
 		err := r.Get(ctx, types.NamespacedName{Name: pod.Spec.ServiceAccountName, Namespace: pod.Namespace}, &serviceAccount)
 		if err != nil {
 			// service account can be deleted before the pods go down, in which case cleanup has already occurred, so just let the pod terminate.
 			if apierrors.IsNotFound(err) {
-				return apiutils.RemoveFinalizerFromPod(ctx, r, pod, metadata.AWSRoleFinalizer)
+				return apiutils.RemoveFinalizerFromPod(ctx, r, pod, metadata.IAMRoleFinalizer)
 			}
 			return ctrl.Result{}, errors.Wrap(err)
 		}
@@ -97,12 +98,12 @@ func (r *PodAWSRoleCleanupReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			}
 			// service account can be deleted before the pods go down, in which case cleanup has already occurred, so just let the pod terminate.
 			if apierrors.IsNotFound(err) {
-				return apiutils.RemoveFinalizerFromPod(ctx, r, pod, metadata.AWSRoleFinalizer)
+				return apiutils.RemoveFinalizerFromPod(ctx, r, pod, metadata.IAMRoleFinalizer)
 			}
 			return ctrl.Result{}, errors.Wrap(err)
 		}
 	}
 
-	// in case there's more than 1 pod, this is not the last pod so we can just let the pod terminate.
-	return apiutils.RemoveFinalizerFromPod(ctx, r, pod, metadata.AWSRoleFinalizer)
+	// in case there's more than 1 pod, this is not the last pod, so we can just let the pod terminate.
+	return apiutils.RemoveFinalizerFromPod(ctx, r, pod, metadata.IAMRoleFinalizer)
 }
