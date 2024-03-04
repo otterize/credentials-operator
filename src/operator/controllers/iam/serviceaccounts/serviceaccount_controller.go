@@ -18,13 +18,15 @@ import (
 
 type ServiceAccountReconciler struct {
 	client.Client
-	agents []iam.IAMCredentialsAgent
+	agents                           []iam.IAMCredentialsAgent
+	markRolesAsUnusedInsteadOfDelete bool
 }
 
-func NewServiceAccountReconciler(client client.Client, agents []iam.IAMCredentialsAgent) *ServiceAccountReconciler {
+func NewServiceAccountReconciler(client client.Client, agents []iam.IAMCredentialsAgent, markRolesAsUnusedInsteadOfDelete bool) *ServiceAccountReconciler {
 	return &ServiceAccountReconciler{
-		Client: client,
-		agents: agents,
+		Client:                           client,
+		agents:                           agents,
+		markRolesAsUnusedInsteadOfDelete: markRolesAsUnusedInsteadOfDelete,
 	}
 }
 
@@ -55,10 +57,6 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	isReferencedByPods := value == metadata.OtterizeServiceAccountHasPodsValue
-	if !isReferencedByPods {
-		logger.Debug("serviceAccount not referenced by pods, skipping")
-		return ctrl.Result{}, nil
-	}
 
 	// Perform cleanup if the service account is being deleted or no longer referenced by pods
 	if serviceAccount.DeletionTimestamp != nil || !isReferencedByPods {
@@ -130,7 +128,7 @@ func (r *ServiceAccountReconciler) HandleServiceUpdate(ctx context.Context, serv
 			continue
 		}
 
-		updated, requeue, err := agent.ReconcileServiceIAMRole(ctx, updatedServiceAccount)
+		updated, requeue, err := agent.ReconcileServiceIAMRole(ctx, updatedServiceAccount, r.shouldUseSoftDeleteStrategy(&serviceAccount))
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to reconcile service account: %w", err)
 		}
@@ -152,4 +150,16 @@ func (r *ServiceAccountReconciler) HandleServiceUpdate(ctx context.Context, serv
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ServiceAccountReconciler) shouldUseSoftDeleteStrategy(serviceAccount *corev1.ServiceAccount) bool {
+	if r.markRolesAsUnusedInsteadOfDelete {
+		return true
+	}
+	if serviceAccount.Labels == nil {
+		return false
+	}
+
+	softDeleteValue, shouldSoftDelete := serviceAccount.Labels[metadata.OtterizeAWSUseSoftDeleteKey]
+	return shouldSoftDelete && softDeleteValue == metadata.OtterizeAWSUseSoftDeleteValue
 }

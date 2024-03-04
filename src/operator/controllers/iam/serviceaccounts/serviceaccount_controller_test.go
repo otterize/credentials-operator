@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"testing"
@@ -31,16 +32,18 @@ func (s *TestServiceAccountSuite) SetupTest() {
 	s.controller = gomock.NewController(s.T())
 	s.client = mock_client.NewMockClient(s.controller)
 	s.mockIAM = mock_iam.NewMockIAMCredentialsAgent(s.controller)
-	s.reconciler = NewServiceAccountReconciler(s.client, []iam.IAMCredentialsAgent{s.mockIAM})
+	s.mockIAM.EXPECT().ServiceManagedByLabel().Return(mockServiceManagedByLabel).AnyTimes()
+	s.reconciler = NewServiceAccountReconciler(s.client, []iam.IAMCredentialsAgent{s.mockIAM}, false)
 }
 
 const (
-	testPodName            = "pod"
-	testNamespace          = "namespace"
-	testServiceAccountName = "serviceaccount"
-	testPodUID             = "pod-uid"
-	testRoleARN            = "role-arn"
-	testRoleName           = "role-name"
+	testPodName               = "pod"
+	testNamespace             = "namespace"
+	testServiceAccountName    = "serviceaccount"
+	testPodUID                = "pod-uid"
+	testRoleARN               = "role-arn"
+	testRoleName              = "role-name"
+	mockServiceManagedByLabel = "credentials-operator.otterize.com/managed-by-mock-iam"
 )
 
 // Tests:
@@ -55,7 +58,10 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountNotTermi
 
 	serviceAccount := testutils.GetTestServiceSchema()
 	serviceAccount.Annotations = map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN}
-	serviceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
+	serviceAccount.Labels = map[string]string{
+		metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue,
+		mockServiceManagedByLabel:            "true",
+	}
 	serviceAccount.Finalizers = []string{metadata.IAMRoleFinalizer}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
@@ -65,7 +71,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountNotTermi
 		},
 	)
 
-	s.mockIAM.EXPECT().ReconcileServiceIAMRole(gomock.Any(), gomock.AssignableToTypeOf(&serviceAccount)).Return(false, false, nil)
+	s.mockIAM.EXPECT().ReconcileServiceIAMRole(gomock.Any(), gomock.AssignableToTypeOf(&serviceAccount), false).Return(false, false, nil)
 
 	res, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().NoError(err)
@@ -97,10 +103,13 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountTerminat
 
 	serviceAccount := corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:              testServiceAccountName,
-			Namespace:         testNamespace,
-			Annotations:       map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
-			Labels:            map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue},
+			Name:        testServiceAccountName,
+			Namespace:   testNamespace,
+			Annotations: map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
+			Labels: map[string]string{
+				metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue,
+				mockServiceManagedByLabel:            "true",
+			},
 			DeletionTimestamp: lo.ToPtr(metav1.Now()),
 			Finalizers:        []string{metadata.IAMRoleFinalizer},
 		},
@@ -132,8 +141,11 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountServiceA
 			Name:        testServiceAccountName,
 			Namespace:   testNamespace,
 			Annotations: map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
-			Labels:      map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasNoPodsValue},
-			Finalizers:  []string{metadata.IAMRoleFinalizer},
+			Labels: map[string]string{
+				metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasNoPodsValue,
+				mockServiceManagedByLabel:            "true",
+			},
+			Finalizers: []string{metadata.IAMRoleFinalizer},
 		},
 	}
 
@@ -156,10 +168,13 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountServiceA
 
 	serviceAccount := corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:              testServiceAccountName,
-			Namespace:         testNamespace,
-			Annotations:       map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
-			Labels:            map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue},
+			Name:        testServiceAccountName,
+			Namespace:   testNamespace,
+			Annotations: map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
+			Labels: map[string]string{
+				metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue,
+				mockServiceManagedByLabel:            "true",
+			},
 			DeletionTimestamp: lo.ToPtr(metav1.Now()),
 			Finalizers:        []string{metadata.IAMRoleFinalizer},
 		},
@@ -177,6 +192,95 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountServiceA
 	res, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().ErrorContains(err, "role deletion failed")
 	s.Require().Empty(res)
+}
+
+func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRole_SameARN_NoPatch() {
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testServiceAccountName},
+	}
+
+	serviceAccount := corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        testServiceAccountName,
+			Namespace:   testNamespace,
+			Annotations: map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
+			Labels: map[string]string{
+				metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue,
+				mockServiceManagedByLabel:            "true",
+			},
+			Finalizers: []string{metadata.IAMRoleFinalizer},
+		},
+	}
+	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
+		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.ServiceAccount, arg3 ...client.GetOption) error {
+			serviceAccount.DeepCopyInto(arg2)
+			return nil
+		},
+	)
+	s.mockIAM.EXPECT().ReconcileServiceIAMRole(gomock.Any(), gomock.AssignableToTypeOf(&serviceAccount), false).Return(false, false, nil)
+
+	_, err := s.reconciler.Reconcile(context.Background(), req)
+	s.Require().NoError(err)
+}
+
+func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRole_NoArn_Patch() {
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testServiceAccountName},
+	}
+
+	serviceAccount := corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testServiceAccountName,
+			Namespace: testNamespace,
+			Labels: map[string]string{
+				metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue,
+				mockServiceManagedByLabel:            "true",
+			},
+			Finalizers: []string{metadata.IAMRoleFinalizer},
+		},
+	}
+	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
+		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.ServiceAccount, arg3 ...client.GetOption) error {
+			serviceAccount.DeepCopyInto(arg2)
+			return nil
+		},
+	)
+	s.mockIAM.EXPECT().ReconcileServiceIAMRole(gomock.Any(), gomock.AssignableToTypeOf(&serviceAccount), false).Return(true, false, nil)
+	s.client.EXPECT().Patch(gomock.Any(), gomock.Any(), gomock.Any())
+
+	_, err := s.reconciler.Reconcile(context.Background(), req)
+	s.Require().NoError(err)
+}
+
+func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRoleWithMarkAsUnusedLabel_SameArn() {
+	req := ctrl.Request{
+		NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testServiceAccountName},
+	}
+
+	serviceAccount := corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        testServiceAccountName,
+			Namespace:   testNamespace,
+			Annotations: map[string]string{metadata.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
+			Labels: map[string]string{
+				metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue,
+				mockServiceManagedByLabel:            "true",
+				metadata.OtterizeAWSUseSoftDeleteKey: "true",
+			},
+			Finalizers: []string{metadata.IAMRoleFinalizer},
+		},
+	}
+	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
+		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.ServiceAccount, arg3 ...client.GetOption) error {
+			serviceAccount.DeepCopyInto(arg2)
+			return nil
+		},
+	)
+
+	s.mockIAM.EXPECT().ReconcileServiceIAMRole(gomock.Any(), gomock.AssignableToTypeOf(&serviceAccount), true).Return(false, false, nil)
+
+	_, err := s.reconciler.Reconcile(context.Background(), req)
+	s.Require().NoError(err)
 }
 
 func TestRunServiceAccountControllerSuite(t *testing.T) {

@@ -155,6 +155,7 @@ func main() {
 	var secretsManager tls_pod.SecretsManager
 	var workloadRegistry tls_pod.WorkloadRegistry
 	var enableAWSServiceAccountManagement bool
+	var awsUseSoftDeleteStrategy bool
 	var enableGCPServiceAccountManagement bool
 	var enableAzureServiceAccountManagement bool
 	var azureSubscriptionId string
@@ -171,6 +172,7 @@ func main() {
 	flag.BoolVar(&certManagerUseClusterIssuer, "cert-manager-use-cluster-issuer", false, "Use ClusterIssuer instead of a (namespace bound) Issuer")
 	flag.BoolVar(&useCertManagerApprover, "cert-manager-approve-requests", false, "Make credentials-operator approve its own CertificateRequests")
 	flag.BoolVar(&enableAWSServiceAccountManagement, "enable-aws-serviceaccount-management", false, "Create and bind ServiceAccounts to AWS IAM roles")
+	flag.BoolVar(&awsUseSoftDeleteStrategy, "aws-use-soft-delete", false, "Mark AWS roles and policies as deleted instead of actually deleting them")
 	flag.BoolVar(&enableGCPServiceAccountManagement, "enable-gcp-serviceaccount-management", false, "Create and bind ServiceAccounts to GCP IAM roles")
 	flag.BoolVar(&enableAzureServiceAccountManagement, "enable-azure-serviceaccount-management", false, "Create and bind ServiceAccounts to Azure IAM roles")
 	flag.StringVar(&azureSubscriptionId, "azure-subscription-id", "", "Azure subscription ID")
@@ -294,7 +296,7 @@ func main() {
 			logrus.WithField("controller", "PodReconciler").WithError(err).Panic("unable to create controller")
 		}
 
-		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, iamAgents)
+		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, iamAgents, awsUseSoftDeleteStrategy)
 		if err = serviceAccountReconciler.SetupWithManager(mgr); err != nil {
 			logrus.WithField("controller", "ServiceAccount").WithError(err).Panic("unable to create controller")
 		}

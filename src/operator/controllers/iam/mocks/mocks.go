@@ -35,20 +35,6 @@ func (m *MockIAMCredentialsAgent) EXPECT() *MockIAMCredentialsAgentMockRecorder 
 	return m.recorder
 }
 
-// OnPodAdmission mocks base method.
-func (m *MockIAMCredentialsAgent) OnPodAdmission(ctx context.Context, pod *v1.Pod, serviceAccount *v1.ServiceAccount) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OnPodAdmission", ctx, pod, serviceAccount)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// OnPodAdmission indicates an expected call of OnPodAdmission.
-func (mr *MockIAMCredentialsAgentMockRecorder) OnPodAdmission(ctx, pod, serviceAccount interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnPodAdmission", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).OnPodAdmission), ctx, pod, serviceAccount)
-}
-
 // ApplyOnPodLabel mocks base method.
 func (m *MockIAMCredentialsAgent) ApplyOnPodLabel() string {
 	m.ctrl.T.Helper()
@@ -77,10 +63,24 @@ func (mr *MockIAMCredentialsAgentMockRecorder) DeleteServiceIAMRole(ctx, namespa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteServiceIAMRole", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).DeleteServiceIAMRole), ctx, namespace, name)
 }
 
-// ReconcileServiceIAMRole mocks base method.
-func (m *MockIAMCredentialsAgent) ReconcileServiceIAMRole(ctx context.Context, serviceAccount *v1.ServiceAccount) (bool, bool, error) {
+// OnPodAdmission mocks base method.
+func (m *MockIAMCredentialsAgent) OnPodAdmission(ctx context.Context, pod *v1.Pod, serviceAccount *v1.ServiceAccount) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReconcileServiceIAMRole", ctx, serviceAccount)
+	ret := m.ctrl.Call(m, "OnPodAdmission", ctx, pod, serviceAccount)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// OnPodAdmission indicates an expected call of OnPodAdmission.
+func (mr *MockIAMCredentialsAgentMockRecorder) OnPodAdmission(ctx, pod, serviceAccount interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnPodAdmission", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).OnPodAdmission), ctx, pod, serviceAccount)
+}
+
+// ReconcileServiceIAMRole mocks base method.
+func (m *MockIAMCredentialsAgent) ReconcileServiceIAMRole(ctx context.Context, serviceAccount *v1.ServiceAccount, useSoftDeleteStrategy bool) (bool, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReconcileServiceIAMRole", ctx, serviceAccount, useSoftDeleteStrategy)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(bool)
 	ret2, _ := ret[2].(error)
@@ -88,7 +88,21 @@ func (m *MockIAMCredentialsAgent) ReconcileServiceIAMRole(ctx context.Context, s
 }
 
 // ReconcileServiceIAMRole indicates an expected call of ReconcileServiceIAMRole.
-func (mr *MockIAMCredentialsAgentMockRecorder) ReconcileServiceIAMRole(ctx, serviceAccount interface{}) *gomock.Call {
+func (mr *MockIAMCredentialsAgentMockRecorder) ReconcileServiceIAMRole(ctx, serviceAccount, useSoftDeleteStrategy interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReconcileServiceIAMRole", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).ReconcileServiceIAMRole), ctx, serviceAccount)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReconcileServiceIAMRole", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).ReconcileServiceIAMRole), ctx, serviceAccount, useSoftDeleteStrategy)
+}
+
+// ServiceManagedByLabel mocks base method.
+func (m *MockIAMCredentialsAgent) ServiceManagedByLabel() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ServiceManagedByLabel")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// ServiceManagedByLabel indicates an expected call of ServiceManagedByLabel.
+func (mr *MockIAMCredentialsAgentMockRecorder) ServiceManagedByLabel() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ServiceManagedByLabel", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).ServiceManagedByLabel))
 }

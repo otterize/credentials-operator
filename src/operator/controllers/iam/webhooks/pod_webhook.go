@@ -94,6 +94,17 @@ func (a *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod
 	}
 
 	updatedServiceAccount.Labels[metadata.OtterizeServiceAccountLabel] = metadata.OtterizeServiceAccountHasPodsValue
+
+	podUseSoftDeleteLabelValue, podUseSoftDeleteLabelExists := pod.Labels[metadata.OtterizeAWSUseSoftDeleteKey]
+	shouldMarkForSoftDelete := podUseSoftDeleteLabelExists && podUseSoftDeleteLabelValue == metadata.OtterizeAWSUseSoftDeleteValue
+	logger.Debugf("should mark for soft delete: %v, labels: %v", shouldMarkForSoftDelete, pod.Labels)
+	if shouldMarkForSoftDelete {
+		logrus.Debugf("Add soft-delete label to service account %s, namespace %s", updatedServiceAccount.Name, updatedServiceAccount.Namespace)
+		updatedServiceAccount.Labels[metadata.OtterizeAWSUseSoftDeleteKey] = metadata.OtterizeAWSUseSoftDeleteValue
+	} else {
+		delete(updatedServiceAccount.Labels, metadata.OtterizeAWSUseSoftDeleteKey)
+	}
+
 	if !dryRun {
 		err = a.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
 		if err != nil {
