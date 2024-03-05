@@ -79,13 +79,8 @@ func (a *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod
 
 	hasUpdates := false
 	for _, agent := range a.agents {
-		if pod.Labels[agent.ApplyOnPodLabel()] == "true" {
-			hasUpdates = true
-			updatedServiceAccount.Labels[agent.ServiceManagedByLabel()] = "true"
-			if err = agent.OnPodAdmission(ctx, &pod, updatedServiceAccount); err != nil {
-				return corev1.Pod{}, false, "", fmt.Errorf("could not update pod & service account: %w", err)
-			}
-		}
+		updated := agent.OnPodAdmission(&pod, updatedServiceAccount)
+		hasUpdates = hasUpdates || updated
 	}
 
 	if !hasUpdates {
@@ -94,16 +89,6 @@ func (a *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod
 	}
 
 	updatedServiceAccount.Labels[metadata.OtterizeServiceAccountLabel] = metadata.OtterizeServiceAccountHasPodsValue
-
-	podUseSoftDeleteLabelValue, podUseSoftDeleteLabelExists := pod.Labels[metadata.OtterizeAWSUseSoftDeleteKey]
-	shouldMarkForSoftDelete := podUseSoftDeleteLabelExists && podUseSoftDeleteLabelValue == metadata.OtterizeAWSUseSoftDeleteValue
-	logger.Debugf("should mark for soft delete: %v, labels: %v", shouldMarkForSoftDelete, pod.Labels)
-	if shouldMarkForSoftDelete {
-		logrus.Debugf("Add soft-delete label to service account %s, namespace %s", updatedServiceAccount.Name, updatedServiceAccount.Namespace)
-		updatedServiceAccount.Labels[metadata.OtterizeAWSUseSoftDeleteKey] = metadata.OtterizeAWSUseSoftDeleteValue
-	} else {
-		delete(updatedServiceAccount.Labels, metadata.OtterizeAWSUseSoftDeleteKey)
-	}
 
 	if !dryRun {
 		err = a.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
