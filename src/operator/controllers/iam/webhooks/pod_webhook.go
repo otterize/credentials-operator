@@ -79,7 +79,10 @@ func (a *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod
 
 	hasUpdates := false
 	for _, agent := range a.agents {
-		updated := agent.OnPodAdmission(&pod, updatedServiceAccount)
+		updated, err := agent.OnPodAdmission(ctx, &pod, updatedServiceAccount)
+		if err != nil {
+			return corev1.Pod{}, false, "", fmt.Errorf("failed to handle pod admission: %w", err)
+		}
 		hasUpdates = hasUpdates || updated
 	}
 
