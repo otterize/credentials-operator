@@ -7,6 +7,7 @@ import (
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	mock_client "github.com/otterize/credentials-operator/src/mocks/controller-runtime/client"
 	"github.com/otterize/credentials-operator/src/shared/testutils"
+	"github.com/otterize/intents-operator/src/shared/awsagent"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
@@ -264,7 +265,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRoleWithMarkA
 			Labels: map[string]string{
 				metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue,
 				mockServiceManagedByLabel:            "true",
-				metadata.OtterizeAWSUseSoftDeleteKey: "true",
+				awsagent.OtterizeAWSUseSoftDeleteKey: "true",
 			},
 			Finalizers: []string{metadata.IAMRoleFinalizer},
 		},

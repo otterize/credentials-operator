@@ -15,9 +15,4 @@ const (
 	OtterizeServiceAccountLabel          = "credentials-operator.otterize.com/service-account-managed"
 	OtterizeServiceAccountHasPodsValue   = "true"
 	OtterizeServiceAccountHasNoPodsValue = "no-pods"
-
-	// OtterizeAWSUseSoftDeleteKey is used to mark workloads that should not have their corresponding roles deleted,
-	// but should be tagged as deleted instead (aka soft delete strategy).
-	OtterizeAWSUseSoftDeleteKey   = "credentials-operator.otterize.com/aws-use-soft-delete"
-	OtterizeAWSUseSoftDeleteValue = "true"
 )

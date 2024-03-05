@@ -50,7 +50,7 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	value, ok := getLabelValue(&serviceAccount, metadata.OtterizeServiceAccountLabel)
 	if !ok {
-		logger.Debug("serviceAccount not labeled with credentials-operator.otterize.com/service-account, skipping")
+		logger.Debugf("serviceAccount not labeled with %s, skipping", metadata.OtterizeServiceAccountLabel)
 		return ctrl.Result{}, nil
 	}
 
