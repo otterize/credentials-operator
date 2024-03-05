@@ -6,7 +6,6 @@ import (
 )
 
 type IAMCredentialsAgent interface {
-	AppliesOnPod(pod *corev1.Pod) bool
 	OnPodAdmission(pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool)
 	OnServiceAccountUpdate(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updated bool, requeue bool, err error)
 	OnServiceAccountTermination(ctx context.Context, serviceAccount *corev1.ServiceAccount) error

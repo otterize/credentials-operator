@@ -35,20 +35,6 @@ func (m *MockIAMCredentialsAgent) EXPECT() *MockIAMCredentialsAgentMockRecorder 
 	return m.recorder
 }
 
-// AppliesOnPod mocks base method.
-func (m *MockIAMCredentialsAgent) AppliesOnPod(pod *v1.Pod) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AppliesOnPod", pod)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// AppliesOnPod indicates an expected call of AppliesOnPod.
-func (mr *MockIAMCredentialsAgentMockRecorder) AppliesOnPod(pod interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AppliesOnPod", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).AppliesOnPod), pod)
-}
-
 // OnPodAdmission mocks base method.
 func (m *MockIAMCredentialsAgent) OnPodAdmission(pod *v1.Pod, serviceAccount *v1.ServiceAccount) bool {
 	m.ctrl.T.Helper()
