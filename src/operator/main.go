@@ -163,8 +163,9 @@ func main() {
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 	//flag.StringVar(&trustAnchorArn, "trust-anchor-arn", "", "ARN of the trust anchor to be used for AWS RolesAnywhere")
 	trustAnchorArn = os.Getenv("OTTERIZE_TRUST_ANCHOR_ARN")
+	trustDomain := os.Getenv("OTTERIZE_TRUST_DOMAIN")
 
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+	flag.BoolVar(&enableLeaderElection, "leader-elect", true,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.Parse()
@@ -247,7 +248,7 @@ func main() {
 	}
 
 	if enableAWSServiceAccountManagement {
-		awsAgent, err := awsagent.NewAWSAgent(ctx, trustAnchorArn)
+		awsAgent, err := awsagent.NewAWSAgent(ctx, trustAnchorArn, trustDomain)
 		if err != nil {
 			logrus.WithError(err).Panic("failed to initialize AWS agent")
 		}
