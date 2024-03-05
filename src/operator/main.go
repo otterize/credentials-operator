@@ -148,6 +148,7 @@ func main() {
 	var secretsManager tls_pod.SecretsManager
 	var workloadRegistry tls_pod.WorkloadRegistry
 	var enableAWSServiceAccountManagement bool
+	var awsUseSoftDeleteStrategy bool
 	var debug bool
 	var userAndPassAcquirer poduserpassword.CloudUserAndPasswordAcquirer
 	var trustAnchorArn string
@@ -160,6 +161,7 @@ func main() {
 	flag.BoolVar(&certManagerUseClusterIssuer, "cert-manager-use-cluster-issuer", false, "Use ClusterIssuer instead of a (namespace bound) Issuer")
 	flag.BoolVar(&useCertManagerApprover, "cert-manager-approve-requests", false, "Make credentials-operator approve its own CertificateRequests")
 	flag.BoolVar(&enableAWSServiceAccountManagement, "enable-aws-serviceaccount-management", false, "Create and bind ServiceAccounts to AWS IAM roles")
+	flag.BoolVar(&awsUseSoftDeleteStrategy, "aws-use-soft-delete", false, "Mark AWS roles and policies as deleted instead of actually deleting them")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 	//flag.StringVar(&trustAnchorArn, "trust-anchor-arn", "", "ARN of the trust anchor to be used for AWS RolesAnywhere")
 	trustAnchorArn = os.Getenv("OTTERIZE_TRUST_ANCHOR_ARN")
@@ -252,7 +254,7 @@ func main() {
 		if err != nil {
 			logrus.WithError(err).Panic("failed to initialize AWS agent")
 		}
-		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, awsAgent)
+		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, awsAgent, awsUseSoftDeleteStrategy)
 		if err = serviceAccountReconciler.SetupWithManager(mgr); err != nil {
 			logrus.WithField("controller", "ServiceAccount").WithError(err).Panic("unable to create controller")
 		}
