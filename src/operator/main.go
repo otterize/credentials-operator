@@ -264,6 +264,8 @@ func main() {
 		if err != nil {
 			logrus.WithError(err).Panic("failed to initialize AWS agent")
 		}
+
+		awsAgent.SetSoftDeleteStrategy(awsUseSoftDeleteStrategy)
 		iamAgents = append(iamAgents, awsAgent)
 	}
 
@@ -296,7 +298,7 @@ func main() {
 			logrus.WithField("controller", "PodReconciler").WithError(err).Panic("unable to create controller")
 		}
 
-		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, iamAgents, awsUseSoftDeleteStrategy)
+		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, iamAgents)
 		if err = serviceAccountReconciler.SetupWithManager(mgr); err != nil {
 			logrus.WithField("controller", "ServiceAccount").WithError(err).Panic("unable to create controller")
 		}

@@ -18,15 +18,13 @@ import (
 
 type ServiceAccountReconciler struct {
 	client.Client
-	agents                           []iam.IAMCredentialsAgent
-	markRolesAsUnusedInsteadOfDelete bool
+	agents []iam.IAMCredentialsAgent
 }
 
-func NewServiceAccountReconciler(client client.Client, agents []iam.IAMCredentialsAgent, markRolesAsUnusedInsteadOfDelete bool) *ServiceAccountReconciler {
+func NewServiceAccountReconciler(client client.Client, agents []iam.IAMCredentialsAgent) *ServiceAccountReconciler {
 	return &ServiceAccountReconciler{
-		Client:                           client,
-		agents:                           agents,
-		markRolesAsUnusedInsteadOfDelete: markRolesAsUnusedInsteadOfDelete,
+		Client: client,
+		agents: agents,
 	}
 }
 
@@ -74,19 +72,9 @@ func getLabelValue(serviceAccount *corev1.ServiceAccount, label string) (string,
 	return value, ok
 }
 
-func isManagedByAgent(serviceAccount *corev1.ServiceAccount, agent iam.IAMCredentialsAgent) bool {
-	value, ok := getLabelValue(serviceAccount, agent.ServiceManagedByLabel())
-	return ok && value == "true"
-}
-
 func (r *ServiceAccountReconciler) HandleServiceCleanup(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
-	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
 	for _, agent := range r.agents {
-		if !isManagedByAgent(&serviceAccount, agent) {
-			logger.WithField("label", agent.ServiceManagedByLabel()).Debug("serviceAccount not managed by agent, skipping")
-			continue
-		}
-		if err := agent.DeleteServiceIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name); err != nil {
+		if err := agent.OnServiceAccountTermination(ctx, &serviceAccount); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to remove service account: %w", err)
 		}
 	}
@@ -107,8 +95,6 @@ func (r *ServiceAccountReconciler) HandleServiceCleanup(ctx context.Context, ser
 }
 
 func (r *ServiceAccountReconciler) HandleServiceUpdate(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
-	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
-
 	// Add a finalizer label to the service account to block deletion until cleanup is complete
 	updatedServiceAccount := serviceAccount.DeepCopy()
 	if controllerutil.AddFinalizer(updatedServiceAccount, metadata.IAMRoleFinalizer) {
@@ -123,12 +109,7 @@ func (r *ServiceAccountReconciler) HandleServiceUpdate(ctx context.Context, serv
 
 	hasUpdates := false
 	for _, agent := range r.agents {
-		if !isManagedByAgent(&serviceAccount, agent) {
-			logger.WithField("label", agent.ServiceManagedByLabel()).Debug("serviceAccount not managed by agent, skipping")
-			continue
-		}
-
-		updated, requeue, err := agent.ReconcileServiceIAMRole(ctx, updatedServiceAccount, r.shouldUseSoftDeleteStrategy(&serviceAccount))
+		updated, requeue, err := agent.OnServiceAccountUpdate(ctx, updatedServiceAccount)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to reconcile service account: %w", err)
 		}
@@ -150,16 +131,4 @@ func (r *ServiceAccountReconciler) HandleServiceUpdate(ctx context.Context, serv
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func (r *ServiceAccountReconciler) shouldUseSoftDeleteStrategy(serviceAccount *corev1.ServiceAccount) bool {
-	if r.markRolesAsUnusedInsteadOfDelete {
-		return true
-	}
-	if serviceAccount.Labels == nil {
-		return false
-	}
-
-	softDeleteValue, shouldSoftDelete := serviceAccount.Labels[metadata.OtterizeAWSUseSoftDeleteKey]
-	return shouldSoftDelete && softDeleteValue == metadata.OtterizeAWSUseSoftDeleteValue
 }

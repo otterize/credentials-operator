@@ -6,9 +6,8 @@ import (
 )
 
 type IAMCredentialsAgent interface {
-	ApplyOnPodLabel() string
-	ServiceManagedByLabel() string
+	AppliesOnPod(pod *corev1.Pod) bool
 	OnPodAdmission(pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool)
-	ReconcileServiceIAMRole(ctx context.Context, serviceAccount *corev1.ServiceAccount, useSoftDeleteStrategy bool) (updated bool, requeue bool, err error)
-	DeleteServiceIAMRole(ctx context.Context, namespace string, name string) error
+	OnServiceAccountUpdate(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updated bool, requeue bool, err error)
+	OnServiceAccountTermination(ctx context.Context, serviceAccount *corev1.ServiceAccount) error
 }

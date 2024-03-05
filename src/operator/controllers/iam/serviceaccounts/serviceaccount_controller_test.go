@@ -32,8 +32,7 @@ func (s *TestServiceAccountSuite) SetupTest() {
 	s.controller = gomock.NewController(s.T())
 	s.client = mock_client.NewMockClient(s.controller)
 	s.mockIAM = mock_iam.NewMockIAMCredentialsAgent(s.controller)
-	s.mockIAM.EXPECT().ServiceManagedByLabel().Return(mockServiceManagedByLabel).AnyTimes()
-	s.reconciler = NewServiceAccountReconciler(s.client, []iam.IAMCredentialsAgent{s.mockIAM}, false)
+	s.reconciler = NewServiceAccountReconciler(s.client, []iam.IAMCredentialsAgent{s.mockIAM})
 }
 
 const (
@@ -71,7 +70,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountNotTermi
 		},
 	)
 
-	s.mockIAM.EXPECT().ReconcileServiceIAMRole(gomock.Any(), gomock.AssignableToTypeOf(&serviceAccount), false).Return(false, false, nil)
+	s.mockIAM.EXPECT().OnServiceAccountUpdate(gomock.Any(), gomock.AssignableToTypeOf(&serviceAccount)).Return(false, false, nil)
 
 	res, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().NoError(err)
@@ -122,7 +121,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountTerminat
 		},
 	)
 
-	s.mockIAM.EXPECT().DeleteServiceIAMRole(context.Background(), testNamespace, testServiceAccountName).Return(nil)
+	s.mockIAM.EXPECT().OnServiceAccountTermination(context.Background(), gomock.AssignableToTypeOf(&serviceAccount)).Return(nil)
 
 	updatedServiceAccount := serviceAccount.DeepCopy()
 	s.Require().True(controllerutil.RemoveFinalizer(updatedServiceAccount, metadata.IAMRoleFinalizer))
@@ -156,7 +155,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountServiceA
 		},
 	)
 
-	s.mockIAM.EXPECT().DeleteServiceIAMRole(context.Background(), testNamespace, testServiceAccountName).Return(nil)
+	s.mockIAM.EXPECT().OnServiceAccountTermination(context.Background(), gomock.AssignableToTypeOf(&serviceAccount)).Return(nil)
 
 	res, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().NoError(err)
@@ -187,7 +186,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountServiceA
 		},
 	)
 
-	s.mockIAM.EXPECT().DeleteServiceIAMRole(context.Background(), testNamespace, testServiceAccountName).Return(errors.New("role deletion failed"))
+	s.mockIAM.EXPECT().OnServiceAccountTermination(context.Background(), gomock.AssignableToTypeOf(&serviceAccount)).Return(errors.New("role deletion failed"))
 
 	res, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().ErrorContains(err, "role deletion failed")
@@ -217,7 +216,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRole_SameARN_
 			return nil
 		},
 	)
-	s.mockIAM.EXPECT().ReconcileServiceIAMRole(gomock.Any(), gomock.AssignableToTypeOf(&serviceAccount), false).Return(false, false, nil)
+	s.mockIAM.EXPECT().OnServiceAccountUpdate(gomock.Any(), gomock.AssignableToTypeOf(&serviceAccount)).Return(false, false, nil)
 
 	_, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().NoError(err)
@@ -245,7 +244,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRole_NoArn_Pa
 			return nil
 		},
 	)
-	s.mockIAM.EXPECT().ReconcileServiceIAMRole(gomock.Any(), gomock.AssignableToTypeOf(&serviceAccount), false).Return(true, false, nil)
+	s.mockIAM.EXPECT().OnServiceAccountUpdate(gomock.Any(), gomock.AssignableToTypeOf(&serviceAccount)).Return(true, false, nil)
 	s.client.EXPECT().Patch(gomock.Any(), gomock.Any(), gomock.Any())
 
 	_, err := s.reconciler.Reconcile(context.Background(), req)
@@ -277,7 +276,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_CreateIAMRoleWithMarkA
 		},
 	)
 
-	s.mockIAM.EXPECT().ReconcileServiceIAMRole(gomock.Any(), gomock.AssignableToTypeOf(&serviceAccount), true).Return(false, false, nil)
+	s.mockIAM.EXPECT().OnServiceAccountUpdate(gomock.Any(), gomock.AssignableToTypeOf(&serviceAccount)).Return(false, false, nil)
 
 	_, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().NoError(err)
