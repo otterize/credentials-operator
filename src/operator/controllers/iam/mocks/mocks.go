@@ -36,17 +36,18 @@ func (m *MockIAMCredentialsAgent) EXPECT() *MockIAMCredentialsAgentMockRecorder 
 }
 
 // OnPodAdmission mocks base method.
-func (m *MockIAMCredentialsAgent) OnPodAdmission(pod *v1.Pod, serviceAccount *v1.ServiceAccount) bool {
+func (m *MockIAMCredentialsAgent) OnPodAdmission(ctx context.Context, pod *v1.Pod, serviceAccount *v1.ServiceAccount) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OnPodAdmission", pod, serviceAccount)
+	ret := m.ctrl.Call(m, "OnPodAdmission", ctx, pod, serviceAccount)
 	ret0, _ := ret[0].(bool)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // OnPodAdmission indicates an expected call of OnPodAdmission.
-func (mr *MockIAMCredentialsAgentMockRecorder) OnPodAdmission(pod, serviceAccount interface{}) *gomock.Call {
+func (mr *MockIAMCredentialsAgentMockRecorder) OnPodAdmission(ctx, pod, serviceAccount interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnPodAdmission", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).OnPodAdmission), pod, serviceAccount)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnPodAdmission", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).OnPodAdmission), ctx, pod, serviceAccount)
 }
 
 // OnServiceAccountTermination mocks base method.
