@@ -70,26 +70,6 @@ func (a *SPIFFEAWSRolePodWebhook) handleOnce(ctx context.Context, pod corev1.Pod
 
 	roleArn := a.awsAgent.GenerateRoleARN(serviceAccount.Namespace, serviceAccount.Name)
 
-	updatedServiceAccount := serviceAccount.DeepCopy()
-
-	if updatedServiceAccount.Annotations == nil {
-		updatedServiceAccount.Annotations = make(map[string]string)
-	}
-
-	if updatedServiceAccount.Labels == nil {
-		updatedServiceAccount.Labels = make(map[string]string)
-	}
-
-	// we don't actually create the role here, so that the webhook returns quickly - a ServiceAccount reconciler takes care of it for us.
-	//updatedServiceAccount.Annotations[metadata.ServiceAccountAWSRoleARNAnnotation] = roleArn
-	//updatedServiceAccount.Labels[metadata.OtterizeServiceAccountLabel] = metadata.OtterizeServiceAccountHasPodsValue
-	//if !dryRun {
-	//	err = a.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
-	//	if err != nil {
-	//		return corev1.Pod{}, false, "", errors.Errorf("could not update service account: %w", err)
-	//	}
-	//}
-
 	// add annotation to trigger reinvocation for AWS pod reconciler
 	if pod.Annotations == nil {
 		pod.Annotations = make(map[string]string)
@@ -100,7 +80,7 @@ func (a *SPIFFEAWSRolePodWebhook) handleOnce(ctx context.Context, pod corev1.Pod
 		pod.Spec.Volumes = make([]corev1.Volume, 0)
 	}
 
-	_, role, profile, err := a.reconcileAWSRole(ctx, updatedServiceAccount)
+	_, role, profile, err := a.reconcileAWSRole(ctx, serviceAccount, dryRun)
 	if err != nil {
 		return corev1.Pod{}, false, "", errors.Wrap(err)
 	}
@@ -133,22 +113,19 @@ func (a *SPIFFEAWSRolePodWebhook) handleOnce(ctx context.Context, pod corev1.Pod
 		})
 	}
 
-	//         - name: spiffe
-	//          csi:
-	//            driver: spiffe.csi.cert-manager.io
-	//            readOnly: true
-	//            volumeAttributes:
-	//              aws.spiffe.csi.cert-manager.io/trust-profile: "arn:aws:rolesanywhere:eu-west-2:228615251467:profile/a37adb60-1972-4450-ae56-fba0947503f1"
-	//              aws.spiffe.csi.cert-manager.io/trust-anchor: "arn:aws:rolesanywhere:eu-west-2:228615251467:trust-anchor/783a334a-9244-4279-9fb3-cea38c65ce3f"
-	//              aws.spiffe.csi.cert-manager.io/role: "arn:aws:iam::228615251467:role/otterize-role"
-	//              aws.spiffe.csi.cert-manager.io/enable: "true"
-
 	controllerutil.AddFinalizer(&pod, metadata.AWSRoleFinalizer)
 	return pod, true, "pod and service account updated to create AWS role", nil
 }
 
-func (a *SPIFFEAWSRolePodWebhook) reconcileAWSRole(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updateAnnotation bool, role *awstypes.Role, profile *rolesanywhereTypes.ProfileDetail, err error) {
+func (a *SPIFFEAWSRolePodWebhook) reconcileAWSRole(ctx context.Context, serviceAccount corev1.ServiceAccount, dryRun bool) (updateAnnotation bool, role *awstypes.Role, profile *rolesanywhereTypes.ProfileDetail, err error) {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
+	if dryRun {
+		return false, &awstypes.Role{
+				Arn: lo.ToPtr("dry-run-role-arn"),
+			}, &rolesanywhereTypes.ProfileDetail{
+				ProfileArn: lo.ToPtr("dry-run-profile-arn"),
+			}, nil
+	}
 
 	if roleARN, ok := hasAWSAnnotation(serviceAccount); ok {
 		generatedRoleARN := a.awsAgent.GenerateRoleARN(serviceAccount.Namespace, serviceAccount.Name)
@@ -158,17 +135,23 @@ func (a *SPIFFEAWSRolePodWebhook) reconcileAWSRole(ctx context.Context, serviceA
 			return false, nil, nil, errors.Errorf("failed getting AWS role: %w", err)
 		}
 
-		if found {
+		foundProfile, profile, err := a.awsAgent.GetOtterizeProfile(ctx, serviceAccount.Namespace, serviceAccount.Name)
+		if err != nil {
+			return false, nil, nil, errors.Errorf("failed getting AWS profile: %w", err)
+		}
+
+		if found && foundProfile {
 			if generatedRoleARN != roleARN {
 				logger.WithField("arn", *role.Arn).Debug("ServiceAccount AWS role exists, but annotation is misconfigured, should be updated")
-				return true, role, nil, nil
+				return true, role, profile, nil
 			}
 			logger.WithField("arn", *role.Arn).Debug("ServiceAccount has matching AWS role")
-			//return false, role, nil, nil
+
+			return false, role, profile, nil
 		}
 	}
 
-	role, err = a.awsAgent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name)
+	role, err = a.awsAgent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, false /* FIXME */)
 	if err != nil {
 		return false, nil, nil, errors.Errorf("failed creating AWS role for service account: %w", err)
 	}
@@ -183,7 +166,7 @@ func (a *SPIFFEAWSRolePodWebhook) reconcileAWSRole(ctx context.Context, serviceA
 	return true, role, profile, nil
 }
 
-func hasAWSAnnotation(serviceAccount *corev1.ServiceAccount) (string, bool) {
+func hasAWSAnnotation(serviceAccount corev1.ServiceAccount) (string, bool) {
 	if serviceAccount.Annotations == nil {
 		return "", false
 	}

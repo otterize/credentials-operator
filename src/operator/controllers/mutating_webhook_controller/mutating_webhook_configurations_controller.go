@@ -17,6 +17,7 @@ limitations under the License.
 package mutatingwebhookconfiguration
 
 import (
+	"bytes"
 	"context"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/samber/lo"
@@ -63,7 +64,14 @@ func (r *MutatingWebhookConfigsReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Set the new CA bundle for the validating webhooks
+	// If all certs match, don't reconcile.
+	if lo.EveryBy(webhookConfig.Webhooks, func(item admissionregistrationv1.MutatingWebhook) bool {
+		return bytes.Equal(item.ClientConfig.CABundle, r.certPEM)
+	}) {
+		return ctrl.Result{}, nil
+	}
+
+	// Set the new CA bundle for the mutating webhooks
 	resourceCopy := webhookConfig.DeepCopy()
 	for i := range resourceCopy.Webhooks {
 		resourceCopy.Webhooks[i].ClientConfig.CABundle = r.certPEM

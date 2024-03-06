@@ -167,7 +167,7 @@ func main() {
 	trustAnchorArn = os.Getenv("OTTERIZE_TRUST_ANCHOR_ARN")
 	trustDomain := os.Getenv("OTTERIZE_TRUST_DOMAIN")
 
-	flag.BoolVar(&enableLeaderElection, "leader-elect", true,
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.Parse()
