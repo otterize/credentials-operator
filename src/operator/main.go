@@ -18,14 +18,14 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"github.com/bombsimon/logrusr/v3"
 	certmanager "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/google/uuid"
 	"github.com/otterize/credentials-operator/src/controllers/aws_iam/pods"
+	"github.com/otterize/credentials-operator/src/controllers/aws_iam/sa_pod_webhook"
 	"github.com/otterize/credentials-operator/src/controllers/aws_iam/serviceaccount"
-	sa_pod_webhook2 "github.com/otterize/credentials-operator/src/controllers/aws_iam/spiffe_pod_webhook"
+	"github.com/otterize/credentials-operator/src/controllers/aws_iam/spiffe_rolesanywhere_pod_webhook"
 	"github.com/otterize/credentials-operator/src/controllers/certificates/otterizecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certificates/spirecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certmanageradapter"
@@ -52,13 +52,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
-	"golang.org/x/exp/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/metadata"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"strings"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -103,76 +102,15 @@ func initSpireClient(ctx context.Context, spireServerAddr string) (spireclient.S
 	return serverClient, nil
 }
 
-const (
-	CertProviderSPIRE       CertProvider = "spire"
-	CertProviderCloud       CertProvider = "otterize-cloud"
-	CertProviderCertManager CertProvider = "cert-manager"
-	CertProviderNone        CertProvider = "none"
-)
-
-type CertProvider string
-
-func (cpf *CertProvider) getOptionalValues() []string {
-	return []string{string(CertProviderSPIRE), string(CertProviderCloud), string(CertProviderCertManager), string(CertProviderNone)}
-}
-
-func (cpf *CertProvider) GetPrintableOptionalValues() string {
-	return strings.Join(cpf.getOptionalValues(), ", ")
-}
-
-func (cpf *CertProvider) Set(v string) error {
-	if slices.Contains(cpf.getOptionalValues(), v) {
-		*cpf = CertProvider(v)
-		return nil
-	}
-	return fmt.Errorf("certificate-provider should be one of: %s", cpf.GetPrintableOptionalValues())
-}
-
-func (cpf *CertProvider) String() string {
-	return string(*cpf)
-}
-
 func main() {
 	errorreporter.Init("credentials-operator", version.Version(), viper.GetString(operatorconfig.TelemetryErrorsAPIKeyKey))
 	defer errorreporter.AutoNotify()
 
-	var metricsAddr string
-	var enableLeaderElection bool
-	var probeAddr string
-	var spireServerAddr string
-	certProvider := CertProviderNone
-	var certManagerIssuer string
-	var selfSignedCert bool
-	var certManagerUseClusterIssuer bool
-	var useCertManagerApprover bool
 	var secretsManager tls_pod.SecretsManager
 	var workloadRegistry tls_pod.WorkloadRegistry
-	var enableAWSServiceAccountManagement bool
-	var awsUseSoftDeleteStrategy bool
-	var debug bool
 	var userAndPassAcquirer poduserpassword.CloudUserAndPasswordAcquirer
-	var trustAnchorArn string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":7071", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":7072", "The address the probe endpoint binds to.")
-	flag.StringVar(&spireServerAddr, "spire-server-address", "spire-server.spire:8081", "SPIRE server API address.")
-	flag.Var(&certProvider, "certificate-provider", fmt.Sprintf("Certificate generation provider (%s)", certProvider.GetPrintableOptionalValues()))
-	flag.StringVar(&certManagerIssuer, "cert-manager-issuer", "ca-issuer", "Name of the Issuer to be used by cert-manager to sign certificates")
-	flag.BoolVar(&selfSignedCert, "self-signed-cert", true, "Whether to generate and update a self-signed cert for Webhooks")
-	flag.BoolVar(&certManagerUseClusterIssuer, "cert-manager-use-cluster-issuer", false, "Use ClusterIssuer instead of a (namespace bound) Issuer")
-	flag.BoolVar(&useCertManagerApprover, "cert-manager-approve-requests", false, "Make credentials-operator approve its own CertificateRequests")
-	flag.BoolVar(&enableAWSServiceAccountManagement, "enable-aws-serviceaccount-management", false, "Create and bind ServiceAccounts to AWS IAM roles")
-	flag.BoolVar(&awsUseSoftDeleteStrategy, "aws-use-soft-delete", false, "Mark AWS roles and policies as deleted instead of actually deleting them")
-	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
-	//flag.StringVar(&trustAnchorArn, "trust-anchor-arn", "", "ARN of the trust anchor to be used for AWS RolesAnywhere")
-	trustAnchorArn = os.Getenv("OTTERIZE_TRUST_ANCHOR_ARN")
-	trustDomain := os.Getenv("OTTERIZE_TRUST_DOMAIN")
 
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
-	flag.Parse()
-
-	if debug {
+	if viper.GetBool(operatorconfig.DebugKey) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 	logrus.SetFormatter(&logrus.JSONFormatter{
@@ -183,30 +121,30 @@ func main() {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
+		MetricsBindAddress:     viper.GetString(operatorconfig.MetricsAddrKey),
 		Port:                   9443,
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
+		HealthProbeBindAddress: viper.GetString(operatorconfig.ProbeAddrKey),
+		LeaderElection:         viper.GetBool(operatorconfig.EnableLeaderElectionKey),
 		LeaderElectionID:       "credentials-operator.otterize.com",
 	})
 	if err != nil {
 		logrus.WithError(err).Panic("unable to start manager")
 	}
 
-	ctx := ctrl.SetupSignalHandler()
+	signalHandlerCtx := ctrl.SetupSignalHandler()
 	podNamespace := os.Getenv("POD_NAMESPACE")
 	if podNamespace == "" {
 		logrus.Panic("POD_NAMESPACE environment variable is required")
 	}
 
-	kubeSystemUID := getClusterContextId(ctx, mgr)
+	kubeSystemUID := getClusterContextId(signalHandlerCtx, mgr)
 	componentinfo.SetGlobalContextId(telemetrysender.Anonymize(kubeSystemUID))
 	componentinfo.SetGlobalVersion(version.Version())
 
 	serviceIdResolver := serviceidresolver.NewResolver(mgr.GetClient())
 	eventRecorder := mgr.GetEventRecorderFor("credentials-operator")
 
-	otterizeCloudClient, clientInitializedWithCredentials, err := otterizeclient.NewCloudClient(ctx)
+	otterizeCloudClient, clientInitializedWithCredentials, err := otterizeclient.NewCloudClient(signalHandlerCtx)
 	if err != nil {
 		logrus.WithError(err).Panic("failed to initialize cloud client")
 	}
@@ -216,15 +154,15 @@ func main() {
 		userAndPassAcquirer = otterizeCloudClient
 	}
 
-	if certProvider == CertProviderCloud {
+	if viper.GetString(operatorconfig.CertProviderKey) == operatorconfig.CertProviderCloud {
 		if !clientInitializedWithCredentials {
 			logrus.WithError(err).Panic("using cloud, but cloud credentials not specified")
 		}
 		workloadRegistry = otterizeCloudClient
 		otterizeCertManager := otterizecertgen.NewOtterizeCertificateGenerator(otterizeCloudClient)
 		secretsManager = secrets.NewDirectSecretsManager(mgr.GetClient(), serviceIdResolver, eventRecorder, otterizeCertManager)
-	} else if certProvider == CertProviderSPIRE {
-		spireClient, err := initSpireClient(ctx, spireServerAddr)
+	} else if viper.GetString(operatorconfig.CertProviderKey) == operatorconfig.CertProviderSPIRE {
+		spireClient, err := initSpireClient(signalHandlerCtx, viper.GetString(operatorconfig.SpireServerAddrKey))
 		if err != nil {
 			logrus.WithError(err).Panic("failed to connect to spire server")
 		}
@@ -234,13 +172,22 @@ func main() {
 		certGenerator := spirecertgen.NewSpireCertificateDataGenerator(bundlesStore, svidsStore)
 		secretsManager = secrets.NewDirectSecretsManager(mgr.GetClient(), serviceIdResolver, eventRecorder, certGenerator)
 		workloadRegistry = entries.NewSpireRegistry(spireClient)
-	} else if certProvider == CertProviderCertManager {
-		secretsManager, workloadRegistry = certmanageradapter.NewCertManagerSecretsManager(mgr.GetClient(), serviceIdResolver,
-			eventRecorder, certManagerIssuer, certManagerUseClusterIssuer)
-	} else if certProvider == CertProviderNone {
+	} else if viper.GetString(operatorconfig.CertProviderKey) == operatorconfig.CertProviderCertManager {
+		cmSecretsManager, cmWorkloadRegistry := certmanageradapter.NewCertManagerSecretsManager(mgr.GetClient(), serviceIdResolver,
+			eventRecorder, viper.GetString(operatorconfig.CertManagerIssuerKey), viper.GetBool(operatorconfig.CertManagerUseClustierIssuerKey))
+
+		if viper.GetBool(operatorconfig.UseCertManagerApproverKey) {
+			if err = cmSecretsManager.RegisterCertificateApprover(signalHandlerCtx, mgr); err != nil {
+				logrus.WithField("controller", "CertificateRequest").WithError(err).Panic("unable to create controller")
+			}
+		}
+
+		secretsManager = cmSecretsManager
+		workloadRegistry = cmWorkloadRegistry
+	} else if viper.GetString(operatorconfig.CertProviderKey) == operatorconfig.CertProviderNone {
 		// intentionally do nothing
 	} else {
-		logrus.WithField("provider", certProvider).Panic("unexpected value for provider")
+		logrus.WithField("provider", viper.GetString(operatorconfig.CertProviderKey)).Panic("unexpected value for provider")
 	}
 	client := mgr.GetClient()
 
@@ -249,17 +196,23 @@ func main() {
 		logrus.WithField("controller", "PodAWSRoleCleanup").WithError(err).Panic("unable to create controller")
 	}
 
-	if enableAWSServiceAccountManagement {
-		awsAgent, err := awsagent.NewAWSAgent(ctx, trustAnchorArn, trustDomain)
-		if err != nil {
-			logrus.WithError(err).Panic("failed to initialize AWS agent")
+	if viper.GetBool(operatorconfig.EnableAWSServiceAccountManagementKey) {
+		awsOptions := make([]awsagent.Option, 0)
+		if viper.GetBool(operatorconfig.EnableAWSRolesAnywhereKey) {
+			trustAnchorArn := viper.GetString(operatorconfig.AWSRolesAnywhereTrustAnchorARNKey)
+			trustDomain := viper.GetString(operatorconfig.AWSRolesAnywhereSPIFFETrustDomainKey)
+			clusterName := viper.GetString(operatorconfig.AWSRolesAnywhereClusterName)
+
+			awsOptions = append(awsOptions, awsagent.WithRolesAnywhere(trustAnchorArn, trustDomain, clusterName))
 		}
-		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, awsAgent, awsUseSoftDeleteStrategy)
+		awsAgent, err := awsagent.NewAWSAgent(signalHandlerCtx, awsOptions...)
+		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, awsAgent, viper.GetBool(operatorconfig.AWSUseSoftDeleteStrategyKey))
 		if err = serviceAccountReconciler.SetupWithManager(mgr); err != nil {
 			logrus.WithField("controller", "ServiceAccount").WithError(err).Panic("unable to create controller")
 		}
 
-		if selfSignedCert {
+		if viper.GetBool(operatorconfig.SelfSignedCertKey) {
+			var webhookHandler admission.Handler = sa_pod_webhook.NewServiceAccountAnnotatingPodWebhook(mgr, awsAgent)
 			logrus.Infoln("Creating self signing certs")
 			certBundle, err :=
 				operatorwebhooks.GenerateSelfSignedCertificate("credentials-operator-webhook-service", podNamespace)
@@ -276,26 +229,24 @@ func main() {
 				logrus.WithField("controller", "MutatingWebhookConfigs").WithError(err).Panic("unable to create controller")
 			}
 
-			podAnnotatorWebhook := sa_pod_webhook2.NewSPIFFEAWSRolePodWebhook(mgr, awsAgent, trustAnchorArn)
-			mgr.GetWebhookServer().Register("/mutate-v1-pod", &webhook.Admission{Handler: podAnnotatorWebhook})
+			if viper.GetBool(operatorconfig.EnableAWSRolesAnywhereKey) {
+				webhookHandler = spiffe_rolesanywhere_pod_webhook.NewSPIFFEAWSRolePodWebhook(mgr, awsAgent, viper.GetString(operatorconfig.AWSRolesAnywhereTrustAnchorARNKey))
+			}
+
+			mgr.GetWebhookServer().Register("/mutate-v1-pod", &webhook.Admission{Handler: webhookHandler})
+
 		}
 
 	}
 
-	if certProvider != CertProviderNone {
+	if viper.GetString(operatorconfig.CertProviderKey) != operatorconfig.CertProviderNone {
 		certPodReconciler := tls_pod.NewCertificatePodReconciler(client, mgr.GetScheme(), workloadRegistry, secretsManager,
-			serviceIdResolver, eventRecorder, certProvider == CertProviderCloud)
+			serviceIdResolver, eventRecorder, viper.GetString(operatorconfig.CertProviderKey) == operatorconfig.CertProviderCloud)
 
 		if err = certPodReconciler.SetupWithManager(mgr); err != nil {
 			logrus.WithField("controller", "certPod").WithError(err).Panic("unable to create controller")
 		}
-		go certPodReconciler.MaintenanceLoop(ctx)
-	}
-
-	if certProvider == CertProviderCertManager && useCertManagerApprover {
-		if err = secretsManager.(*certmanageradapter.CertManagerSecretsManager).RegisterCertificateApprover(ctx, mgr); err != nil {
-			logrus.WithField("controller", "CertificateRequest").WithError(err).Panic("unable to create controller")
-		}
+		go certPodReconciler.MaintenanceLoop(signalHandlerCtx)
 	}
 
 	if userAndPassAcquirer != nil {
@@ -315,10 +266,10 @@ func main() {
 	}
 
 	telemetrysender.SendCredentialsOperator(telemetriesgql.EventTypeStarted, 1)
-	telemetrysender.CredentialsOperatorRunActiveReporter(ctx)
+	telemetrysender.CredentialsOperatorRunActiveReporter(signalHandlerCtx)
 	logrus.Info("starting manager")
 
-	if err := mgr.Start(ctx); err != nil {
+	if err := mgr.Start(signalHandlerCtx); err != nil {
 		logrus.WithError(err).Panic("problem running manager")
 	}
 }
@@ -335,7 +286,7 @@ func getClusterContextId(ctx context.Context, mgr ctrl.Manager) string {
 	kubeSystemUID := ""
 	kubeSystemNs, err := metadataClient.Resource(mapping.Resource).Get(ctx, "kube-system", metav1.GetOptions{})
 	if err != nil || kubeSystemNs == nil {
-		logrus.Warningf("failed getting kubesystem UID: %s", err)
+		logrus.WithError(err).Warningf("failed getting kubesystem UID: %s", err)
 		return fmt.Sprintf("rand-%s", uuid.New().String())
 	}
 	kubeSystemUID = string(kubeSystemNs.UID)

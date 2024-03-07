@@ -13,10 +13,11 @@ require (
 	github.com/bombsimon/logrusr/v3 v3.0.0
 	github.com/cert-manager/cert-manager v1.12.3
 	github.com/google/uuid v1.6.0
-	github.com/otterize/intents-operator/src v0.0.0-20240306140704-c985b4cdb827
+	github.com/otterize/intents-operator/src v0.0.0-20240307130542-3fdb6399161e
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.1
 	github.com/samber/lo v1.33.0
 	github.com/sirupsen/logrus v1.9.0
+	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.13.0
 	github.com/spiffe/go-spiffe/v2 v2.1.1
 	github.com/spiffe/spire v1.4.3
@@ -33,7 +34,6 @@ require (
 )
 
 require (
-	github.com/99designs/gqlgen v0.17.44 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20220621081337-cb9428e4ac1e // indirect
 	github.com/DataDog/datadog-go v3.2.0+incompatible // indirect
 	github.com/Microsoft/go-winio v0.6.0 // indirect
@@ -62,7 +62,6 @@ require (
 	github.com/bugsnag/bugsnag-go/v2 v2.2.0 // indirect
 	github.com/bugsnag/panicwrap v1.3.4 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/eapache/go-resiliency v1.2.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21 // indirect
@@ -121,21 +120,16 @@ require (
 	github.com/prometheus/common v0.45.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
-	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/sosodev/duration v1.2.0 // indirect
 	github.com/spf13/afero v1.9.2 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/cobra v1.7.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.4.1 // indirect
 	github.com/twmb/murmur3 v1.1.6 // indirect
 	github.com/uber-go/tally/v4 v4.1.3 // indirect
-	github.com/urfave/cli/v2 v2.27.1 // indirect
 	github.com/vektah/gqlparser v1.3.1 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.11 // indirect
 	github.com/vishalkuo/bimap v0.0.0-20220726225509-e0b4f20de28b // indirect
-	github.com/xrash/smetrics v0.0.0-20231213231151-1d8dd44e695e // indirect
 	github.com/zeebo/errs v1.3.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect

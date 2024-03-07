@@ -1,8 +1,9 @@
-package sa_pod_webhook
+package spiffe_rolesanywhere_pod_webhook
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	rolesanywhereTypes "github.com/aws/aws-sdk-go-v2/service/rolesanywhere/types"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
@@ -83,6 +84,39 @@ func (a *SPIFFEAWSRolePodWebhook) handleOnce(ctx context.Context, pod corev1.Pod
 	_, role, profile, err := a.reconcileAWSRole(ctx, serviceAccount, dryRun)
 	if err != nil {
 		return corev1.Pod{}, false, "", errors.Wrap(err)
+	}
+
+	updatedServiceAccount := serviceAccount.DeepCopy()
+
+	if updatedServiceAccount.Annotations == nil {
+		updatedServiceAccount.Annotations = make(map[string]string)
+	}
+
+	if updatedServiceAccount.Labels == nil {
+		updatedServiceAccount.Labels = make(map[string]string)
+	}
+
+	// we don't actually create the role here, so that the webhook returns quickly - a ServiceAccount reconciler takes care of it for us.
+	updatedServiceAccount.Annotations[metadata.ServiceAccountAWSRoleARNAnnotation] = roleArn
+	updatedServiceAccount.Labels[metadata.OtterizeServiceAccountLabel] = metadata.OtterizeServiceAccountHasPodsValue
+
+	podUseSoftDeleteLabelValue, podUseSoftDeleteLabelExists := pod.Labels[metadata.OtterizeAWSUseSoftDeleteKey]
+	shouldMarkForSoftDelete := podUseSoftDeleteLabelExists && podUseSoftDeleteLabelValue == metadata.OtterizeAWSUseSoftDeleteValue
+	logrus.Debugf("pod %s, namespace %s, should mark for soft delete: %v, labels: %v", pod.Name, pod.Namespace, shouldMarkForSoftDelete, pod.Labels)
+	if shouldMarkForSoftDelete {
+		logrus.Debugf("Add soft-delete label to service account %s, namespace %s", updatedServiceAccount.Name, updatedServiceAccount.Namespace)
+		updatedServiceAccount.Labels[metadata.OtterizeAWSUseSoftDeleteKey] = metadata.OtterizeAWSUseSoftDeleteValue
+	} else {
+		delete(updatedServiceAccount.Labels, metadata.OtterizeAWSUseSoftDeleteKey)
+	}
+
+	controllerutil.AddFinalizer(updatedServiceAccount, metadata.AWSRoleFinalizer)
+
+	if !dryRun {
+		err = a.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
+		if err != nil {
+			return corev1.Pod{}, false, "", fmt.Errorf("could not update service account: %w", err)
+		}
 	}
 
 	pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{

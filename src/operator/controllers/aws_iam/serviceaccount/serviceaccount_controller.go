@@ -7,8 +7,10 @@ import (
 	rolesanywhereTypes "github.com/aws/aws-sdk-go-v2/service/rolesanywhere/types"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	"github.com/otterize/intents-operator/src/shared/errors"
+	"github.com/otterize/intents-operator/src/shared/operatorconfig"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -23,6 +25,7 @@ type AWSRolePolicyManager interface {
 	GetOtterizeRole(ctx context.Context, namespaceName, accountName string) (bool, *types.Role, error)
 	CreateOtterizeIAMRole(ctx context.Context, namespace string, name string, useSoftDeleteStrategy bool) (*types.Role, error)
 	CreateRolesAnywhereProfileForRole(ctx context.Context, role types.Role, namespace string, serviceAccountName string) (*rolesanywhereTypes.ProfileDetail, error)
+	DeleteRolesAnywhereProfileForServiceAccount(ctx context.Context, namespace string, serviceAccountName string) (bool, error)
 }
 
 type ServiceAccountReconciler struct {
@@ -73,6 +76,19 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, fmt.Errorf("failed to remove service account: %w", err)
 		}
 
+		if viper.GetBool(operatorconfig.EnableAWSRolesAnywhereKey) {
+			deleted, err := r.awsAgent.DeleteRolesAnywhereProfileForServiceAccount(ctx, req.Namespace, req.Name)
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to remove rolesanywhere profile for service account: %w", err)
+			}
+
+			if !deleted {
+				logrus.Debugf("rolesanywhere profile for service account %s/%s did not exist when deletion was attempted", req.Namespace, req.Name)
+			}
+
+			logrus.WithFields(logrus.Fields{"serviceAccount": req.Name, "namespace": req.Namespace}).Debug("deleted rolesanywhere profile for service account")
+		}
+
 		if serviceAccount.DeletionTimestamp != nil {
 			updatedServiceAccount := serviceAccount.DeepCopy()
 			if controllerutil.RemoveFinalizer(updatedServiceAccount, metadata.AWSRoleFinalizer) {
@@ -99,7 +115,13 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, errors.Wrap(err)
 		}
 	}
-	shouldUpdateAnnotation, role, _, err := r.reconcileAWSRole(ctx, &serviceAccount)
+
+	if viper.GetBool(operatorconfig.EnableAWSRolesAnywhereKey) {
+		// In RolesAnywhere mode, the SPIFFE pod webhook, and not the reconciler, handles the role creation
+		return ctrl.Result{}, nil
+	}
+
+	shouldUpdateAnnotation, role, err := r.reconcileAWSRole(ctx, &serviceAccount)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err)
 	}
@@ -127,26 +149,21 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // - modified: if AWS state was modified (and the ServiceAccount should be re-queued)
 // - role: the AWS IAM role
 // - err
-func (r *ServiceAccountReconciler) reconcileAWSRole(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updateAnnotation bool, role *types.Role, profile *rolesanywhereTypes.ProfileDetail, err error) {
+func (r *ServiceAccountReconciler) reconcileAWSRole(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updateAnnotation bool, role *types.Role, err error) {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
 	roleARN, ok := hasAWSAnnotation(serviceAccount)
 
 	// calling create in any case because this way we validate it is not soft-deleted and it is configured with the correct soft-delete strategy
 	role, err = r.awsAgent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, r.shouldUseSoftDeleteStrategy(serviceAccount))
 	if err != nil {
-		return false, nil, nil, fmt.Errorf("failed creating AWS role for service account: %w", err)
+		return false, nil, fmt.Errorf("failed creating AWS role for service account: %w", err)
 	}
 	logger.WithField("arn", *role.Arn).Info("created AWS role for ServiceAccount")
 
 	// update annotation if it doesn't exist or if it is misconfigured
 	shouldUpdate := !ok || roleARN != *role.Arn
-	profile, err = r.awsAgent.CreateRolesAnywhereProfileForRole(ctx, *role, serviceAccount.Namespace, serviceAccount.Name)
-	if err != nil {
-		return false, nil, nil, fmt.Errorf("failed creating rolesanywhere profile for role: %w", err)
-	}
-	logger.WithField("arn", *profile.ProfileId).Info("created AWS role for ServiceAccount")
 
-	return shouldUpdate, role, profile, nil
+	return shouldUpdate, role, nil
 }
 
 func (r *ServiceAccountReconciler) shouldUseSoftDeleteStrategy(serviceAccount *corev1.ServiceAccount) bool {
