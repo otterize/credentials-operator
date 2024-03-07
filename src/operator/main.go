@@ -204,6 +204,10 @@ func main() {
 			clusterName := viper.GetString(operatorconfig.AWSRolesAnywhereClusterName)
 
 			awsOptions = append(awsOptions, awsagent.WithRolesAnywhere(trustAnchorArn, trustDomain, clusterName))
+
+			if viper.GetBool(operatorconfig.AWSUseSoftDeleteStrategyKey) {
+				awsOptions = append(awsOptions, awsagent.WithSoftDeleteStrategy())
+			}
 		}
 		awsAgent, err := awsagent.NewAWSAgent(signalHandlerCtx, awsOptions...)
 		serviceAccountReconciler := serviceaccount.NewServiceAccountReconciler(client, awsAgent, viper.GetBool(operatorconfig.AWSUseSoftDeleteStrategyKey))
