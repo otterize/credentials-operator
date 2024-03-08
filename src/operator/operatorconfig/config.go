@@ -11,9 +11,9 @@ import (
 const (
 	TelemetryErrorsAPIKeyKey                 = "telemetry-errors-api-key"
 	TelemetryErrorsAPIKeyDefault             = "20b1b74678347375fedfdba65171acb2"
-	AWSRolesAnywhereTrustAnchorARNKey        = "trust-anchor-arn"
-	AWSRolesAnywhereSPIFFETrustDomainKey     = "spiffe-trust-domain"
-	AWSRolesAnywhereClusterName              = "roles-anywhere-cluster-name"
+	AWSRolesAnywhereTrustAnchorARNKey        = "rolesanywhere-trust-anchor-arn"
+	AWSRolesAnywhereSPIFFETrustDomainKey     = "rolesanywhere-spiffe-trust-domain"
+	AWSRolesAnywhereClusterName              = "rolesanywhere-cluster-name"
 	EnableAWSServiceAccountManagementKey     = "enable-aws-serviceaccount-management"
 	EnableAWSServiceAccountManagementDefault = false
 	EnableAWSRolesAnywhereKey                = "enable-aws-iam-rolesanywhere"

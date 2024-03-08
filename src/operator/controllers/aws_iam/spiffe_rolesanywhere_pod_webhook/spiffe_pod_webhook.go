@@ -96,8 +96,6 @@ func (a *SPIFFEAWSRolePodWebhook) handleOnce(ctx context.Context, pod corev1.Pod
 		updatedServiceAccount.Labels = make(map[string]string)
 	}
 
-	// we don't actually create the role here, so that the webhook returns quickly - a ServiceAccount reconciler takes care of it for us.
-	updatedServiceAccount.Annotations[metadata.ServiceAccountAWSRoleARNAnnotation] = roleArn
 	updatedServiceAccount.Labels[metadata.OtterizeServiceAccountLabel] = metadata.OtterizeServiceAccountHasPodsValue
 
 	podUseSoftDeleteLabelValue, podUseSoftDeleteLabelExists := pod.Labels[metadata.OtterizeAWSUseSoftDeleteKey]
@@ -195,7 +193,7 @@ func (a *SPIFFEAWSRolePodWebhook) reconcileAWSRole(ctx context.Context, serviceA
 	if err != nil {
 		return false, nil, nil, errors.Errorf("failed creating rolesanywhere profile for role: %w", err)
 	}
-	logger.WithField("arn", *profile.ProfileId).Info("created AWS role for ServiceAccount")
+	logger.WithField("arn", *profile.ProfileId).Info("created AWS profile for ServiceAccount")
 
 	return true, role, profile, nil
 }

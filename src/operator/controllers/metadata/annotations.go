@@ -14,6 +14,9 @@ const (
 	// and IAM roles
 	ServiceAccountAWSRoleARNAnnotation = "eks.amazonaws.com/role-arn"
 
+	// IAMRoleFinalizer indicates that cleanup on IAM roles is needed upon termination.
+	IAMRoleFinalizer = "credentials-operator.otterize.com/iam-role"
+
 	// AWSRoleFinalizer indicates that cleanup on AWS is needed upon termination.
 	AWSRoleFinalizer = "credentials-operator.otterize.com/aws-role"
 
