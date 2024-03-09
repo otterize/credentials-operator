@@ -1,7 +1,6 @@
 package operatorconfig
 
 import (
-	"fmt"
 	"github.com/otterize/intents-operator/src/shared"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -74,7 +73,7 @@ func init() {
 
 	pflag.String(ProbeAddrKey, ProbeAddrDefault, "The address the probe endpoint binds to.")
 	pflag.String(SpireServerAddrKey, SpireServerAddrDefault, "SPIRE server API address.")
-	pflag.String(CertProviderKey, CertProviderDefault, fmt.Sprintf("Certificate generation provider"))
+	pflag.String(CertProviderKey, CertProviderDefault, "Certificate generation provider")
 	pflag.String(CertManagerIssuerKey, CertManagerIssuerDefault, "Name of the Issuer to be used by cert-manager to sign certificates")
 	pflag.Bool(SelfSignedCertKey, SelfSignedCertDefault, "Whether to generate and update a self-signed cert for Webhooks")
 	pflag.Bool(CertManagerUseClustierIssuerKey, CertManagerUseClusterIssuerDefault, "Use ClusterIssuer instead of a (namespace bound) Issuer")
