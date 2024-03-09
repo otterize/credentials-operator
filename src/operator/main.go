@@ -23,19 +23,16 @@ import (
 	"github.com/bombsimon/logrusr/v3"
 	certmanager "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/google/uuid"
-	sa_pod_webhook_old "github.com/otterize/credentials-operator/src/controllers/aws_iam/sa_pod_webhook"
+	sa_pod_webhook_aws "github.com/otterize/credentials-operator/src/controllers/aws_iam/sa_pod_webhook"
 	"github.com/otterize/credentials-operator/src/controllers/aws_iam/serviceaccount_old"
-	"github.com/otterize/credentials-operator/src/controllers/iam/pods"
-	"github.com/otterize/intents-operator/src/shared/azureagent"
-
 	"github.com/otterize/credentials-operator/src/controllers/aws_iam/spiffe_rolesanywhere_pod_webhook"
 	"github.com/otterize/credentials-operator/src/controllers/certificates/otterizecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certificates/spirecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certmanageradapter"
 	"github.com/otterize/credentials-operator/src/controllers/iam"
+	"github.com/otterize/credentials-operator/src/controllers/iam/pods"
 	"github.com/otterize/credentials-operator/src/controllers/iam/serviceaccounts"
-	"github.com/otterize/credentials-operator/src/controllers/iam/webhooks"
-	mutatingwebhookconfiguration "github.com/otterize/credentials-operator/src/controllers/mutating_webhook_controller"
+	sa_pod_webhook_generic "github.com/otterize/credentials-operator/src/controllers/iam/webhooks"
 	"github.com/otterize/credentials-operator/src/controllers/otterizeclient"
 	"github.com/otterize/credentials-operator/src/controllers/poduserpassword"
 	"github.com/otterize/credentials-operator/src/controllers/secrets"
@@ -45,8 +42,10 @@ import (
 	"github.com/otterize/credentials-operator/src/controllers/spireclient/svids"
 	"github.com/otterize/credentials-operator/src/controllers/tls_pod"
 	"github.com/otterize/credentials-operator/src/operatorconfig"
+	mutatingwebhookconfiguration "github.com/otterize/intents-operator/src/operator/controllers/mutating_webhook_controller"
 	operatorwebhooks "github.com/otterize/intents-operator/src/operator/webhooks"
 	"github.com/otterize/intents-operator/src/shared/awsagent"
+	"github.com/otterize/intents-operator/src/shared/azureagent"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/filters"
 	"github.com/otterize/intents-operator/src/shared/gcpagent"
@@ -63,6 +62,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/metadata"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"time"
@@ -142,13 +142,14 @@ func main() {
 	ctrl.SetLogger(logrusr.New(logrus.StandardLogger()))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     viper.GetString(operatorconfig.MetricsAddrKey),
-		Port:                   9443,
+		Scheme: scheme,
+		Metrics: server.Options{
+			BindAddress: viper.GetString(operatorconfig.MetricsAddrKey),
+		},
+		WebhookServer:          webhook.NewServer(webhook.Options{Port: 9443, CertDir: operatorwebhooks.CertDirPath}),
 		HealthProbeBindAddress: viper.GetString(operatorconfig.ProbeAddrKey),
 		LeaderElection:         viper.GetBool(operatorconfig.EnableLeaderElectionKey),
 		LeaderElectionID:       "credentials-operator.otterize.com",
-		CertDir:                operatorwebhooks.CertDirPath,
 	})
 	if err != nil {
 		logrus.WithError(err).Panic("unable to start manager")
@@ -277,7 +278,7 @@ func main() {
 	}
 
 	if viper.GetBool(operatorconfig.SelfSignedCertKey) {
-		var webhookHandler admission.Handler = sa_pod_webhook.NewServiceAccountAnnotatingPodWebhook(mgr, iamAgents)
+		var webhookHandler admission.Handler = sa_pod_webhook_generic.NewServiceAccountAnnotatingPodWebhook(mgr, iamAgents)
 		logrus.Infoln("Creating self signing certs")
 		certBundle, err :=
 			operatorwebhooks.GenerateSelfSignedCertificate("credentials-operator-webhook-service", podNamespace)
@@ -295,7 +296,7 @@ func main() {
 		}
 
 		if viper.GetBool(operatorconfig.EnableAWSServiceAccountManagementKey) {
-			webhookHandler = sa_pod_webhook_old.NewServiceAccountAnnotatingPodWebhook(mgr, awsAgent)
+			webhookHandler = sa_pod_webhook_aws.NewServiceAccountAnnotatingPodWebhook(mgr, awsAgent)
 		}
 
 		if viper.GetBool(operatorconfig.EnableAWSRolesAnywhereKey) {

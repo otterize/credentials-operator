@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 ARG TARGETOS
 ARG TARGETARCH
-#RUN go test -v ./...
+RUN go test -v ./...
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -o manager .
 
 # add version file
@@ -23,7 +23,7 @@ RUN echo -n $VERSION > /version
 FROM gcr.io/distroless/static:debug
 WORKDIR /
 COPY --from=builder /workspace/manager .
-#USER 65532:65532
+USER 65532:65532
 COPY --from=builder /version .
 
 ENTRYPOINT ["/manager"]
