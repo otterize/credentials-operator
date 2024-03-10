@@ -290,6 +290,7 @@ func main() {
 			logrus.WithError(err).Panic("failed writing certs to file system")
 		}
 
+		//+kubebuilder:rbac:groups="admissionregistration.k8s.io",resources=mutatingwebhookconfigurations,verbs=get;update;patch;list;watch
 		reconciler := mutatingwebhookconfiguration.NewMutatingWebhookConfigsReconciler(client, mgr.GetScheme(), certBundle.CertPem, filters.CredentialsOperatorLabelPredicate())
 		if err = reconciler.SetupWithManager(mgr); err != nil {
 			logrus.WithField("controller", "MutatingWebhookConfigs").WithError(err).Panic("unable to create controller")
