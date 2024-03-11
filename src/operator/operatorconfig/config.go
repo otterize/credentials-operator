@@ -61,6 +61,8 @@ const (
 
 func init() {
 	viper.SetDefault(EnableAWSServiceAccountManagementKey, EnableAWSServiceAccountManagementDefault)
+	viper.SetDefault(EnableGCPServiceAccountManagementKey, EnableGCPServiceAccountManagementDefault)
+	viper.SetDefault(EnableAzureServiceAccountManagementKey, EnableAzureServiceAccountManagementDefault)
 	viper.SetDefault(EnableAWSRolesAnywhereKey, EnableAWSRolesAnywhereDefault)
 	viper.SetDefault(TelemetryErrorsAPIKeyKey, TelemetryErrorsAPIKeyDefault)
 	viper.SetDefault(MetricsAddrKey, MetricsAddrDefault)
