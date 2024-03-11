@@ -22,6 +22,8 @@ type ServiceAccountReconciler struct {
 }
 
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=iam.cnrm.cloud.google.com,resources=iamserviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=iam.cnrm.cloud.google.com,resources=iamserviceaccountkeys,verbs=get;list;watch;create;update;patch;delete
 
 func NewServiceAccountReconciler(client client.Client, agents []iam.IAMCredentialsAgent) *ServiceAccountReconciler {
 	return &ServiceAccountReconciler{
