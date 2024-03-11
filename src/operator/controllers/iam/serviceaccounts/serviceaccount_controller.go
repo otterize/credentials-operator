@@ -21,6 +21,8 @@ type ServiceAccountReconciler struct {
 	agents []iam.IAMCredentialsAgent
 }
 
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;update;patch
+
 func NewServiceAccountReconciler(client client.Client, agents []iam.IAMCredentialsAgent) *ServiceAccountReconciler {
 	return &ServiceAccountReconciler{
 		Client: client,
