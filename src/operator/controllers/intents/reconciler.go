@@ -2,20 +2,16 @@ package intents
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"github.com/aidarkhanov/nanoid"
 	"github.com/amit7itz/goset"
 	"github.com/jackc/pgx/v5"
-	"github.com/otterize/credentials-operator/src/controllers/poduserpassword"
+	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
 	"github.com/otterize/intents-operator/src/operator/databaseconfigurator"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/crypto/pbkdf2"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,9 +24,14 @@ import (
 )
 
 const (
-	PGCreateUserStatement databaseconfigurator.SQLSprintfStatement = "CREATE USER %s WITH PASSWORD %s"
-	PGDefaultDatabase
-	OtterizeClusterUIDResourceName = "otterize-cluster-uid"
+	PGCreateUserStatement          databaseconfigurator.SQLSprintfStatement = "CREATE USER %s WITH PASSWORD %s"
+	OtterizeClusterUIDResourceName                                          = "otterize-cluster-uid"
+)
+
+const (
+	ReasonErrorFetchingPostgresServerConfig = "ErrorFetchingPostgresServerConfig"
+	ReasonFailedReadingWorkloadPassword     = "FailedReadingWorkloadPassword"
+	ReasonFailedCreatingDatabaseUser        = "FailedCreatingDatabaseUser"
 )
 
 type Reconciler struct {
@@ -74,10 +75,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	for _, databaseName := range dbNames {
 		pgServerConf := otterizev1alpha3.PostgreSQLServerConfig{}
+		// TODO: Need to list from the entire cluster & match the databaseName. CRD webhook should enforce cluster-wide name uniqueness
 		err := r.client.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: databaseName}, &pgServerConf)
 		if err != nil {
 			r.recorder.Eventf(&intents, v1.EventTypeWarning,
-				"Failed validating user credentials for %s with error:", intents.GetServiceName(), err.Error())
+				ReasonErrorFetchingPostgresServerConfig,
+				"Error trying to fetch '%s' PostgresServerConf for client '%s'. Error: %s",
+				intents.GetServiceName(), databaseName, err.Error())
+
 			return ctrl.Result{}, errors.Wrap(err)
 		}
 
@@ -103,26 +108,37 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 
 		if !exists {
+			password, err := r.fetchWorkloadPassword(ctx, intents)
+			if err != nil {
+				r.recorder.Eventf(&intents, v1.EventTypeWarning,
+					ReasonFailedReadingWorkloadPassword,
+					"Failed reading client %s password. Error: %s", intents.GetServiceName(), err.Error())
+				return ctrl.Result{}, errors.Wrap(err)
+			}
+
 			logrus.WithField("username", pgUsername).Info(
 				"Username does not exist in database %s, creating it", databaseName)
-			r.createPostgresUserForWorkload(ctx, pgUsername, pgConfigurator)
 
+			err = r.createPostgresUserForWorkload(ctx, pgConfigurator, pgUsername, password)
+			if err != nil {
+				r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonFailedCreatingDatabaseUser,
+					"Failed creating database user. Error: %s", err.Error())
+				return ctrl.Result{}, errors.Wrap(err)
+			}
+
+			logrus.Info("User created successfully")
 		}
-
 	}
 	return ctrl.Result{}, nil
 }
 
 func (r *Reconciler) createPostgresUserForWorkload(
 	ctx context.Context,
+	pgConfigurator *databaseconfigurator.PostgresConfigurator,
 	pgUsername string,
-	pgConfigurator *databaseconfigurator.PostgresConfigurator) error {
+	password string) error {
 
 	batch := pgx.Batch{}
-	password, err := createServicePassword()
-	if err != nil {
-		return errors.Wrap(err)
-	}
 	stmt, err := PGCreateUserStatement.PrepareSanitized(pgx.Identifier{pgUsername}, databaseconfigurator.NonUserInputString(password))
 	if err != nil {
 		return errors.Wrap(err)
@@ -172,18 +188,26 @@ func (r *Reconciler) getClusterUID(ctx context.Context) (string, error) {
 	return clusterUID, nil
 }
 
-func createServicePassword() (string, error) {
-	password, err := nanoid.Generate(poduserpassword.DefaultCredentialsAlphabet, poduserpassword.DefaultCredentialsLen)
+func (r *Reconciler) fetchWorkloadPassword(ctx context.Context, clientIntents otterizev1alpha3.ClientIntents) (string, error) {
+	pod, err := r.serviceIdResolver.ResolveClientIntentToPod(ctx, clientIntents)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err)
 	}
-	salt, err := nanoid.Generate(poduserpassword.DefaultCredentialsAlphabet, 8)
+	secretName, ok := pod.Annotations[metadata.UserAndPasswordSecretNameAnnotation]
+	if !ok {
+		return "", errors.Wrap(fmt.Errorf("pods for client %s has no credentials annotation, cannot validate DB user exists", clientIntents.GetServiceName()))
+	}
+	secret := v1.Secret{}
+	err = r.client.Get(ctx, types.NamespacedName{
+		Namespace: clientIntents.Namespace,
+		Name:      secretName,
+	}, &secret)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(fmt.Errorf("failed reading secret for client %s. Error: %s", clientIntents.GetServiceName(), err.Error()))
 	}
 
-	dk := pbkdf2.Key([]byte(password), []byte(salt), 2048, 16, sha256.New)
-	return hex.EncodeToString(dk), nil
+	return string(secret.Data["password"]), nil
+
 }
 
 func extractDBNames(intents otterizev1alpha3.ClientIntents) []string {
