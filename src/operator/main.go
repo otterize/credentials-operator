@@ -297,6 +297,7 @@ func main() {
 		}
 	}
 
+	intentsReconciler :=
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {

@@ -2,12 +2,16 @@ package poduserpassword
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"github.com/aidarkhanov/nanoid"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	"github.com/otterize/credentials-operator/src/controllers/otterizeclient/otterizegraphql"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/crypto/pbkdf2"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,6 +27,11 @@ const (
 	ReasonEnsuredPodUserAndPassword        = "EnsuredPodUserAndPassword"
 	ReasonEnsuringPodUserAndPasswordFailed = "EnsuringPodUserAndPasswordFailed"
 	ReasonPodOwnerResolutionFailed         = "PodOwnerResolutionFailed"
+)
+
+const (
+	DefaultCredentialsAlphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	DefaultCredentialsLen      = 16
 )
 
 type CloudUserAndPasswordAcquirer interface {
@@ -100,12 +109,11 @@ func (e *Reconciler) ensurePodUserAndPasswordPostgresSecret(ctx context.Context,
 	err := e.client.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: secretName}, &v1.Secret{})
 	if apierrors.IsNotFound(err) {
 		log.Debug("Creating user-password credentials secret for pod")
-		creds, err := e.userAndPasswordAcquirer.AcquireServiceUserAndPassword(ctx, serviceName, pod.Namespace)
+		password, err := createServicePassword()
 		if err != nil {
 			return errors.Wrap(err)
 		}
-
-		secret := buildUserAndPasswordCredentialsSecret(secretName, pod.Namespace, creds)
+		secret := buildUserAndPasswordCredentialsSecret(secretName, pod.Namespace, serviceName, password)
 		log.WithField("secret", secretName).Debug("Creating new secret with user-password credentials")
 		if err := e.client.Create(ctx, secret); err != nil {
 			return errors.Wrap(err)
@@ -120,16 +128,30 @@ func (e *Reconciler) ensurePodUserAndPasswordPostgresSecret(ctx context.Context,
 	return nil
 }
 
-func buildUserAndPasswordCredentialsSecret(name, namespace string, creds *otterizegraphql.UserPasswordCredentials) *v1.Secret {
+func buildUserAndPasswordCredentialsSecret(name, namespace, pgUsername, password string) *v1.Secret {
 	return &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
 		Data: map[string][]byte{
-			"username": []byte(creds.Username),
-			"password": []byte(creds.Password),
+			"username": []byte(pgUsername),
+			"password": []byte(password),
 		},
 		Type: v1.SecretTypeOpaque,
 	}
+}
+
+func createServicePassword() (string, error) {
+	password, err := nanoid.Generate(DefaultCredentialsAlphabet, DefaultCredentialsLen)
+	if err != nil {
+		return "", err
+	}
+	salt, err := nanoid.Generate(DefaultCredentialsAlphabet, 8)
+	if err != nil {
+		return "", err
+	}
+
+	dk := pbkdf2.Key([]byte(password), []byte(salt), 2048, 16, sha256.New)
+	return hex.EncodeToString(dk), nil
 }
