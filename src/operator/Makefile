@@ -28,7 +28,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 # This variable is used to construct full image tags for bundle and catalog images.
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
-# otterize.com/spire-integration-operator-bundle:$VERSION and otterize.com/spire-integration-operator-catalog:$VERSION.
+# otterize.com/credentials-operator-bundle:$VERSION and otterize.com/credentials-operator-catalog:$VERSION.
 IMAGE_TAG_BASE ?= 353146681200.dkr.ecr.us-east-1.amazonaws.com/otterize
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
@@ -47,7 +47,7 @@ ifeq ($(USE_IMAGE_DIGESTS), true)
 endif
 
 # Image URL to use all building/pushing image targets
-IMG ?= $(IMAGE_TAG_BASE):spire-integration-operator-$(VERSION)
+IMG ?= $(IMAGE_TAG_BASE):credentials-operator-$(VERSION)
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.24.1
 
@@ -162,7 +162,7 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v4.5.5
-CONTROLLER_TOOLS_VERSION ?= v0.9.0
+CONTROLLER_TOOLS_VERSION ?= v0.14.0
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
