@@ -29,6 +29,7 @@ import (
 	"github.com/otterize/credentials-operator/src/controllers/certificates/otterizecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certificates/spirecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certmanageradapter"
+	"github.com/otterize/credentials-operator/src/controllers/intents"
 	"github.com/otterize/credentials-operator/src/controllers/otterizeclient"
 	"github.com/otterize/credentials-operator/src/controllers/poduserpassword"
 	"github.com/otterize/credentials-operator/src/controllers/secrets"
@@ -40,6 +41,7 @@ import (
 	"github.com/otterize/credentials-operator/src/operatorconfig"
 	operatorwebhooks "github.com/otterize/intents-operator/src/operator/webhooks"
 	"github.com/otterize/intents-operator/src/shared/awsagent"
+	"github.com/otterize/intents-operator/src/shared/clusterid"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/intents-operator/src/shared/telemetries/componentinfo"
@@ -191,8 +193,11 @@ func main() {
 		logrus.Panic("POD_NAMESPACE environment variable is required")
 	}
 
-	kubeSystemUID := getClusterContextId(ctx, mgr)
-	componentinfo.SetGlobalContextId(telemetrysender.Anonymize(kubeSystemUID))
+	clusterUID, err := clusterid.GetClusterUID(ctx)
+	if err != nil {
+		logrus.WithError(err).Panic("Failed fetching cluster UID")
+	}
+	componentinfo.SetGlobalContextId(telemetrysender.Anonymize(clusterUID))
 	componentinfo.SetGlobalVersion(version.Version())
 
 	serviceIdResolver := serviceidresolver.NewResolver(mgr.GetClient())
@@ -297,7 +302,11 @@ func main() {
 		}
 	}
 
-	intentsReconciler :=
+	intentsReconciler := intents.NewReconciler(client, scheme, eventRecorder, serviceIdResolver)
+	if err := intentsReconciler.SetupWithManager(mgr); err != nil {
+		logrus.WithField("controller", "intents").WithError(err).Panic("unable to create controller")
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {

@@ -8,6 +8,7 @@ import (
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
 	"github.com/otterize/intents-operator/src/operator/databaseconfigurator"
+	"github.com/otterize/intents-operator/src/shared/clusterid"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/samber/lo"
@@ -17,15 +18,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 )
 
 const (
-	PGCreateUserStatement          databaseconfigurator.SQLSprintfStatement = "CREATE USER %s WITH PASSWORD %s"
-	OtterizeClusterUIDResourceName                                          = "otterize-cluster-uid"
+	PGCreateUserStatement databaseconfigurator.SQLSprintfStatement = "CREATE USER %s WITH PASSWORD %s"
 )
 
 const (
@@ -112,7 +111,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			if err != nil {
 				r.recorder.Eventf(&intents, v1.EventTypeWarning,
 					ReasonFailedReadingWorkloadPassword,
-					"Failed reading client %s password. Error: %s", intents.GetServiceName(), err.Error())
+					"Failed reading client %s Postgres password. Error: %s", intents.GetServiceName(), err.Error())
 				return ctrl.Result{}, errors.Wrap(err)
 			}
 
@@ -158,34 +157,12 @@ func (r *Reconciler) createPostgresUserForWorkload(
 }
 
 func (r *Reconciler) getPostgresUserForWorkload(ctx context.Context, client, namespace string) (string, error) {
-	clusterUID, err := r.getClusterUID(ctx)
+	clusterUID, err := clusterid.GetClusterUID(ctx)
 	if err != nil {
 		return "", errors.Wrap(err)
 	}
 
 	return databaseconfigurator.BuildPostgresUsername(clusterUID, client, namespace), nil
-}
-
-// Fetches cluster ID from the config map created in the Otterize namespace (created by the intents operator)
-func (r *Reconciler) getClusterUID(ctx context.Context) (string, error) {
-	if r.clusterUID != "" {
-		return r.clusterUID, nil
-	}
-
-	podNamespace := os.Getenv("POD_NAMESPACE")
-	cm := v1.ConfigMap{}
-	err := r.client.Get(ctx, types.NamespacedName{Namespace: podNamespace, Name: OtterizeClusterUIDResourceName}, &cm)
-	if err != nil {
-		return "", errors.Wrap(err)
-	}
-
-	clusterUID, ok := cm.Data["clusteruid"]
-	if !ok || clusterUID == "" {
-		return "", errors.Wrap(fmt.Errorf("invalid cluster UID found in %s config map", OtterizeClusterUIDResourceName))
-	}
-
-	r.clusterUID = clusterUID
-	return clusterUID, nil
 }
 
 func (r *Reconciler) fetchWorkloadPassword(ctx context.Context, clientIntents otterizev1alpha3.ClientIntents) (string, error) {
@@ -207,7 +184,6 @@ func (r *Reconciler) fetchWorkloadPassword(ctx context.Context, clientIntents ot
 	}
 
 	return string(secret.Data["password"]), nil
-
 }
 
 func extractDBNames(intents otterizev1alpha3.ClientIntents) []string {
