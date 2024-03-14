@@ -80,9 +80,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			r.recorder.Eventf(&intents, v1.EventTypeWarning,
 				ReasonErrorFetchingPostgresServerConfig,
 				"Error trying to fetch '%s' PostgresServerConf for client '%s'. Error: %s",
-				intents.GetServiceName(), databaseName, err.Error())
-
-			return ctrl.Result{}, errors.Wrap(err)
+				databaseName, intents.GetServiceName(), err.Error())
+			return ctrl.Result{}, nil
 		}
 
 		pgConfigurator := databaseconfigurator.NewPostgresConfigurator(pgServerConf.Spec, r.client)
@@ -115,7 +114,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				return ctrl.Result{}, errors.Wrap(err)
 			}
 
-			logrus.WithField("username", pgUsername).Info(
+			logrus.WithField("username", pgUsername).Infof(
 				"Username does not exist in database %s, creating it", databaseName)
 
 			err = r.createPostgresUserForWorkload(ctx, pgConfigurator, pgUsername, password)
@@ -156,13 +155,13 @@ func (r *Reconciler) createPostgresUserForWorkload(
 	return nil
 }
 
-func (r *Reconciler) getPostgresUserForWorkload(ctx context.Context, client, namespace string) (string, error) {
+func (r *Reconciler) getPostgresUserForWorkload(ctx context.Context, clientName, namespace string) (string, error) {
 	clusterUID, err := clusterid.GetClusterUID(ctx)
 	if err != nil {
 		return "", errors.Wrap(err)
 	}
 
-	return databaseconfigurator.BuildPostgresUsername(clusterUID, client, namespace), nil
+	return databaseconfigurator.BuildPostgresUsername(clusterUID, clientName, namespace), nil
 }
 
 func (r *Reconciler) fetchWorkloadPassword(ctx context.Context, clientIntents otterizev1alpha3.ClientIntents) (string, error) {
@@ -187,7 +186,7 @@ func (r *Reconciler) fetchWorkloadPassword(ctx context.Context, clientIntents ot
 }
 
 func extractDBNames(intents otterizev1alpha3.ClientIntents) []string {
-	dbNames := goset.Set[string]{}
+	dbNames := goset.NewSet[string]()
 	for _, intent := range intents.GetCallsList() {
 		if intent.Type != otterizev1alpha3.IntentTypeDatabase {
 			continue
