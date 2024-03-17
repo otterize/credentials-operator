@@ -31,6 +31,7 @@ const (
 	ReasonErrorFetchingPostgresServerConfig = "ErrorFetchingPostgresServerConfig"
 	ReasonFailedReadingWorkloadPassword     = "FailedReadingWorkloadPassword"
 	ReasonFailedCreatingDatabaseUser        = "FailedCreatingDatabaseUser"
+	ReasonMissingPostgresServerConfig       = "MissingPostgresServerConfig"
 )
 
 type Reconciler struct {
@@ -73,19 +74,23 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	for _, databaseName := range dbNames {
-		pgServerConf := otterizev1alpha3.PostgreSQLServerConfig{}
-		// TODO: Need to list from the entire cluster & match the databaseName. CRD webhook should enforce cluster-wide name uniqueness
-		err := r.client.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: databaseName}, &pgServerConf)
+		pgServerConfigs := otterizev1alpha3.PostgreSQLServerConfigList{}
+		err := r.client.List(ctx, &pgServerConfigs)
 		if err != nil {
-			r.recorder.Eventf(&intents, v1.EventTypeWarning,
-				ReasonErrorFetchingPostgresServerConfig,
+			r.recorder.Eventf(&intents, ReasonErrorFetchingPostgresServerConfig,
 				"Error trying to fetch '%s' PostgresServerConf for client '%s'. Error: %s",
 				databaseName, intents.GetServiceName(), err.Error())
 			return ctrl.Result{}, nil
 		}
+		pgServerConf, err := findMatchingPGServerConfForDBInstance(databaseName, pgServerConfigs)
+		if err != nil {
+			r.recorder.Eventf(&intents, ReasonMissingPostgresServerConfig,
+				"Could not find matching PostgreSQLServerConfig. Error: %s", err.Error())
+			return ctrl.Result{}, nil
+		}
 
 		pgConfigurator := databaseconfigurator.NewPostgresConfigurator(pgServerConf.Spec, r.client)
-		connectionString := pgConfigurator.FormatConnectionString()
+		connectionString := pgConfigurator.FormatConnectionString(databaseName)
 		conn, err := pgx.Connect(ctx, connectionString)
 		if err != nil {
 			pgErr, ok := pgConfigurator.TranslatePostgresConnectionError(err)
@@ -197,4 +202,18 @@ func extractDBNames(intents otterizev1alpha3.ClientIntents) []string {
 	}
 
 	return dbNames.Items()
+}
+
+func findMatchingPGServerConfForDBInstance(
+	databaseInstanceName string,
+	pgServerConfigList otterizev1alpha3.PostgreSQLServerConfigList) (*otterizev1alpha3.PostgreSQLServerConfig, error) {
+
+	for _, conf := range pgServerConfigList.Items {
+		if conf.Name == databaseInstanceName {
+			return &conf, nil
+		}
+	}
+
+	return nil, errors.Wrap(fmt.Errorf(
+		"did not find Postgres server config to match database '%s' in the cluster", databaseInstanceName))
 }
