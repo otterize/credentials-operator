@@ -319,6 +319,13 @@ func main() {
 	}
 
 	intentsReconciler := intents.NewReconciler(client, scheme, eventRecorder, serviceIdResolver)
+	if err = intentsReconciler.InitIntentsClientIndices(mgr); err != nil {
+		logrus.WithError(err).Panic("unable to init indices")
+	}
+	if err = intentsReconciler.InitIntentsDatabaseServerIndices(mgr); err != nil {
+		logrus.WithError(err).Panic("unable to init database server indices")
+	}
+
 	if err := intentsReconciler.SetupWithManager(mgr); err != nil {
 		logrus.WithField("controller", "intents").WithError(err).Panic("unable to create controller")
 	}

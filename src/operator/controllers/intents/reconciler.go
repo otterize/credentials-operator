@@ -21,6 +21,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -32,6 +34,7 @@ const (
 	ReasonFailedReadingWorkloadPassword     = "FailedReadingWorkloadPassword"
 	ReasonFailedCreatingDatabaseUser        = "FailedCreatingDatabaseUser"
 	ReasonMissingPostgresServerConfig       = "MissingPostgresServerConfig"
+	OtterizeIntentsClientIndexNameField     = "spec.service.name"
 )
 
 type Reconciler struct {
@@ -55,7 +58,69 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{RecoverPanic: lo.ToPtr(true)}).
 		For(&otterizev1alpha3.ClientIntents{}).
+		Watches(&otterizev1alpha3.PostgreSQLServerConfig{}, handler.EnqueueRequestsFromMapFunc(r.mapPGServerConfToClientIntents)).
+		Watches(&v1.Pod{}, handler.EnqueueRequestsFromMapFunc(r.mapPodToClientIntents)).
 		Complete(r)
+}
+
+func (r *Reconciler) mapPodToClientIntents(_ context.Context, obj client.Object) []reconcile.Request {
+	pod := obj.(*v1.Pod)
+	otterizeIdentity, err := r.serviceIdResolver.ResolvePodToServiceIdentity(context.Background(), pod)
+	if err != nil {
+		logrus.Errorf("Failed resovling Otterize identity for pod %s: %v", pod.Name, err)
+	}
+	fullClientName := fmt.Sprintf("%s.%s", otterizeIdentity.Name, otterizeIdentity.Namespace)
+	logrus.Infof("Enqueueing client intents for client '%s'", fullClientName)
+
+	clientIntentsList := otterizev1alpha3.ClientIntentsList{}
+	err = r.client.List(context.Background(),
+		&clientIntentsList,
+		&client.MatchingFields{OtterizeIntentsClientIndexNameField: fullClientName},
+	)
+
+	if err != nil {
+		logrus.Errorf("Failed to list intents for client %s: %v", fullClientName, err)
+	}
+	requests := make([]reconcile.Request, 0)
+	for _, clientIntents := range clientIntentsList.Items {
+		request := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      clientIntents.Name,
+				Namespace: clientIntents.Namespace,
+			},
+		}
+		requests = append(requests, request)
+	}
+
+	return requests
+}
+
+func (r *Reconciler) mapPGServerConfToClientIntents(ctx context.Context, obj client.Object) []reconcile.Request {
+	pgServerConf := obj.(*otterizev1alpha3.PostgreSQLServerConfig)
+	logrus.Infof("Enqueueing client intents for PostgreSQLServerConfig change %s", pgServerConf.Name)
+
+	intentsToReconcile := make([]otterizev1alpha3.ClientIntents, 0)
+	intentsList := otterizev1alpha3.ClientIntentsList{}
+	dbInstanceName := pgServerConf.Name
+	err := r.client.List(context.Background(),
+		&intentsList,
+		&client.MatchingFields{otterizev1alpha3.OtterizeTargetServerIndexField: dbInstanceName},
+	)
+	if err != nil {
+		logrus.Errorf("Failed to list client intents targeting %s: %v", dbInstanceName, err)
+	}
+	intentsToReconcile = append(intentsToReconcile, intentsList.Items...)
+
+	requests := make([]reconcile.Request, 0)
+	for _, clientIntents := range intentsToReconcile {
+		requests = append(requests, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      clientIntents.Name,
+				Namespace: clientIntents.Namespace,
+			},
+		})
+	}
+	return requests
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -77,16 +142,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		pgServerConfigs := otterizev1alpha3.PostgreSQLServerConfigList{}
 		err := r.client.List(ctx, &pgServerConfigs)
 		if err != nil {
-			r.recorder.Eventf(&intents, ReasonErrorFetchingPostgresServerConfig,
+			r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonErrorFetchingPostgresServerConfig,
 				"Error trying to fetch '%s' PostgresServerConf for client '%s'. Error: %s",
 				databaseName, intents.GetServiceName(), err.Error())
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, errors.Wrap(err)
 		}
 		pgServerConf, err := findMatchingPGServerConfForDBInstance(databaseName, pgServerConfigs)
 		if err != nil {
-			r.recorder.Eventf(&intents, ReasonMissingPostgresServerConfig,
+			r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonMissingPostgresServerConfig,
 				"Could not find matching PostgreSQLServerConfig. Error: %s", err.Error())
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, nil // Not returning error on purpose, missing PGServerConf - record event and move on
 		}
 
 		pgConfigurator := databaseconfigurator.NewPostgresConfigurator(pgServerConf.Spec, r.client)
@@ -188,6 +253,46 @@ func (r *Reconciler) fetchWorkloadPassword(ctx context.Context, clientIntents ot
 	}
 
 	return string(secret.Data["password"]), nil
+}
+
+func (r *Reconciler) InitIntentsClientIndices(mgr ctrl.Manager) error {
+	err := mgr.GetCache().IndexField(
+		context.Background(),
+		&otterizev1alpha3.ClientIntents{}, OtterizeIntentsClientIndexNameField,
+		func(object client.Object) []string {
+			clientIntents := object.(*otterizev1alpha3.ClientIntents)
+			return []string{fmt.Sprintf("%s.%s", clientIntents.Spec.Service.Name, clientIntents.Namespace)}
+		})
+	if err != nil {
+		return errors.Wrap(err)
+	}
+
+	return nil
+}
+
+func (r *Reconciler) InitIntentsDatabaseServerIndices(mgr ctrl.Manager) error {
+	err := mgr.GetCache().IndexField(
+		context.Background(),
+		&otterizev1alpha3.ClientIntents{},
+		otterizev1alpha3.OtterizeTargetServerIndexField,
+		func(object client.Object) []string {
+			var res []string
+			intents := object.(*otterizev1alpha3.ClientIntents)
+			if intents.Spec == nil {
+				return nil
+			}
+			// Only relevant for database intents for now
+			for _, intent := range intents.GetCallsList() {
+				if intent.DatabaseResources != nil {
+					res = append(res, intent.GetTargetServerName())
+				}
+			}
+			return res
+		})
+	if err != nil {
+		return errors.Wrap(err)
+	}
+	return nil
 }
 
 func extractDBNames(intents otterizev1alpha3.ClientIntents) []string {
