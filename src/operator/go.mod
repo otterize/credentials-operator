@@ -16,7 +16,7 @@ require (
 	github.com/cert-manager/cert-manager v1.12.3
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.5.5
-	github.com/otterize/intents-operator/src v0.0.0-20240317122855-b1c69706cfcc
+	github.com/otterize/intents-operator/src v0.0.0-20240318180630-b2f61321f83e
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.1
 	github.com/samber/lo v1.36.0
 	github.com/sirupsen/logrus v1.9.3
