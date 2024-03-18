@@ -133,7 +133,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, errors.Wrap(err)
 	}
 
-	dbNames := extractDBNames(intents)
+	dbNames := extractDBInstanceNames(intents)
 	if len(dbNames) == 0 {
 		return ctrl.Result{}, nil
 	}
@@ -155,7 +155,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 
 		pgConfigurator := databaseconfigurator.NewPostgresConfigurator(pgServerConf.Spec, r.client)
-		connectionString := pgConfigurator.FormatConnectionString(databaseName)
+		connectionString := pgConfigurator.FormatConnectionString(pgServerConf.Spec.DatabaseName)
 		conn, err := pgx.Connect(ctx, connectionString)
 		if err != nil {
 			pgErr, ok := pgConfigurator.TranslatePostgresConnectionError(err)
@@ -295,15 +295,13 @@ func (r *Reconciler) InitIntentsDatabaseServerIndices(mgr ctrl.Manager) error {
 	return nil
 }
 
-func extractDBNames(intents otterizev1alpha3.ClientIntents) []string {
+func extractDBInstanceNames(intents otterizev1alpha3.ClientIntents) []string {
 	dbNames := goset.NewSet[string]()
 	for _, intent := range intents.GetCallsList() {
 		if intent.Type != otterizev1alpha3.IntentTypeDatabase {
 			continue
 		}
-		for _, res := range intent.DatabaseResources {
-			dbNames.Add(res.DatabaseName)
-		}
+		dbNames.Add(intent.GetTargetServerName())
 	}
 
 	return dbNames.Items()
