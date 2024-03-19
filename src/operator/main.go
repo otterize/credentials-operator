@@ -28,7 +28,9 @@ import (
 	"github.com/otterize/credentials-operator/src/controllers/certificates/otterizecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certificates/spirecertgen"
 	"github.com/otterize/credentials-operator/src/controllers/certmanageradapter"
-	"github.com/otterize/credentials-operator/src/controllers/iam"
+	"github.com/otterize/credentials-operator/src/controllers/iam/iamcredentialsagents"
+	"github.com/otterize/credentials-operator/src/controllers/iam/iamcredentialsagents/azurecredentialsagent"
+	"github.com/otterize/credentials-operator/src/controllers/iam/iamcredentialsagents/gcpcredentialsagent"
 	"github.com/otterize/credentials-operator/src/controllers/iam/pods"
 	"github.com/otterize/credentials-operator/src/controllers/iam/serviceaccounts"
 	sa_pod_webhook_generic "github.com/otterize/credentials-operator/src/controllers/iam/webhooks"
@@ -204,7 +206,7 @@ func main() {
 	}
 	client := mgr.GetClient()
 
-	iamAgents := make([]iam.IAMCredentialsAgent, 0)
+	iamAgents := make([]iamcredentialsagents.IAMCredentialsAgent, 0)
 
 	var awsAgent *awsagent.Agent
 
@@ -237,7 +239,8 @@ func main() {
 			logrus.WithError(err).Panic("failed to initialize GCP agent")
 		}
 
-		iamAgents = append(iamAgents, gcpAgent)
+		gcpCredentialsAgent := gcpcredentialsagent.NewGCPCredentialsAgent(gcpAgent)
+		iamAgents = append(iamAgents, gcpCredentialsAgent)
 	}
 
 	if viper.GetBool(operatorconfig.EnableAzureServiceAccountManagementKey) {
@@ -251,7 +254,8 @@ func main() {
 		if err != nil {
 			logrus.WithError(err).Panic("failed to initialize Azure agent")
 		}
-		iamAgents = append(iamAgents, azureAgent)
+		azureCredentialsAgent := azurecredentialsagent.NewAzureCredentialsAgent(azureAgent)
+		iamAgents = append(iamAgents, azureCredentialsAgent)
 	}
 
 	azureGCPserviceAccountReconciler := serviceaccounts.NewServiceAccountReconciler(client, iamAgents)

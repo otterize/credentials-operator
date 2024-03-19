@@ -1,4 +1,4 @@
-package azureagent
+package azurecredentialsagent
 
 import (
 	"context"
@@ -26,6 +26,10 @@ const (
 
 type Agent struct {
 	*azureagent.Agent
+}
+
+func NewAzureCredentialsAgent(azureAgent *azureagent.Agent) *Agent {
+	return &Agent{azureAgent}
 }
 
 func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool, err error) {

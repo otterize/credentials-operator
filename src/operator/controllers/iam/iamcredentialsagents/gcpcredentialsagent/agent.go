@@ -21,6 +21,10 @@ type Agent struct {
 	*gcpagent.Agent
 }
 
+func NewGCPCredentialsAgent(gcpAgent *gcpagent.Agent) *Agent {
+	return &Agent{gcpAgent}
+}
+
 func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool, err error) {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
 	if !a.AppliesOnPod(pod) {
