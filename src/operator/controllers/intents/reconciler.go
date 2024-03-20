@@ -166,35 +166,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 		pgConfigurator.SetConnection(ctx, conn)
 
-		pgUsername, err := r.getPostgresUserForWorkload(ctx, intents.GetServiceName(), intents.Namespace)
+		err = r.handleDBUserCreation(ctx, intents, pgConfigurator, databaseName)
 		if err != nil {
-			return ctrl.Result{}, errors.Wrap(err)
-		}
-		exists, err := pgConfigurator.ValidateUserExists(ctx, pgUsername)
-		if err != nil {
-			return ctrl.Result{}, errors.Wrap(err)
-		}
-
-		if !exists {
-			password, err := r.fetchWorkloadPassword(ctx, intents)
-			if err != nil {
-				r.recorder.Eventf(&intents, v1.EventTypeWarning,
-					ReasonFailedReadingWorkloadPassword,
-					"Failed reading client %s Postgres password. Error: %s", intents.GetServiceName(), err.Error())
-				return ctrl.Result{}, errors.Wrap(err)
-			}
-
-			logrus.WithField("username", pgUsername).Infof(
-				"Username does not exist in database %s, creating it", databaseName)
-
-			err = r.createPostgresUserForWorkload(ctx, pgConfigurator, pgUsername, password)
-			if err != nil {
-				r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonFailedCreatingDatabaseUser,
-					"Failed creating database user. Error: %s", err.Error())
-				return ctrl.Result{}, errors.Wrap(err)
-			}
-
-			logrus.Info("User created successfully")
+			return ctrl.Result{}, err
 		}
 	}
 	return ctrl.Result{}, nil
@@ -292,6 +266,45 @@ func (r *Reconciler) InitIntentsDatabaseServerIndices(mgr ctrl.Manager) error {
 	if err != nil {
 		return errors.Wrap(err)
 	}
+	return nil
+}
+
+func (r *Reconciler) handleDBUserCreation(
+	ctx context.Context,
+	intents otterizev1alpha3.ClientIntents,
+	pgConfigurator *databaseconfigurator.PostgresConfigurator,
+	databaseName string) error {
+
+	pgUsername, err := r.getPostgresUserForWorkload(ctx, intents.GetServiceName(), intents.Namespace)
+	if err != nil {
+		return errors.Wrap(err)
+	}
+	exists, err := pgConfigurator.ValidateUserExists(ctx, pgUsername)
+	if err != nil {
+		return errors.Wrap(err)
+	}
+
+	if !exists {
+		password, err := r.fetchWorkloadPassword(ctx, intents)
+		if err != nil {
+			r.recorder.Eventf(&intents, v1.EventTypeWarning,
+				ReasonFailedReadingWorkloadPassword,
+				"Failed reading client %s Postgres password. Error: %s", intents.GetServiceName(), err.Error())
+			return errors.Wrap(err)
+		}
+
+		logrus.WithField("username", pgUsername).Infof(
+			"Username does not exist in database %s, creating it", databaseName)
+
+		err = r.createPostgresUserForWorkload(ctx, pgConfigurator, pgUsername, password)
+		if err != nil {
+			r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonFailedCreatingDatabaseUser,
+				"Failed creating database user. Error: %s", err.Error())
+			return errors.Wrap(err)
+		}
+		logrus.Info("User created successfully")
+	}
+
 	return nil
 }
 
