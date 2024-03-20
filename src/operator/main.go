@@ -118,7 +118,6 @@ func main() {
 
 	var secretsManager tls_pod.SecretsManager
 	var workloadRegistry tls_pod.WorkloadRegistry
-	var userAndPassAcquirer poduserpassword.CloudUserAndPasswordAcquirer
 
 	if viper.GetBool(operatorconfig.DebugKey) {
 		logrus.SetLevel(logrus.DebugLevel)
@@ -166,7 +165,6 @@ func main() {
 
 	if clientInitializedWithCredentials {
 		otterizeclient.PeriodicallyReportConnectionToCloud(otterizeCloudClient)
-		userAndPassAcquirer = otterizeCloudClient
 	}
 
 	if viper.GetString(operatorconfig.CertProviderKey) == operatorconfig.CertProviderCloud {
@@ -311,8 +309,8 @@ func main() {
 		go certPodReconciler.MaintenanceLoop(signalHandlerCtx)
 	}
 
-	if userAndPassAcquirer != nil {
-		podUserAndPasswordReconciler := poduserpassword.NewReconciler(client, scheme, eventRecorder, serviceIdResolver, userAndPassAcquirer)
+	if viper.GetBool(operatorconfig.EnableDatabasePolicy) {
+		podUserAndPasswordReconciler := poduserpassword.NewReconciler(client, scheme, eventRecorder, serviceIdResolver)
 		if err = podUserAndPasswordReconciler.SetupWithManager(mgr); err != nil {
 			logrus.WithField("controller", "podUserAndPassword").WithError(err).Panic("unable to create controller")
 		}

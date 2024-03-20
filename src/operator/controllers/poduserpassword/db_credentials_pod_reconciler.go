@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"github.com/aidarkhanov/nanoid"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
-	"github.com/otterize/credentials-operator/src/controllers/otterizeclient/otterizegraphql"
 	"github.com/otterize/intents-operator/src/operator/databaseconfigurator"
 	"github.com/otterize/intents-operator/src/shared/clusterid"
 	"github.com/otterize/intents-operator/src/shared/errors"
@@ -36,25 +35,19 @@ const (
 	DefaultCredentialsLen      = 16
 )
 
-type CloudUserAndPasswordAcquirer interface {
-	AcquireServiceUserAndPassword(ctx context.Context, serviceName, namespace string) (*otterizegraphql.UserPasswordCredentials, error)
-}
-
 type Reconciler struct {
-	client                  client.Client
-	scheme                  *runtime.Scheme
-	recorder                record.EventRecorder
-	serviceIdResolver       *serviceidresolver.Resolver
-	userAndPasswordAcquirer CloudUserAndPasswordAcquirer
+	client            client.Client
+	scheme            *runtime.Scheme
+	recorder          record.EventRecorder
+	serviceIdResolver *serviceidresolver.Resolver
 }
 
-func NewReconciler(client client.Client, scheme *runtime.Scheme, eventRecorder record.EventRecorder, serviceIdResolver *serviceidresolver.Resolver, acquirer CloudUserAndPasswordAcquirer) *Reconciler {
+func NewReconciler(client client.Client, scheme *runtime.Scheme, eventRecorder record.EventRecorder, serviceIdResolver *serviceidresolver.Resolver) *Reconciler {
 	return &Reconciler{
-		client:                  client,
-		scheme:                  scheme,
-		serviceIdResolver:       serviceIdResolver,
-		recorder:                eventRecorder,
-		userAndPasswordAcquirer: acquirer,
+		client:            client,
+		scheme:            scheme,
+		serviceIdResolver: serviceIdResolver,
+		recorder:          eventRecorder,
 	}
 }
 
