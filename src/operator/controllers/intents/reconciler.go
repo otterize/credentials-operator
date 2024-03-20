@@ -7,8 +7,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
-	"github.com/otterize/intents-operator/src/operator/databaseconfigurator"
+	"github.com/otterize/intents-operator/src/operator/controllers/intents_reconcilers/database/databaseconfigurator"
 	"github.com/otterize/intents-operator/src/shared/clusterid"
+	"github.com/otterize/intents-operator/src/shared/databaseutils"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/samber/lo"
@@ -63,7 +64,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *Reconciler) mapPodToClientIntents(_ context.Context, obj client.Object) []reconcile.Request {
+func (r *Reconciler) mapPodToClientIntents(ctx context.Context, obj client.Object) []reconcile.Request {
 	pod := obj.(*v1.Pod)
 	otterizeIdentity, err := r.serviceIdResolver.ResolvePodToServiceIdentity(context.Background(), pod)
 	if err != nil {
@@ -73,7 +74,7 @@ func (r *Reconciler) mapPodToClientIntents(_ context.Context, obj client.Object)
 	logrus.Infof("Enqueueing client intents for client '%s'", fullClientName)
 
 	clientIntentsList := otterizev1alpha3.ClientIntentsList{}
-	err = r.client.List(context.Background(),
+	err = r.client.List(ctx,
 		&clientIntentsList,
 		&client.MatchingFields{OtterizeIntentsClientIndexNameField: fullClientName},
 	)
@@ -102,7 +103,7 @@ func (r *Reconciler) mapPGServerConfToClientIntents(ctx context.Context, obj cli
 	intentsToReconcile := make([]otterizev1alpha3.ClientIntents, 0)
 	intentsList := otterizev1alpha3.ClientIntentsList{}
 	dbInstanceName := pgServerConf.Name
-	err := r.client.List(context.Background(),
+	err := r.client.List(ctx,
 		&intentsList,
 		&client.MatchingFields{otterizev1alpha3.OtterizeTargetServerIndexField: dbInstanceName},
 	)
@@ -158,7 +159,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		connectionString := pgConfigurator.FormatConnectionString(pgServerConf.Spec.DatabaseName)
 		conn, err := pgx.Connect(ctx, connectionString)
 		if err != nil {
-			pgErr, ok := pgConfigurator.TranslatePostgresConnectionError(err)
+			pgErr, ok := databaseutils.TranslatePostgresConnectionError(err)
 			if ok {
 				return ctrl.Result{}, errors.Wrap(fmt.Errorf(pgErr))
 			}
@@ -205,7 +206,7 @@ func (r *Reconciler) getPostgresUserForWorkload(ctx context.Context, clientName,
 		return "", errors.Wrap(err)
 	}
 
-	return databaseconfigurator.BuildPostgresUsername(clusterUID, clientName, namespace), nil
+	return databaseutils.BuildPostgresUsername(clusterUID, clientName, namespace), nil
 }
 
 func (r *Reconciler) fetchWorkloadPassword(ctx context.Context, clientIntents otterizev1alpha3.ClientIntents) (string, error) {
@@ -279,7 +280,7 @@ func (r *Reconciler) handleDBUserCreation(
 	if err != nil {
 		return errors.Wrap(err)
 	}
-	exists, err := pgConfigurator.ValidateUserExists(ctx, pgUsername)
+	exists, err := databaseutils.ValidateUserExists(ctx, pgUsername, pgConfigurator.Conn)
 	if err != nil {
 		return errors.Wrap(err)
 	}

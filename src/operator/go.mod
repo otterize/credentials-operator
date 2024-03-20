@@ -15,7 +15,7 @@ require (
 	github.com/bombsimon/logrusr/v3 v3.0.0
 	github.com/cert-manager/cert-manager v1.12.3
 	github.com/jackc/pgx/v5 v5.5.5
-	github.com/otterize/intents-operator/src v0.0.0-20240318195005-7bb7a5091b37
+	github.com/otterize/intents-operator/src v0.0.0-20240320162536-a09d85302e92
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.1
 	github.com/samber/lo v1.36.0
 	github.com/sirupsen/logrus v1.9.3
@@ -51,6 +51,9 @@ require (
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.2.1 // indirect
 	github.com/DataDog/datadog-go v3.2.0+incompatible // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
+	github.com/agnivade/levenshtein v1.1.1 // indirect
+	github.com/alexflint/go-arg v1.4.3 // indirect
+	github.com/alexflint/go-scalar v1.2.0 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.25.3 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.25.3 // indirect
