@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/otterize/credentials-operator/src/controllers/iam"
+	"github.com/otterize/credentials-operator/src/controllers/iam/iamcredentialsagents"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/sirupsen/logrus"
@@ -29,10 +29,10 @@ const (
 type ServiceAccountAnnotatingPodWebhook struct {
 	client  client.Client
 	decoder *admission.Decoder
-	agents  []iam.IAMCredentialsAgent
+	agents  []iamcredentialsagents.IAMCredentialsAgent
 }
 
-func NewServiceAccountAnnotatingPodWebhook(mgr manager.Manager, agents []iam.IAMCredentialsAgent) *ServiceAccountAnnotatingPodWebhook {
+func NewServiceAccountAnnotatingPodWebhook(mgr manager.Manager, agents []iamcredentialsagents.IAMCredentialsAgent) *ServiceAccountAnnotatingPodWebhook {
 	return &ServiceAccountAnnotatingPodWebhook{
 		client:  mgr.GetClient(),
 		decoder: admission.NewDecoder(mgr.GetScheme()),
@@ -48,6 +48,10 @@ func (a *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod
 
 	if pod.Labels == nil {
 		return pod, false, "no create IAM role label - no modifications made", nil
+	}
+
+	if controllerutil.ContainsFinalizer(&pod, metadata.IAMRoleFinalizer) {
+		return pod, false, "pod already handled by webhook", nil
 	}
 
 	var serviceAccount corev1.ServiceAccount

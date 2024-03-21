@@ -3,7 +3,7 @@ package serviceaccounts
 import (
 	"context"
 	"fmt"
-	"github.com/otterize/credentials-operator/src/controllers/iam"
+	"github.com/otterize/credentials-operator/src/controllers/iam/iamcredentialsagents"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/samber/lo"
@@ -18,10 +18,10 @@ import (
 
 type ServiceAccountReconciler struct {
 	client.Client
-	agents []iam.IAMCredentialsAgent
+	agents []iamcredentialsagents.IAMCredentialsAgent
 }
 
-func NewServiceAccountReconciler(client client.Client, agents []iam.IAMCredentialsAgent) *ServiceAccountReconciler {
+func NewServiceAccountReconciler(client client.Client, agents []iamcredentialsagents.IAMCredentialsAgent) *ServiceAccountReconciler {
 	return &ServiceAccountReconciler{
 		Client: client,
 		agents: agents,
