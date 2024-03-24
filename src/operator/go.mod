@@ -14,7 +14,7 @@ require (
 	github.com/bombsimon/logrusr/v3 v3.0.0
 	github.com/cert-manager/cert-manager v1.12.3
 	github.com/google/uuid v1.6.0
-	github.com/otterize/intents-operator/src v0.0.0-20240310164606-91d6246c0cfa
+	github.com/otterize/intents-operator/src v0.0.0-20240324150435-7dce68c3126f
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.1
 	github.com/samber/lo v1.33.0
 	github.com/sirupsen/logrus v1.9.0
@@ -37,13 +37,16 @@ require (
 require (
 	cloud.google.com/go/compute v1.23.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	github.com/Azure/azure-sdk-for-go-extensions v0.1.6 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.9.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.5.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.5.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2 v2.2.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4 v4.7.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault v1.4.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi v1.2.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.2.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armsubscriptions v1.3.0 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20220621081337-cb9428e4ac1e // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.2.1 // indirect
 	github.com/DataDog/datadog-go v3.2.0+incompatible // indirect
