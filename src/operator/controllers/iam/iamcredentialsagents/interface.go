@@ -1,4 +1,4 @@
-package iam
+package iamcredentialsagents
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 )
 
 type IAMCredentialsAgent interface {
+	FinalizerName() string
 	OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool, err error)
 	OnServiceAccountUpdate(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updated bool, requeue bool, err error)
 	OnServiceAccountTermination(ctx context.Context, serviceAccount *corev1.ServiceAccount) error
