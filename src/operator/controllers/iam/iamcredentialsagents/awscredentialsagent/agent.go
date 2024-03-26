@@ -28,6 +28,9 @@ const (
 	// but should be tagged as deleted instead (aka soft delete strategy).
 	OtterizeAWSUseSoftDeleteKey   = "credentials-operator.otterize.com/aws-use-soft-delete"
 	OtterizeAWSUseSoftDeleteValue = "true"
+
+	// AWSAgentFinalizer indicates that cleanup on AWS is needed upon termination.
+	AWSAgentFinalizer = "credentials-operator.otterize.com/aws-role"
 )
 
 type Agent struct {
@@ -39,6 +42,10 @@ type Agent struct {
 
 func NewAWSCredentialsAgent(awsAgent *awsagent.Agent, markRolesAsUnusedInsteadOfDelete bool, enableAWSRoleAnywhere bool, trustAnchorArn string) *Agent {
 	return &Agent{awsAgent, markRolesAsUnusedInsteadOfDelete, enableAWSRoleAnywhere, trustAnchorArn}
+}
+
+func (a *Agent) FinalizerName() string {
+	return AWSAgentFinalizer
 }
 
 func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool, err error) {

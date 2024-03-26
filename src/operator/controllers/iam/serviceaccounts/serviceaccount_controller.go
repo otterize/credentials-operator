@@ -18,13 +18,13 @@ import (
 
 type ServiceAccountReconciler struct {
 	client.Client
-	agents []iamcredentialsagents.IAMCredentialsAgent
+	agent iamcredentialsagents.IAMCredentialsAgent
 }
 
-func NewServiceAccountReconciler(client client.Client, agents []iamcredentialsagents.IAMCredentialsAgent) *ServiceAccountReconciler {
+func NewServiceAccountReconciler(client client.Client, agent iamcredentialsagents.IAMCredentialsAgent) *ServiceAccountReconciler {
 	return &ServiceAccountReconciler{
 		Client: client,
-		agents: agents,
+		agent:  agent,
 	}
 }
 
@@ -58,10 +58,10 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Perform cleanup if the service account is being deleted or no longer referenced by pods
 	if serviceAccount.DeletionTimestamp != nil || !isReferencedByPods {
-		return r.HandleServiceCleanup(ctx, serviceAccount)
+		return r.HandleServiceAccountCleanup(ctx, serviceAccount)
 	}
 
-	return r.HandleServiceUpdate(ctx, serviceAccount)
+	return r.HandleServiceAccountUpdate(ctx, serviceAccount)
 }
 
 func getLabelValue(serviceAccount *corev1.ServiceAccount, label string) (string, bool) {
@@ -72,16 +72,15 @@ func getLabelValue(serviceAccount *corev1.ServiceAccount, label string) (string,
 	return value, ok
 }
 
-func (r *ServiceAccountReconciler) HandleServiceCleanup(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
-	for _, agent := range r.agents {
-		if err := agent.OnServiceAccountTermination(ctx, &serviceAccount); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to remove service account: %w", err)
-		}
+func (r *ServiceAccountReconciler) HandleServiceAccountCleanup(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
+	if err := r.agent.OnServiceAccountTermination(ctx, &serviceAccount); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to remove service account: %w", err)
 	}
 
 	if serviceAccount.DeletionTimestamp != nil {
+		// remove finalizer to unblock deletion
 		updatedServiceAccount := serviceAccount.DeepCopy()
-		if controllerutil.RemoveFinalizer(updatedServiceAccount, metadata.IAMRoleFinalizer) {
+		if controllerutil.RemoveFinalizer(updatedServiceAccount, r.agent.FinalizerName()) {
 			err := r.Client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
 			if err != nil {
 				if apierrors.IsConflict(err) {
@@ -94,10 +93,10 @@ func (r *ServiceAccountReconciler) HandleServiceCleanup(ctx context.Context, ser
 	return ctrl.Result{}, nil
 }
 
-func (r *ServiceAccountReconciler) HandleServiceUpdate(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
-	// Add a finalizer label to the service account to block deletion until cleanup is complete
+func (r *ServiceAccountReconciler) HandleServiceAccountUpdate(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
+	// Add a finalizer to the service account to block deletion until cleanup is complete
 	updatedServiceAccount := serviceAccount.DeepCopy()
-	if controllerutil.AddFinalizer(updatedServiceAccount, metadata.IAMRoleFinalizer) {
+	if controllerutil.AddFinalizer(updatedServiceAccount, r.agent.FinalizerName()) {
 		err := r.Client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
 		if err != nil {
 			if apierrors.IsConflict(err) {
@@ -107,19 +106,14 @@ func (r *ServiceAccountReconciler) HandleServiceUpdate(ctx context.Context, serv
 		}
 	}
 
-	hasUpdates := false
-	for _, agent := range r.agents {
-		updated, requeue, err := agent.OnServiceAccountUpdate(ctx, updatedServiceAccount)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to reconcile service account: %w", err)
-		}
-		if requeue {
-			return ctrl.Result{Requeue: true}, nil
-		}
-		hasUpdates = hasUpdates || updated
+	updated, requeue, err := r.agent.OnServiceAccountUpdate(ctx, updatedServiceAccount)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to reconcile service account: %w", err)
 	}
-
-	if !hasUpdates {
+	if requeue {
+		return ctrl.Result{Requeue: true}, nil
+	}
+	if !updated {
 		return ctrl.Result{}, nil
 	}
 

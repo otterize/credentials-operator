@@ -15,6 +15,9 @@ const (
 	// GCPWorkloadIdentityAnnotation is used by GCP workload identity to link between service accounts
 	GCPWorkloadIdentityAnnotation = "iam.gke.io/gcp-service-account"
 	GCPWorkloadIdentityNotSet     = "false"
+
+	// GCPAgentFinalizer indicates that cleanup on GCP service account is needed upon termination.
+	GCPAgentFinalizer = "credentials-operator.otterize.com/gcp-service-account"
 )
 
 type Agent struct {
@@ -23,6 +26,10 @@ type Agent struct {
 
 func NewGCPCredentialsAgent(gcpAgent *gcpagent.Agent) *Agent {
 	return &Agent{gcpAgent}
+}
+
+func (a *Agent) FinalizerName() string {
+	return GCPAgentFinalizer
 }
 
 func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool, err error) {

@@ -22,6 +22,9 @@ const (
 
 	// AzureClientIDEnvVar is originally set by the Azure workload identity webhook, and is overridden by us to contain the generated client ID
 	AzureClientIDEnvVar = "AZURE_CLIENT_ID"
+
+	// AzureAgentFinalizer indicates that cleanup on Azure workload identity is needed upon termination.
+	AzureAgentFinalizer = "credentials-operator.otterize.com/azure-workload-identity"
 )
 
 type Agent struct {
@@ -30,6 +33,10 @@ type Agent struct {
 
 func NewAzureCredentialsAgent(azureAgent *azureagent.Agent) *Agent {
 	return &Agent{azureAgent}
+}
+
+func (a *Agent) FinalizerName() string {
+	return AzureAgentFinalizer
 }
 
 func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool, err error) {
