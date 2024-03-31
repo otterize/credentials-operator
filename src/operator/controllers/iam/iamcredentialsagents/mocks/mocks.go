@@ -77,6 +77,22 @@ func (mr *MockIAMCredentialsAgentMockRecorder) OnPodAdmission(ctx, pod, serviceA
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnPodAdmission", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).OnPodAdmission), ctx, pod, serviceAccount, dryRun)
 }
 
+// OnPodUpdate mocks base method.
+func (m *MockIAMCredentialsAgent) OnPodUpdate(ctx context.Context, pod *v1.Pod, serviceAccount *v1.ServiceAccount) (bool, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OnPodUpdate", ctx, pod, serviceAccount)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// OnPodUpdate indicates an expected call of OnPodUpdate.
+func (mr *MockIAMCredentialsAgentMockRecorder) OnPodUpdate(ctx, pod, serviceAccount interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnPodUpdate", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).OnPodUpdate), ctx, pod, serviceAccount)
+}
+
 // OnServiceAccountTermination mocks base method.
 func (m *MockIAMCredentialsAgent) OnServiceAccountTermination(ctx context.Context, serviceAccount *v1.ServiceAccount) error {
 	m.ctrl.T.Helper()

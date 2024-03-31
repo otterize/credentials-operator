@@ -38,8 +38,13 @@ func (a *Agent) ServiceAccountLabel() string {
 }
 
 func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount, dryRun bool) error {
-	apiutils.AddAnnotation(serviceAccount, GCPWorkloadIdentityAnnotation, GCPWorkloadIdentityNotSet)
+	// The GCP agent does not need to do anything on pod admission
 	return nil
+}
+
+func (a *Agent) OnPodUpdate(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool, requeue bool, err error) {
+	apiutils.AddAnnotation(serviceAccount, GCPWorkloadIdentityAnnotation, GCPWorkloadIdentityNotSet)
+	return true, false, nil
 }
 
 func (a *Agent) OnServiceAccountUpdate(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updated bool, requeue bool, err error) {

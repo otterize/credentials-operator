@@ -353,10 +353,6 @@ func setupIAMAgents(ctx context.Context, mgr ctrl.Manager, client controllerrunt
 			awsWebhookHandler := sa_pod_webhook_generic.NewServiceAccountAnnotatingPodWebhook(mgr, awsCredentialsAgent)
 			mgr.GetWebhookServer().Register("/mutate-aws-v1-pod", &webhook.Admission{Handler: awsWebhookHandler})
 		}
-		if gcpIAMEnabled {
-			gcpWebhookHandler := sa_pod_webhook_generic.NewServiceAccountAnnotatingPodWebhook(mgr, gcpCredentialsAgent)
-			mgr.GetWebhookServer().Register("/mutate-gcp-v1-pod", &webhook.Admission{Handler: gcpWebhookHandler})
-		}
 		if azureIAMEnabled {
 			azureWebhookHandler := sa_pod_webhook_generic.NewServiceAccountAnnotatingPodWebhook(mgr, azureCredentialsAgent)
 			mgr.GetWebhookServer().Register("/mutate-azure-v1-pod", &webhook.Admission{Handler: azureWebhookHandler})

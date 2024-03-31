@@ -48,6 +48,7 @@ func (s *TestPodsControllerSuite) SetupTest() {
 	s.reconciler = NewPodReconciler(s.client, s.mockIAM)
 	s.mockIAM.EXPECT().FinalizerName().Return(mockFinalizer).AnyTimes()
 	s.mockIAM.EXPECT().ServiceAccountLabel().Return(mockServiceAccountLabel).AnyTimes()
+	s.mockIAM.EXPECT().AppliesOnPod(gomock.Any()).Return(true).AnyTimes()
 }
 
 func (s *TestPodsControllerSuite) TestPodWithoutLabelsNotAffected() {
@@ -60,6 +61,7 @@ func (s *TestPodsControllerSuite) TestPodWithoutLabelsNotAffected() {
 			return nil
 		},
 	)
+	s.mockIAM.EXPECT().OnPodUpdate(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil)
 
 	res, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().NoError(err)
@@ -76,6 +78,8 @@ func (s *TestPodsControllerSuite) TestPodNotTerminatingNotAffected() {
 			return nil
 		},
 	)
+
+	s.mockIAM.EXPECT().OnPodUpdate(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil)
 
 	res, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().NoError(err)

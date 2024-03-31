@@ -57,38 +57,24 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	isReferencedByPods := value == metadata.OtterizeServiceAccountHasPodsValue
 
 	// Perform cleanup if the service account is being deleted or no longer referenced by pods
-	if serviceAccount.DeletionTimestamp != nil || !isReferencedByPods {
-		return r.HandleServiceAccountCleanup(ctx, serviceAccount)
+	if serviceAccount.DeletionTimestamp == nil && isReferencedByPods {
+		return r.handleServiceAccountUpdate(ctx, serviceAccount)
 	}
 
-	return r.HandleServiceAccountUpdate(ctx, serviceAccount)
+	return r.handleServiceAccountCleanup(ctx, serviceAccount)
 }
 
-func (r *ServiceAccountReconciler) HandleServiceAccountCleanup(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
-	if err := r.agent.OnServiceAccountTermination(ctx, &serviceAccount); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to remove service account: %w", err)
-	}
-
-	if serviceAccount.DeletionTimestamp != nil {
-		// remove finalizer to unblock deletion
-		updatedServiceAccount := serviceAccount.DeepCopy()
-		if controllerutil.RemoveFinalizer(updatedServiceAccount, r.agent.FinalizerName()) {
-			err := r.Client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
-			if err != nil {
-				if apierrors.IsConflict(err) {
-					return ctrl.Result{Requeue: true}, nil
-				}
-				return ctrl.Result{}, errors.Wrap(err)
-			}
-		}
-	}
-	return ctrl.Result{}, nil
-}
-
-func (r *ServiceAccountReconciler) HandleServiceAccountUpdate(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
-	// Add a finalizer to the service account to block deletion until cleanup is complete
+func (r *ServiceAccountReconciler) handleServiceAccountUpdate(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
 	updatedServiceAccount := serviceAccount.DeepCopy()
-	if controllerutil.AddFinalizer(updatedServiceAccount, r.agent.FinalizerName()) {
+	updated, requeue, err := r.agent.OnServiceAccountUpdate(ctx, updatedServiceAccount)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to reconcile service account: %w", err)
+	}
+	if requeue {
+		return ctrl.Result{Requeue: true}, nil
+	}
+	if updated {
+		controllerutil.AddFinalizer(updatedServiceAccount, r.agent.FinalizerName())
 		err := r.Client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
 		if err != nil {
 			if apierrors.IsConflict(err) {
@@ -98,22 +84,30 @@ func (r *ServiceAccountReconciler) HandleServiceAccountUpdate(ctx context.Contex
 		}
 	}
 
-	updated, requeue, err := r.agent.OnServiceAccountUpdate(ctx, updatedServiceAccount)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to reconcile service account: %w", err)
-	}
-	if requeue {
-		return ctrl.Result{Requeue: true}, nil
-	}
-	if !updated {
+	return ctrl.Result{}, nil
+}
+
+func (r *ServiceAccountReconciler) handleServiceAccountCleanup(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
+	logger := logrus.WithField("name", serviceAccount.Name).WithField("namespace", serviceAccount.Namespace)
+	if !controllerutil.ContainsFinalizer(&serviceAccount, r.agent.FinalizerName()) {
+		logger.Debug("service account does not have the Otterize finalizer, skipping")
 		return ctrl.Result{}, nil
 	}
 
-	if err := r.Client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount)); err != nil {
-		if apierrors.IsConflict(err) {
-			return ctrl.Result{Requeue: true}, nil
+	if err := r.agent.OnServiceAccountTermination(ctx, &serviceAccount); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to remove service account: %w", err)
+	}
+
+	// remove finalizer to unblock deletion
+	updatedServiceAccount := serviceAccount.DeepCopy()
+	if controllerutil.RemoveFinalizer(updatedServiceAccount, r.agent.FinalizerName()) {
+		err := r.Client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
+		if err != nil {
+			if apierrors.IsConflict(err) {
+				return ctrl.Result{Requeue: true}, nil
+			}
+			return ctrl.Result{}, errors.Wrap(err)
 		}
-		return ctrl.Result{}, errors.Wrap(err)
 	}
 
 	return ctrl.Result{}, nil

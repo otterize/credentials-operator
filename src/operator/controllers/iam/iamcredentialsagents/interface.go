@@ -12,6 +12,8 @@ type IAMCredentialsAgent interface {
 	AppliesOnPod(pod *corev1.Pod) bool
 
 	OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount, dryRun bool) error
+
+	OnPodUpdate(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool, requeue bool, err error)
 	OnServiceAccountUpdate(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updated bool, requeue bool, err error)
 	OnServiceAccountTermination(ctx context.Context, serviceAccount *corev1.ServiceAccount) error
 }

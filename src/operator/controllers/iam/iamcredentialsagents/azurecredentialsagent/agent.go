@@ -88,6 +88,10 @@ func mutateContainers(containers []corev1.Container, clientId string) []corev1.C
 	})
 }
 
+func (a *Agent) OnPodUpdate(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool, requeue bool, err error) {
+	return false, false, nil
+}
+
 func (a *Agent) OnServiceAccountUpdate(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updated bool, requeue bool, err error) {
 	return false, false, nil
 }

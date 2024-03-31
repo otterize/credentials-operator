@@ -2,6 +2,7 @@ package pods
 
 import (
 	"context"
+	"fmt"
 	"github.com/otterize/credentials-operator/src/controllers/iam/iamcredentialsagents"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	"github.com/otterize/credentials-operator/src/shared/apiutils"
@@ -53,9 +54,60 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, errors.Wrap(err)
 	}
 
-	if pod.DeletionTimestamp == nil {
+	if !r.agent.AppliesOnPod(&pod) {
+		logger.Debug("pod does not have the Otterize IAM label, skipping")
 		return ctrl.Result{}, nil
 	}
+
+	if pod.DeletionTimestamp == nil {
+		return r.handlePodUpdate(ctx, pod)
+	}
+
+	return r.handlePodCleanup(ctx, pod)
+}
+
+func (r *PodReconciler) handlePodUpdate(ctx context.Context, pod corev1.Pod) (ctrl.Result, error) {
+	var serviceAccount corev1.ServiceAccount
+	err := r.Get(ctx, types.NamespacedName{Name: pod.Spec.ServiceAccountName, Namespace: pod.Namespace}, &serviceAccount)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get service account: %w", err)
+	}
+
+	updatedServiceAccount := serviceAccount.DeepCopy()
+	updatedPod := pod.DeepCopy()
+
+	updated, requeue, err := r.agent.OnPodUpdate(ctx, updatedPod, updatedServiceAccount)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to reconcile pod: %w", err)
+	}
+	if requeue {
+		return ctrl.Result{Requeue: true}, nil
+	}
+	if updated {
+		controllerutil.AddFinalizer(updatedPod, r.agent.FinalizerName())
+		err := r.Patch(ctx, updatedPod, client.MergeFrom(&pod))
+		if err != nil {
+			if apierrors.IsConflict(err) {
+				return ctrl.Result{Requeue: true}, nil
+			}
+			return ctrl.Result{}, errors.Wrap(err)
+		}
+
+		apiutils.AddLabel(updatedServiceAccount, r.agent.ServiceAccountLabel(), metadata.OtterizeServiceAccountHasPodsValue)
+		err = r.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
+		if err != nil {
+			if apierrors.IsConflict(err) {
+				return ctrl.Result{Requeue: true}, nil
+			}
+			return ctrl.Result{}, errors.Wrap(err)
+		}
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *PodReconciler) handlePodCleanup(ctx context.Context, pod corev1.Pod) (ctrl.Result, error) {
+	logger := logrus.WithField("name", pod.Name).WithField("namespace", pod.Namespace)
 
 	if !controllerutil.ContainsFinalizer(&pod, r.agent.FinalizerName()) {
 		logger.Debug("pod does not have the Otterize finalizer, skipping")
@@ -70,7 +122,6 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	// in case there's more than 1 pod, this is not the last pod, so we can just let the pod terminate.
 	updatedPod := pod.DeepCopy()
 	if controllerutil.RemoveFinalizer(updatedPod, r.agent.FinalizerName()) {
 		err := r.Patch(ctx, updatedPod, client.MergeFrom(&pod))
