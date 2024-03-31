@@ -52,13 +52,8 @@ func (a *Agent) ServiceAccountLabel() string {
 	return AWSOtterizeServiceAccountLabel
 }
 
-func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount, dryRun bool) (updated bool, err error) {
+func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount, dryRun bool) error {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
-
-	if !a.AppliesOnPod(pod) {
-		logger.Debug("Pod is not marked for AWS IAM role, skipping")
-		return false, nil
-	}
 
 	roleArn := a.GenerateRoleARN(serviceAccount.Namespace, serviceAccount.Name)
 	serviceAccount.Annotations[ServiceAccountAWSRoleARNAnnotation] = roleArn
@@ -82,7 +77,7 @@ func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAcco
 
 		_, role, profile, err := a.reconcileAWSRole(ctx, serviceAccount, dryRun)
 		if err != nil {
-			return false, errors.Errorf("failed reconciling AWS role: %w", err)
+			return errors.Errorf("failed reconciling AWS role: %w", err)
 		}
 
 		pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
@@ -115,7 +110,7 @@ func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAcco
 
 	}
 
-	return true, nil
+	return nil
 }
 func (a *Agent) reconcileAWSRole(ctx context.Context, serviceAccount *corev1.ServiceAccount, dryRun bool) (updateAnnotation bool, role *awstypes.Role, profile *rolesanywhereTypes.ProfileDetail, err error) {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})

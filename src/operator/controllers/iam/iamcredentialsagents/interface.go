@@ -8,7 +8,10 @@ import (
 type IAMCredentialsAgent interface {
 	FinalizerName() string
 	ServiceAccountLabel() string
-	OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount, dryRun bool) (updated bool, err error)
+
+	AppliesOnPod(pod *corev1.Pod) bool
+
+	OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount, dryRun bool) error
 	OnServiceAccountUpdate(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updated bool, requeue bool, err error)
 	OnServiceAccountTermination(ctx context.Context, serviceAccount *corev1.ServiceAccount) error
 }

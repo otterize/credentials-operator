@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/otterize/credentials-operator/src/controllers/iam/iamcredentialsagents"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
+	"github.com/otterize/credentials-operator/src/shared/apiutils"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -46,13 +47,15 @@ func (w *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod
 		return pod, false, "no webhook handling if pod is terminating", nil
 	}
 
-	if pod.Labels == nil {
+	if !w.agent.AppliesOnPod(&pod) {
 		return pod, false, "no create IAM role label - no modifications made", nil
 	}
 
 	if controllerutil.ContainsFinalizer(&pod, w.agent.FinalizerName()) {
 		return pod, false, "pod already handled by webhook", nil
 	}
+
+	controllerutil.AddFinalizer(&pod, w.agent.FinalizerName())
 
 	var serviceAccount corev1.ServiceAccount
 	err = w.client.Get(ctx, types.NamespacedName{
@@ -64,43 +67,18 @@ func (w *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod
 	}
 
 	updatedServiceAccount := serviceAccount.DeepCopy()
-
-	if updatedServiceAccount.Annotations == nil {
-		updatedServiceAccount.Annotations = make(map[string]string)
-	}
-
-	if updatedServiceAccount.Labels == nil {
-		updatedServiceAccount.Labels = make(map[string]string)
-	}
-
-	if pod.Annotations == nil {
-		pod.Annotations = make(map[string]string)
-	}
-
-	if pod.Labels == nil {
-		pod.Labels = make(map[string]string)
-	}
-
-	updated, err := w.agent.OnPodAdmission(ctx, &pod, updatedServiceAccount, dryRun)
-	if err != nil {
+	if err := w.agent.OnPodAdmission(ctx, &pod, updatedServiceAccount, dryRun); err != nil {
 		return corev1.Pod{}, false, "", fmt.Errorf("failed to handle pod admission: %w", err)
 	}
 
-	if !updated {
-		logger.Debugf("pod was not modified by IAM agent, skipping")
-		return pod, false, "no IAM modifications made", nil
-	}
-
-	updatedServiceAccount.Labels[w.agent.ServiceAccountLabel()] = metadata.OtterizeServiceAccountHasPodsValue
-
 	if !dryRun {
+		apiutils.AddLabel(updatedServiceAccount, w.agent.ServiceAccountLabel(), metadata.OtterizeServiceAccountHasPodsValue)
 		err = w.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
 		if err != nil {
 			return corev1.Pod{}, false, "", fmt.Errorf("could not patch service account: %w", err)
 		}
 	}
 
-	controllerutil.AddFinalizer(&pod, w.agent.FinalizerName())
 	return pod, true, "pod and service account updated to create IAM role", nil
 }
 

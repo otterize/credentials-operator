@@ -42,47 +42,34 @@ func (a *Agent) ServiceAccountLabel() string {
 	return AzureOtterizeServiceAccountLabel
 }
 
-func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount, dryRun bool) (updated bool, err error) {
+func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount, dryRun bool) error {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
 
-	if !a.AppliesOnPod(pod) {
-		logger.Debug("Pod is not marked for Azure role assignment, skipping")
-		return false, nil
+	if !dryRun {
+		// get or create the user assigned identity, ensuring the identity & federated credentials are in-place
+		identity, err := a.GetOrCreateUserAssignedIdentity(ctx, serviceAccount.Namespace, serviceAccount.Name)
+		if err != nil {
+			return errors.Errorf("failed to create user assigned identity: %w", err)
+		}
+
+		clientId := *identity.Properties.ClientID
+
+		logger.WithField("identity", *identity.Name).WithField("clientId", clientId).
+			Info("Annotating service account with managed identity client ID")
+
+		serviceAccount.Annotations[AzureWorkloadIdentityClientIdAnnotation] = clientId
+		// we additionally annotate the pod with the client ID to trigger the azure workload identity webhook on it
+		pod.Annotations[OtterizeAzureWorkloadIdentityClientIdAnnotation] = clientId
+
+		// update the pod's containers with the new client ID
+		// it would be great if the azure workload identity webhook could do this for us, but it doesn't,
+		// because it had already set its client ID to an empty string on its first invocation,
+		// before we had a chance to set it on the service account.
+		pod.Spec.InitContainers = mutateContainers(pod.Spec.InitContainers, clientId)
+		pod.Spec.Containers = mutateContainers(pod.Spec.Containers, clientId)
 	}
 
-	if dryRun {
-		logger.Debug("Dry run, skipping user assigned identity creation")
-		return false, nil
-	}
-
-	// get or create the user assigned identity, ensuring the identity & federated credentials are in-place
-	identity, err := a.GetOrCreateUserAssignedIdentity(ctx, serviceAccount.Namespace, serviceAccount.Name)
-	if err != nil {
-		return false, errors.Errorf("failed to create user assigned identity: %w", err)
-	}
-
-	clientId := *identity.Properties.ClientID
-
-	if serviceAccount.Annotations[AzureWorkloadIdentityClientIdAnnotation] == clientId {
-		// existing identity matches the annotated identity
-		return false, nil
-	}
-
-	logger.WithField("identity", *identity.Name).WithField("clientId", clientId).
-		Info("Annotating service account with managed identity client ID")
-
-	serviceAccount.Annotations[AzureWorkloadIdentityClientIdAnnotation] = clientId
-	// we additionally annotate the pod with the client ID to trigger the azure workload identity webhook on it
-	pod.Annotations[OtterizeAzureWorkloadIdentityClientIdAnnotation] = clientId
-
-	// update the pod's containers with the new client ID
-	// it would be great if the azure workload identity webhook could do this for us, but it doesn't,
-	// because it had already set its client ID to an empty string on its first invocation,
-	// before we had a chance to set it on the service account.
-	pod.Spec.InitContainers = mutateContainers(pod.Spec.InitContainers, clientId)
-	pod.Spec.Containers = mutateContainers(pod.Spec.Containers, clientId)
-
-	return true, nil
+	return nil
 }
 
 func mutateContainers(containers []corev1.Container, clientId string) []corev1.Container {
