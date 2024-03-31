@@ -89,7 +89,7 @@ func (r *ServiceAccountReconciler) handleServiceAccountUpdate(ctx context.Contex
 
 func (r *ServiceAccountReconciler) handleServiceAccountCleanup(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
 	logger := logrus.WithField("name", serviceAccount.Name).WithField("namespace", serviceAccount.Namespace)
-	if !controllerutil.ContainsFinalizer(&serviceAccount, r.agent.FinalizerName()) {
+	if !controllerutil.ContainsFinalizer(&serviceAccount, r.agent.FinalizerName()) && !controllerutil.ContainsFinalizer(&serviceAccount, metadata.DeprecatedIAMRoleFinalizer) {
 		logger.Debug("service account does not have the Otterize finalizer, skipping")
 		return ctrl.Result{}, nil
 	}
@@ -100,7 +100,7 @@ func (r *ServiceAccountReconciler) handleServiceAccountCleanup(ctx context.Conte
 
 	// remove finalizer to unblock deletion
 	updatedServiceAccount := serviceAccount.DeepCopy()
-	if controllerutil.RemoveFinalizer(updatedServiceAccount, r.agent.FinalizerName()) {
+	if controllerutil.RemoveFinalizer(updatedServiceAccount, r.agent.FinalizerName()) || controllerutil.RemoveFinalizer(updatedServiceAccount, metadata.DeprecatedIAMRoleFinalizer) {
 		err := r.Client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
 		if err != nil {
 			if apierrors.IsConflict(err) {

@@ -10,6 +10,10 @@ const (
 	TLSSecretNameAnnotation           = "credentials-operator.otterize.com/tls-secret-name"
 	TLSSecretNameAnnotationDeprecated = "spire-integration.otterize.com/tls-secret-name"
 
+	// DeprecatedIAMRoleFinalizer indicates that cleanup on IAM roles is needed upon termination.
+	// Deprecated: replaced by AWSAgentFinalizer, GCPAgentFinalizer, and AzureAgentFinalizer
+	DeprecatedIAMRoleFinalizer = "credentials-operator.otterize.com/iam-role"
+
 	// DNSNamesAnnotation is a comma-separated list of additional dns names to be registered as part of the
 	// SPIRE-server entry and encoded into the certificate data
 	DNSNamesAnnotation           = "credentials-operator.otterize.com/dns-names"

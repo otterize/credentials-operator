@@ -43,7 +43,7 @@ func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := logrus.WithField("name", req.Name).WithField("namespace", req.Namespace)
+
 	pod := corev1.Pod{}
 
 	err := r.Get(ctx, req.NamespacedName, &pod)
@@ -54,11 +54,6 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, errors.Wrap(err)
 	}
 
-	if !r.agent.AppliesOnPod(&pod) {
-		logger.Debug("pod does not have the Otterize IAM label, skipping")
-		return ctrl.Result{}, nil
-	}
-
 	if pod.DeletionTimestamp == nil {
 		return r.handlePodUpdate(ctx, pod)
 	}
@@ -67,6 +62,13 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 }
 
 func (r *PodReconciler) handlePodUpdate(ctx context.Context, pod corev1.Pod) (ctrl.Result, error) {
+	logger := logrus.WithField("name", pod.Name).WithField("namespace", pod.Namespace)
+
+	if !r.agent.AppliesOnPod(&pod) {
+		logger.Debug("pod does not have the Otterize IAM label, skipping")
+		return ctrl.Result{}, nil
+	}
+
 	var serviceAccount corev1.ServiceAccount
 	err := r.Get(ctx, types.NamespacedName{Name: pod.Spec.ServiceAccountName, Namespace: pod.Namespace}, &serviceAccount)
 	if err != nil {
@@ -109,7 +111,7 @@ func (r *PodReconciler) handlePodUpdate(ctx context.Context, pod corev1.Pod) (ct
 func (r *PodReconciler) handlePodCleanup(ctx context.Context, pod corev1.Pod) (ctrl.Result, error) {
 	logger := logrus.WithField("name", pod.Name).WithField("namespace", pod.Namespace)
 
-	if !controllerutil.ContainsFinalizer(&pod, r.agent.FinalizerName()) {
+	if !controllerutil.ContainsFinalizer(&pod, r.agent.FinalizerName()) && !controllerutil.ContainsFinalizer(&pod, metadata.DeprecatedIAMRoleFinalizer) {
 		logger.Debug("pod does not have the Otterize finalizer, skipping")
 		return ctrl.Result{}, nil
 	}
@@ -123,7 +125,7 @@ func (r *PodReconciler) handlePodCleanup(ctx context.Context, pod corev1.Pod) (c
 	}
 
 	updatedPod := pod.DeepCopy()
-	if controllerutil.RemoveFinalizer(updatedPod, r.agent.FinalizerName()) {
+	if controllerutil.RemoveFinalizer(updatedPod, r.agent.FinalizerName()) || controllerutil.RemoveFinalizer(updatedPod, metadata.DeprecatedIAMRoleFinalizer) {
 		err := r.Patch(ctx, updatedPod, client.MergeFrom(&pod))
 		if err != nil {
 			if apierrors.IsConflict(err) {
