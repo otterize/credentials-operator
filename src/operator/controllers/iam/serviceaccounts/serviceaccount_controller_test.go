@@ -44,6 +44,8 @@ func (s *TestServiceAccountSuite) SetupTest() {
 	s.client = mock_client.NewMockClient(s.controller)
 	s.mockIAM = mock_iamcredentialsagents.NewMockIAMCredentialsAgent(s.controller)
 	s.reconciler = NewServiceAccountReconciler(s.client, s.mockIAM)
+	s.mockIAM.EXPECT().FinalizerName().Return(mockFinalizer).AnyTimes()
+	s.mockIAM.EXPECT().ServiceAccountLabel().Return(mockServiceAccountLabel).AnyTimes()
 }
 
 // Tests:
@@ -140,7 +142,7 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountServiceA
 			Namespace:   testNamespace,
 			Annotations: map[string]string{awscredentialsagent.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
 			Labels: map[string]string{
-				mockServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue,
+				mockServiceAccountLabel: metadata.OtterizeServiceAccountHasNoPodsValue,
 			},
 			Finalizers: []string{mockFinalizer},
 		},

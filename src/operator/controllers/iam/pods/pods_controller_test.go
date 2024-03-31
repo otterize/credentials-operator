@@ -46,6 +46,8 @@ func (s *TestPodsControllerSuite) SetupTest() {
 	s.client = mock_client.NewMockClient(s.controller)
 	s.mockIAM = mock_iamcredentialsagents.NewMockIAMCredentialsAgent(s.controller)
 	s.reconciler = NewPodReconciler(s.client, s.mockIAM)
+	s.mockIAM.EXPECT().FinalizerName().Return(mockFinalizer).AnyTimes()
+	s.mockIAM.EXPECT().ServiceAccountLabel().Return(mockServiceAccountLabel).AnyTimes()
 }
 
 func (s *TestPodsControllerSuite) TestPodWithoutLabelsNotAffected() {
@@ -224,6 +226,7 @@ func (s *TestPodsControllerSuite) TestNonLastPodTerminatingDoesNotLabelServiceAc
 			pod2 := testutils.GetTestPodSchema()
 			pod2.UID += "2"
 			pod2.Name += "2"
+			pod2.Finalizers = []string{mockFinalizer}
 
 			podList := corev1.PodList{Items: []corev1.Pod{pod, pod2}}
 			podList.DeepCopyInto(arg1)
@@ -338,6 +341,6 @@ func (s *TestPodsControllerSuite) TestLastPodTerminatingWithFinalizerLabelsServi
 	s.Require().Equal(reconcile.Result{Requeue: true}, res)
 }
 
-func TestRunServiceAccountControllerSuite(t *testing.T) {
+func TestRunPodsControllerSuite(t *testing.T) {
 	suite.Run(t, new(TestPodsControllerSuite))
 }
