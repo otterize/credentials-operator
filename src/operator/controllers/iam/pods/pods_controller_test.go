@@ -3,6 +3,7 @@ package pods
 import (
 	"context"
 	"errors"
+	mock_iamcredentialsagents "github.com/otterize/credentials-operator/src/controllers/iam/iamcredentialsagents/mocks"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	mock_client "github.com/otterize/credentials-operator/src/mocks/controller-runtime/client"
 	"github.com/otterize/credentials-operator/src/shared/apiutils"
@@ -21,17 +22,30 @@ import (
 	"testing"
 )
 
+const (
+	testPodName             = "pod"
+	testNamespace           = "namespace"
+	testServiceAccountName  = "serviceaccount"
+	testPodUID              = "pod-uid"
+	testRoleARN             = "role-arn"
+	testRoleName            = "role-name"
+	mockFinalizer           = "credentials-operator.otterize.com/mock-finalizer"
+	mockServiceAccountLabel = "credentials-operator.otterize.com/mock-service-account-managed"
+)
+
 type TestPodsControllerSuite struct {
 	suite.Suite
 	controller *gomock.Controller
 	client     *mock_client.MockClient
+	mockIAM    *mock_iamcredentialsagents.MockIAMCredentialsAgent
 	reconciler *PodReconciler
 }
 
 func (s *TestPodsControllerSuite) SetupTest() {
 	s.controller = gomock.NewController(s.T())
 	s.client = mock_client.NewMockClient(s.controller)
-	s.reconciler = NewPodReconciler(s.client)
+	s.mockIAM = mock_iamcredentialsagents.NewMockIAMCredentialsAgent(s.controller)
+	s.reconciler = NewPodReconciler(s.client, s.mockIAM)
 }
 
 func (s *TestPodsControllerSuite) TestPodWithoutLabelsNotAffected() {
@@ -88,11 +102,11 @@ func (s *TestPodsControllerSuite) TestLastPodTerminatingButDifferentPodUIDDoesNo
 	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
-	serviceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
+	serviceAccount.Labels = map[string]string{mockServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
 
 	pod := testutils.GetTestPodSchema()
 	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
-	pod.Finalizers = []string{metadata.IAMRoleFinalizer}
+	pod.Finalizers = []string{mockFinalizer}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
@@ -118,7 +132,7 @@ func (s *TestPodsControllerSuite) TestLastPodTerminatingButDifferentPodUIDDoesNo
 
 	// should not update serviceaccount because UID was different
 	updatedPod := pod.DeepCopy()
-	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, metadata.IAMRoleFinalizer))
+	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, mockFinalizer))
 
 	s.client.EXPECT().Patch(gomock.Any(), updatedPod, gomock.Any())
 
@@ -131,11 +145,11 @@ func (s *TestPodsControllerSuite) TestLastPodTerminatingWithFinalizerLabelsServi
 	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
-	serviceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
+	serviceAccount.Labels = map[string]string{mockServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
 
 	pod := testutils.GetTestPodSchema()
 	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
-	pod.Finalizers = []string{metadata.IAMRoleFinalizer}
+	pod.Finalizers = []string{mockFinalizer}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
@@ -169,12 +183,12 @@ func (s *TestPodsControllerSuite) TestLastPodTerminatingWithFinalizerLabelsServi
 	)
 
 	updatedServiceAccount := serviceAccount.DeepCopy()
-	updatedServiceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasNoPodsValue}
+	updatedServiceAccount.Labels = map[string]string{mockServiceAccountLabel: metadata.OtterizeServiceAccountHasNoPodsValue}
 
 	s.client.EXPECT().Patch(gomock.Any(), updatedServiceAccount, gomock.Any())
 
 	updatedPod := pod.DeepCopy()
-	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, metadata.IAMRoleFinalizer))
+	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, mockFinalizer))
 
 	s.client.EXPECT().Patch(gomock.Any(), updatedPod, gomock.Any())
 
@@ -187,11 +201,11 @@ func (s *TestPodsControllerSuite) TestNonLastPodTerminatingDoesNotLabelServiceAc
 	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
-	serviceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
+	serviceAccount.Labels = map[string]string{mockServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
 
 	pod := testutils.GetTestPodSchema()
 	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
-	pod.Finalizers = []string{metadata.IAMRoleFinalizer}
+	pod.Finalizers = []string{mockFinalizer}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
@@ -219,7 +233,7 @@ func (s *TestPodsControllerSuite) TestNonLastPodTerminatingDoesNotLabelServiceAc
 
 	// should not update serviceaccount because it's not the last pod
 	updatedPod := pod.DeepCopy()
-	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, metadata.IAMRoleFinalizer))
+	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, mockFinalizer))
 
 	s.client.EXPECT().Patch(gomock.Any(), updatedPod, gomock.Any())
 
@@ -232,11 +246,11 @@ func (s *TestPodsControllerSuite) TestLastPodTerminatingWithFinalizerServiceAcco
 	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
-	serviceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
+	serviceAccount.Labels = map[string]string{mockServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
 
 	pod := testutils.GetTestPodSchema()
 	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
-	pod.Finalizers = []string{metadata.IAMRoleFinalizer}
+	pod.Finalizers = []string{mockFinalizer}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
@@ -264,7 +278,7 @@ func (s *TestPodsControllerSuite) TestLastPodTerminatingWithFinalizerServiceAcco
 	}, gomock.AssignableToTypeOf(&serviceAccount)).Return(k8serrors.NewNotFound(schema.GroupResource{}, serviceAccount.Name))
 
 	updatedPod := pod.DeepCopy()
-	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, metadata.IAMRoleFinalizer))
+	s.Require().True(controllerutil.RemoveFinalizer(updatedPod, mockFinalizer))
 
 	s.client.EXPECT().Patch(gomock.Any(), updatedPod, gomock.Any())
 
@@ -277,11 +291,11 @@ func (s *TestPodsControllerSuite) TestLastPodTerminatingWithFinalizerLabelsServi
 	req := testutils.GetTestPodRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
-	serviceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
+	serviceAccount.Labels = map[string]string{mockServiceAccountLabel: metadata.OtterizeServiceAccountHasPodsValue}
 
 	pod := testutils.GetTestPodSchema()
 	pod.DeletionTimestamp = lo.ToPtr(metav1.Now())
-	pod.Finalizers = []string{metadata.IAMRoleFinalizer}
+	pod.Finalizers = []string{mockFinalizer}
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
@@ -315,7 +329,7 @@ func (s *TestPodsControllerSuite) TestLastPodTerminatingWithFinalizerLabelsServi
 	)
 
 	updatedServiceAccount := serviceAccount.DeepCopy()
-	updatedServiceAccount.Labels = map[string]string{metadata.OtterizeServiceAccountLabel: metadata.OtterizeServiceAccountHasNoPodsValue}
+	updatedServiceAccount.Labels = map[string]string{mockServiceAccountLabel: metadata.OtterizeServiceAccountHasNoPodsValue}
 
 	s.client.EXPECT().Patch(gomock.Any(), updatedServiceAccount, gomock.Any()).Return(k8serrors.NewConflict(schema.GroupResource{}, serviceAccount.Name, errors.New("conflict")))
 

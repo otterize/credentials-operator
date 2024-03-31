@@ -35,6 +35,20 @@ func (m *MockIAMCredentialsAgent) EXPECT() *MockIAMCredentialsAgentMockRecorder 
 	return m.recorder
 }
 
+// FinalizerName mocks base method.
+func (m *MockIAMCredentialsAgent) FinalizerName() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FinalizerName")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// FinalizerName indicates an expected call of FinalizerName.
+func (mr *MockIAMCredentialsAgentMockRecorder) FinalizerName() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinalizerName", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).FinalizerName))
+}
+
 // OnPodAdmission mocks base method.
 func (m *MockIAMCredentialsAgent) OnPodAdmission(ctx context.Context, pod *v1.Pod, serviceAccount *v1.ServiceAccount) (bool, error) {
 	m.ctrl.T.Helper()
@@ -78,4 +92,18 @@ func (m *MockIAMCredentialsAgent) OnServiceAccountUpdate(ctx context.Context, se
 func (mr *MockIAMCredentialsAgentMockRecorder) OnServiceAccountUpdate(ctx, serviceAccount interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnServiceAccountUpdate", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).OnServiceAccountUpdate), ctx, serviceAccount)
+}
+
+// ServiceAccountLabel mocks base method.
+func (m *MockIAMCredentialsAgent) ServiceAccountLabel() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ServiceAccountLabel")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// ServiceAccountLabel indicates an expected call of ServiceAccountLabel.
+func (mr *MockIAMCredentialsAgentMockRecorder) ServiceAccountLabel() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ServiceAccountLabel", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).ServiceAccountLabel))
 }

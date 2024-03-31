@@ -52,7 +52,7 @@ func (a *Agent) ServiceAccountLabel() string {
 	return AWSOtterizeServiceAccountLabel
 }
 
-func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool, err error) {
+func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount, dryRun bool) (updated bool, err error) {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
 
 	if !a.AppliesOnPod(pod) {
@@ -76,8 +76,6 @@ func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAcco
 
 	if a.enableAWSRoleAnywhere {
 		// In RolesAnywhere mode, the pod webhook, and not the reconciler, handles the role creation
-		dryRun := false // TODO
-
 		if pod.Spec.Volumes == nil {
 			pod.Spec.Volumes = make([]corev1.Volume, 0)
 		}

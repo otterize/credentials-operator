@@ -42,11 +42,16 @@ func (a *Agent) ServiceAccountLabel() string {
 	return AzureOtterizeServiceAccountLabel
 }
 
-func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool, err error) {
+func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount, dryRun bool) (updated bool, err error) {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
 
 	if !a.AppliesOnPod(pod) {
 		logger.Debug("Pod is not marked for Azure role assignment, skipping")
+		return false, nil
+	}
+
+	if dryRun {
+		logger.Debug("Dry run, skipping user assigned identity creation")
 		return false, nil
 	}
 

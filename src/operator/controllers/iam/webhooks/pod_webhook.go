@@ -81,7 +81,7 @@ func (w *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod
 		pod.Labels = make(map[string]string)
 	}
 
-	updated, err := w.agent.OnPodAdmission(ctx, &pod, updatedServiceAccount)
+	updated, err := w.agent.OnPodAdmission(ctx, &pod, updatedServiceAccount, dryRun)
 	if err != nil {
 		return corev1.Pod{}, false, "", fmt.Errorf("failed to handle pod admission: %w", err)
 	}
@@ -91,7 +91,7 @@ func (w *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod
 		return pod, false, "no IAM modifications made", nil
 	}
 
-	updatedServiceAccount.Labels[metadata.OtterizeServiceAccountLabel] = metadata.OtterizeServiceAccountHasPodsValue
+	updatedServiceAccount.Labels[w.agent.ServiceAccountLabel()] = metadata.OtterizeServiceAccountHasPodsValue
 
 	if !dryRun {
 		err = w.client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))

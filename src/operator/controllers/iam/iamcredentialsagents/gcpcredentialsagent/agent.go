@@ -36,7 +36,7 @@ func (a *Agent) ServiceAccountLabel() string {
 	return GCPOtterizeServiceAccountLabel
 }
 
-func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount) (updated bool, err error) {
+func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount, dryRun bool) (updated bool, err error) {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
 	if !a.AppliesOnPod(pod) {
 		logger.Debug("Pod is not marked for GCP service account creation, skipping")
