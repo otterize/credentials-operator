@@ -42,7 +42,6 @@ func NewServiceAccountAnnotatingPodWebhook(mgr manager.Manager, agent iamcredent
 }
 
 func (w *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod corev1.Pod, dryRun bool) (outputPod corev1.Pod, patched bool, successMsg string, err error) {
-	logger := logrus.WithField("name", pod.Name).WithField("namespace", pod.Namespace)
 	if pod.DeletionTimestamp != nil {
 		return pod, false, "no webhook handling if pod is terminating", nil
 	}
@@ -51,11 +50,9 @@ func (w *ServiceAccountAnnotatingPodWebhook) handleOnce(ctx context.Context, pod
 		return pod, false, "no create IAM role label - no modifications made", nil
 	}
 
-	if controllerutil.ContainsFinalizer(&pod, w.agent.FinalizerName()) {
+	if !controllerutil.AddFinalizer(&pod, w.agent.FinalizerName()) {
 		return pod, false, "pod already handled by webhook", nil
 	}
-
-	controllerutil.AddFinalizer(&pod, w.agent.FinalizerName())
 
 	var serviceAccount corev1.ServiceAccount
 	err = w.client.Get(ctx, types.NamespacedName{
