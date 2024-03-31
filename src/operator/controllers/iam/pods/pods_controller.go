@@ -2,6 +2,7 @@ package pods
 
 import (
 	"context"
+	"github.com/otterize/credentials-operator/src/controllers/iam/iamcredentialsagents"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	"github.com/otterize/credentials-operator/src/shared/apiutils"
 	"github.com/otterize/intents-operator/src/shared/errors"
@@ -18,11 +19,13 @@ import (
 
 type PodReconciler struct {
 	client.Client
+	agent iamcredentialsagents.IAMCredentialsAgent
 }
 
-func NewPodReconciler(client client.Client) *PodReconciler {
+func NewPodReconciler(client client.Client, agent iamcredentialsagents.IAMCredentialsAgent) *PodReconciler {
 	return &PodReconciler{
 		Client: client,
+		agent:  agent,
 	}
 }
 
@@ -54,7 +57,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, nil
 	}
 
-	if !controllerutil.ContainsFinalizer(&pod, metadata.IAMRoleFinalizer) && !controllerutil.ContainsFinalizer(&pod, metadata.AWSRoleFinalizer) {
+	if !controllerutil.ContainsFinalizer(&pod, r.agent.FinalizerName()) {
 		logger.Debug("pod does not have the Otterize finalizer, skipping")
 		return ctrl.Result{}, nil
 	}
@@ -67,17 +70,18 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	// Get only the pods that are IAM consumers - also handles case where label was removed from the pod.
 	iamSAConsumers := lo.Filter(saConsumers, func(filteredPod corev1.Pod, _ int) bool {
-		return controllerutil.ContainsFinalizer(&pod, metadata.IAMRoleFinalizer) || controllerutil.ContainsFinalizer(&pod, metadata.AWSRoleFinalizer) || pod.UID == filteredPod.UID
+		return controllerutil.ContainsFinalizer(&pod, r.agent.FinalizerName()) || pod.UID == filteredPod.UID
 	})
 
 	// check if this is the last pod linked to this SA.
-	if len(iamSAConsumers) == 1 && iamSAConsumers[0].UID == pod.UID {
+	isLastPodWithThisSA := len(iamSAConsumers) == 1 && iamSAConsumers[0].UID == pod.UID
+	if isLastPodWithThisSA {
 		var serviceAccount corev1.ServiceAccount
 		err := r.Get(ctx, types.NamespacedName{Name: pod.Spec.ServiceAccountName, Namespace: pod.Namespace}, &serviceAccount)
 		if err != nil {
 			// service account can be deleted before the pods go down, in which case cleanup has already occurred, so just let the pod terminate.
 			if apierrors.IsNotFound(err) {
-				return apiutils.RemoveFinalizerFromPod(ctx, r, pod, metadata.IAMRoleFinalizer, metadata.AWSRoleFinalizer)
+				return apiutils.RemoveFinalizerFromPod(ctx, r, pod, r.agent.FinalizerName())
 			}
 			return ctrl.Result{}, errors.Wrap(err)
 		}
@@ -88,7 +92,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 		// Normally we would call the other reconciler, but because this is blocking the removal of a pod finalizer,
 		// we instead update the ServiceAccount and let it do the hard work, so we can remove the pod finalizer ASAP.
-		updatedServiceAccount.Labels[metadata.OtterizeServiceAccountLabel] = metadata.OtterizeServiceAccountHasNoPodsValue
+		updatedServiceAccount.Labels[r.agent.ServiceAccountLabel()] = metadata.OtterizeServiceAccountHasNoPodsValue
 		err = r.Client.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
 		if err != nil {
 			if apierrors.IsConflict(err) {
@@ -96,12 +100,12 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			}
 			// service account can be deleted before the pods go down, in which case cleanup has already occurred, so just let the pod terminate.
 			if apierrors.IsNotFound(err) {
-				return apiutils.RemoveFinalizerFromPod(ctx, r, pod, metadata.IAMRoleFinalizer, metadata.AWSRoleFinalizer)
+				return apiutils.RemoveFinalizerFromPod(ctx, r, pod, r.agent.FinalizerName())
 			}
 			return ctrl.Result{}, errors.Wrap(err)
 		}
 	}
 
 	// in case there's more than 1 pod, this is not the last pod, so we can just let the pod terminate.
-	return apiutils.RemoveFinalizerFromPod(ctx, r, pod, metadata.IAMRoleFinalizer, metadata.AWSRoleFinalizer)
+	return apiutils.RemoveFinalizerFromPod(ctx, r, pod, r.agent.FinalizerName())
 }

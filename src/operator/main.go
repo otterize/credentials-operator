@@ -317,14 +317,14 @@ func setupIAMAgents(ctx context.Context, mgr ctrl.Manager, client controllerrunt
 		iamAgents = append(iamAgents, azureCredentialsAgent)
 	}
 
-	// setup pod reconciler
-	podReconciler := pods.NewPodReconciler(client)
-	if err := podReconciler.SetupWithManager(mgr); err != nil {
-		logrus.WithField("controller", "Pod").WithError(err).Panic("unable to create controller")
-	}
-
 	// setup service account reconciler
 	for _, iamAgent := range iamAgents {
+		// setup pod reconciler
+		podReconciler := pods.NewPodReconciler(client, iamAgent)
+		if err := podReconciler.SetupWithManager(mgr); err != nil {
+			logrus.WithField("controller", "Pod").WithError(err).Panic("unable to create controller")
+		}
+
 		serviceAccountReconciler := serviceaccounts.NewServiceAccountReconciler(client, iamAgent)
 		if err := serviceAccountReconciler.SetupWithManager(mgr); err != nil {
 			logrus.WithField("controller", "ServiceAccount").WithError(err).Panic("unable to create controller")

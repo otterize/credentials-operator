@@ -48,9 +48,9 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, errors.Wrap(err)
 	}
 
-	value, ok := getLabelValue(&serviceAccount, metadata.OtterizeServiceAccountLabel)
+	value, ok := getLabelValue(&serviceAccount, r.agent.ServiceAccountLabel())
 	if !ok {
-		logger.Debugf("serviceAccount not labeled with %s, skipping", metadata.OtterizeServiceAccountLabel)
+		logger.Debugf("serviceAccount not labeled with %s, skipping", r.agent.ServiceAccountLabel())
 		return ctrl.Result{}, nil
 	}
 
