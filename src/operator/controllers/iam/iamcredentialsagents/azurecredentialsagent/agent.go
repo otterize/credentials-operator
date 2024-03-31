@@ -2,6 +2,7 @@ package azurecredentialsagent
 
 import (
 	"context"
+	"github.com/otterize/credentials-operator/src/shared/apiutils"
 	"github.com/otterize/intents-operator/src/shared/azureagent"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/samber/lo"
@@ -57,9 +58,10 @@ func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAcco
 		logger.WithField("identity", *identity.Name).WithField("clientId", clientId).
 			Info("Annotating service account with managed identity client ID")
 
-		serviceAccount.Annotations[AzureWorkloadIdentityClientIdAnnotation] = clientId
+		apiutils.AddAnnotation(serviceAccount, AzureWorkloadIdentityClientIdAnnotation, clientId)
 		// we additionally annotate the pod with the client ID to trigger the azure workload identity webhook on it
-		pod.Annotations[OtterizeAzureWorkloadIdentityClientIdAnnotation] = clientId
+		// (the content of the annotation is not really important, we just need to trigger _some_ modification).
+		apiutils.AddAnnotation(pod, OtterizeAzureWorkloadIdentityClientIdAnnotation, clientId)
 
 		// update the pod's containers with the new client ID
 		// it would be great if the azure workload identity webhook could do this for us, but it doesn't,

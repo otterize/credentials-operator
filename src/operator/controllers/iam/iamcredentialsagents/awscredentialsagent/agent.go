@@ -5,6 +5,7 @@ import (
 	"fmt"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	rolesanywhereTypes "github.com/aws/aws-sdk-go-v2/service/rolesanywhere/types"
+	"github.com/otterize/credentials-operator/src/shared/apiutils"
 	"github.com/otterize/intents-operator/src/shared/awsagent"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/samber/lo"
@@ -56,17 +57,17 @@ func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAcco
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
 
 	roleArn := a.GenerateRoleARN(serviceAccount.Namespace, serviceAccount.Name)
-	serviceAccount.Annotations[ServiceAccountAWSRoleARNAnnotation] = roleArn
-	pod.Annotations[OtterizeServiceAccountAWSRoleARNAnnotation] = roleArn
+	apiutils.AddAnnotation(serviceAccount, ServiceAccountAWSRoleARNAnnotation, roleArn)
+	apiutils.AddAnnotation(pod, OtterizeServiceAccountAWSRoleARNAnnotation, roleArn)
 
 	podUseSoftDeleteLabelValue, podUseSoftDeleteLabelExists := pod.Labels[OtterizeAWSUseSoftDeleteKey]
 	shouldMarkForSoftDelete := podUseSoftDeleteLabelExists && podUseSoftDeleteLabelValue == OtterizeAWSUseSoftDeleteValue
 	logger.Debugf("should mark for soft delete: %v, labels: %v", shouldMarkForSoftDelete, pod.Labels)
 	if shouldMarkForSoftDelete {
 		logger.Debugf("Add soft-delete label to service account")
-		serviceAccount.Labels[OtterizeAWSUseSoftDeleteKey] = OtterizeAWSUseSoftDeleteValue
+		apiutils.AddLabel(serviceAccount, OtterizeAWSUseSoftDeleteKey, OtterizeAWSUseSoftDeleteValue)
 	} else {
-		delete(serviceAccount.Labels, OtterizeAWSUseSoftDeleteKey)
+		apiutils.RemoveLabel(serviceAccount, OtterizeAWSUseSoftDeleteKey)
 	}
 
 	if a.enableAWSRoleAnywhere {
@@ -184,7 +185,7 @@ func (a *Agent) OnServiceAccountUpdate(ctx context.Context, serviceAccount *core
 		return false, false, nil
 	}
 
-	serviceAccount.Annotations[ServiceAccountAWSRoleARNAnnotation] = *role.Arn
+	apiutils.AddAnnotation(serviceAccount, ServiceAccountAWSRoleARNAnnotation, *role.Arn)
 	return true, false, nil
 }
 

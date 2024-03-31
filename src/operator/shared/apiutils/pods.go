@@ -5,8 +5,10 @@ import (
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"strings"
 )
 
@@ -49,6 +51,21 @@ func GetPodServiceAccountConsumers(ctx context.Context, c client.Client, pod cor
 	})
 
 	return thisPodAndNonTerminatingPods, nil
+}
+
+func RemoveFinalizerFromPod(ctx context.Context, c client.Client, pod corev1.Pod, finalizer string) (ctrl.Result, error) {
+	updatedPod := pod.DeepCopy()
+	if controllerutil.RemoveFinalizer(updatedPod, finalizer) {
+		err := c.Patch(ctx, updatedPod, client.MergeFrom(&pod))
+		if err != nil {
+			if apierrors.IsConflict(err) {
+				return ctrl.Result{Requeue: true}, nil
+			}
+			return ctrl.Result{}, errors.Wrap(err)
+		}
+	}
+
+	return ctrl.Result{}, nil
 }
 
 func AddLabel(o client.Object, key, value string) {

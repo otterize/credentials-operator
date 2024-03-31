@@ -48,7 +48,7 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, errors.Wrap(err)
 	}
 
-	value, ok := getLabelValue(&serviceAccount, r.agent.ServiceAccountLabel())
+	value, ok := serviceAccount.Labels[r.agent.ServiceAccountLabel()]
 	if !ok {
 		logger.Debugf("serviceAccount not labeled with %s, skipping", r.agent.ServiceAccountLabel())
 		return ctrl.Result{}, nil
@@ -62,14 +62,6 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	return r.HandleServiceAccountUpdate(ctx, serviceAccount)
-}
-
-func getLabelValue(serviceAccount *corev1.ServiceAccount, label string) (string, bool) {
-	if serviceAccount.Labels == nil {
-		return "", false
-	}
-	value, ok := serviceAccount.Labels[label]
-	return value, ok
 }
 
 func (r *ServiceAccountReconciler) HandleServiceAccountCleanup(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {

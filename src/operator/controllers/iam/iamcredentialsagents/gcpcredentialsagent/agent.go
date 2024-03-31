@@ -2,6 +2,7 @@ package gcpcredentialsagent
 
 import (
 	"context"
+	"github.com/otterize/credentials-operator/src/shared/apiutils"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/gcpagent"
 	"github.com/sirupsen/logrus"
@@ -37,7 +38,7 @@ func (a *Agent) ServiceAccountLabel() string {
 }
 
 func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAccount *corev1.ServiceAccount, dryRun bool) error {
-	serviceAccount.Annotations[GCPWorkloadIdentityAnnotation] = GCPWorkloadIdentityNotSet
+	apiutils.AddAnnotation(serviceAccount, GCPWorkloadIdentityAnnotation, GCPWorkloadIdentityNotSet)
 	return nil
 }
 
@@ -68,7 +69,7 @@ func (a *Agent) OnServiceAccountUpdate(ctx context.Context, serviceAccount *core
 
 	// Annotate the service account with the GCP IAM role
 	gsaFullName := a.GetGSAFullName(serviceAccount.Namespace, serviceAccount.Name)
-	serviceAccount.Annotations[GCPWorkloadIdentityAnnotation] = gsaFullName
+	apiutils.AddAnnotation(serviceAccount, GCPWorkloadIdentityAnnotation, gsaFullName)
 	return true, false, nil
 }
 
