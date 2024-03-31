@@ -35,6 +35,20 @@ func (m *MockIAMCredentialsAgent) EXPECT() *MockIAMCredentialsAgentMockRecorder 
 	return m.recorder
 }
 
+// AppliesOnPod mocks base method.
+func (m *MockIAMCredentialsAgent) AppliesOnPod(pod *v1.Pod) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AppliesOnPod", pod)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// AppliesOnPod indicates an expected call of AppliesOnPod.
+func (mr *MockIAMCredentialsAgentMockRecorder) AppliesOnPod(pod interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AppliesOnPod", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).AppliesOnPod), pod)
+}
+
 // FinalizerName mocks base method.
 func (m *MockIAMCredentialsAgent) FinalizerName() string {
 	m.ctrl.T.Helper()
@@ -50,18 +64,17 @@ func (mr *MockIAMCredentialsAgentMockRecorder) FinalizerName() *gomock.Call {
 }
 
 // OnPodAdmission mocks base method.
-func (m *MockIAMCredentialsAgent) OnPodAdmission(ctx context.Context, pod *v1.Pod, serviceAccount *v1.ServiceAccount) (bool, error) {
+func (m *MockIAMCredentialsAgent) OnPodAdmission(ctx context.Context, pod *v1.Pod, serviceAccount *v1.ServiceAccount, dryRun bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OnPodAdmission", ctx, pod, serviceAccount)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "OnPodAdmission", ctx, pod, serviceAccount, dryRun)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // OnPodAdmission indicates an expected call of OnPodAdmission.
-func (mr *MockIAMCredentialsAgentMockRecorder) OnPodAdmission(ctx, pod, serviceAccount interface{}) *gomock.Call {
+func (mr *MockIAMCredentialsAgentMockRecorder) OnPodAdmission(ctx, pod, serviceAccount, dryRun interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnPodAdmission", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).OnPodAdmission), ctx, pod, serviceAccount)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnPodAdmission", reflect.TypeOf((*MockIAMCredentialsAgent)(nil).OnPodAdmission), ctx, pod, serviceAccount, dryRun)
 }
 
 // OnServiceAccountTermination mocks base method.

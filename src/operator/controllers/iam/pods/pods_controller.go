@@ -71,7 +71,18 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	// in case there's more than 1 pod, this is not the last pod, so we can just let the pod terminate.
-	return apiutils.RemoveFinalizerFromPod(ctx, r, pod, r.agent.FinalizerName())
+	updatedPod := pod.DeepCopy()
+	if controllerutil.RemoveFinalizer(updatedPod, r.agent.FinalizerName()) {
+		err := r.Patch(ctx, updatedPod, client.MergeFrom(&pod))
+		if err != nil {
+			if apierrors.IsConflict(err) {
+				return ctrl.Result{Requeue: true}, nil
+			}
+			return ctrl.Result{}, errors.Wrap(err)
+		}
+	}
+
+	return ctrl.Result{}, nil
 }
 
 func (r *PodReconciler) handleLastPodWithThisSA(ctx context.Context, pod corev1.Pod) (requeue bool, err error) {
