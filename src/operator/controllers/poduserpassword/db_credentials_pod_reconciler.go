@@ -113,7 +113,8 @@ func (e *Reconciler) ensurePodUserAndPasswordPostgresSecret(ctx context.Context,
 			return errors.Wrap(err)
 		}
 
-		pgUsername := databaseutils.BuildPostgresUsername(clusterID, serviceName, pod.Namespace)
+		username := databaseutils.BuildHashedUsername(serviceName, pod.Namespace, clusterID)
+		pgUsername := databaseutils.KubernetesToPostgresName(username)
 
 		secret := buildUserAndPasswordCredentialsSecret(secretName, pod.Namespace, pgUsername, password)
 		log.WithField("secret", secretName).Debug("Creating new secret with user-password credentials")

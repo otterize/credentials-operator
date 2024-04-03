@@ -205,8 +205,8 @@ func (r *Reconciler) getPostgresUserForWorkload(ctx context.Context, clientName,
 	if err != nil {
 		return "", errors.Wrap(err)
 	}
-
-	return databaseutils.BuildPostgresUsername(clusterUID, clientName, namespace), nil
+	username := databaseutils.BuildHashedUsername(clientName, namespace, clusterUID)
+	return databaseutils.KubernetesToPostgresName(username), nil
 }
 
 func (r *Reconciler) fetchWorkloadPassword(ctx context.Context, clientIntents otterizev1alpha3.ClientIntents) (string, error) {
