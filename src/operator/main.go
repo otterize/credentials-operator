@@ -206,6 +206,25 @@ func main() {
 	client := mgr.GetClient()
 	setupIAMAgents(signalHandlerCtx, mgr, client, podNamespace)
 
+	// setup webhook
+	if viper.GetBool(operatorconfig.SelfSignedCertKey) {
+		logrus.Infoln("Creating self signing certs")
+		certBundle, err := operatorwebhooks.GenerateSelfSignedCertificate("credentials-operator-webhook-service", podNamespace)
+		if err != nil {
+			logrus.WithError(err).Panic("unable to create self signed certs for webhook")
+		}
+		err = operatorwebhooks.WriteCertToFiles(certBundle)
+		if err != nil {
+			logrus.WithError(err).Panic("failed writing certs to file system")
+		}
+
+		//+kubebuilder:rbac:groups="admissionregistration.k8s.io",resources=mutatingwebhookconfigurations,verbs=get;update;patch;list;watch
+		reconciler := mutatingwebhookconfiguration.NewMutatingWebhookConfigsReconciler(client, mgr.GetScheme(), certBundle.CertPem, filters.CredentialsOperatorLabelPredicate())
+		if err = reconciler.SetupWithManager(mgr); err != nil {
+			logrus.WithField("controller", "MutatingWebhookConfigs").WithError(err).Panic("unable to create controller")
+		}
+	}
+
 	if viper.GetString(operatorconfig.CertProviderKey) != operatorconfig.CertProviderNone {
 		certPodReconciler := tls_pod.NewCertificatePodReconciler(client, mgr.GetScheme(), workloadRegistry, secretsManager,
 			serviceIdResolver, eventRecorder, viper.GetString(operatorconfig.CertProviderKey) == operatorconfig.CertProviderCloud)
@@ -297,24 +316,27 @@ func setupIAMAgents(ctx context.Context, mgr ctrl.Manager, client controllerrunt
 		return
 	}
 
-	var awsCredentialsAgent *awscredentialsagent.Agent
-	var gcpCredentialsAgent *gcpcredentialsagent.Agent
-	var azureCredentialsAgent *azurecredentialsagent.Agent
 	iamAgents := make([]iamcredentialsagents.IAMCredentialsAgent, 0)
 
 	if awsIAMEnabled {
-		awsCredentialsAgent = initAWSCredentialsAgent(ctx)
+		awsCredentialsAgent := initAWSCredentialsAgent(ctx)
 		iamAgents = append(iamAgents, awsCredentialsAgent)
+
+		awsWebhookHandler := sa_pod_webhook_generic.NewServiceAccountAnnotatingPodWebhook(mgr, awsCredentialsAgent)
+		mgr.GetWebhookServer().Register("/mutate-aws-v1-pod", &webhook.Admission{Handler: awsWebhookHandler})
 	}
 
 	if gcpIAMEnabled {
-		gcpCredentialsAgent = initGCPCredentialsAgent(ctx, client)
+		gcpCredentialsAgent := initGCPCredentialsAgent(ctx, client)
 		iamAgents = append(iamAgents, gcpCredentialsAgent)
 	}
 
 	if azureIAMEnabled {
-		azureCredentialsAgent = initAzureCredentialsAgent(ctx)
+		azureCredentialsAgent := initAzureCredentialsAgent(ctx)
 		iamAgents = append(iamAgents, azureCredentialsAgent)
+
+		azureWebhookHandler := sa_pod_webhook_generic.NewServiceAccountAnnotatingPodWebhook(mgr, azureCredentialsAgent)
+		mgr.GetWebhookServer().Register("/mutate-azure-v1-pod", &webhook.Admission{Handler: azureWebhookHandler})
 	}
 
 	// setup service account reconciler
@@ -328,34 +350,6 @@ func setupIAMAgents(ctx context.Context, mgr ctrl.Manager, client controllerrunt
 		serviceAccountReconciler := serviceaccounts.NewServiceAccountReconciler(client, iamAgent)
 		if err := serviceAccountReconciler.SetupWithManager(mgr); err != nil {
 			logrus.WithField("controller", "ServiceAccount").WithError(err).Panic("unable to create controller")
-		}
-	}
-
-	// setup webhook
-	if viper.GetBool(operatorconfig.SelfSignedCertKey) {
-		logrus.Infoln("Creating self signing certs")
-		certBundle, err := operatorwebhooks.GenerateSelfSignedCertificate("credentials-operator-webhook-service", podNamespace)
-		if err != nil {
-			logrus.WithError(err).Panic("unable to create self signed certs for webhook")
-		}
-		err = operatorwebhooks.WriteCertToFiles(certBundle)
-		if err != nil {
-			logrus.WithError(err).Panic("failed writing certs to file system")
-		}
-
-		//+kubebuilder:rbac:groups="admissionregistration.k8s.io",resources=mutatingwebhookconfigurations,verbs=get;update;patch;list;watch
-		reconciler := mutatingwebhookconfiguration.NewMutatingWebhookConfigsReconciler(client, mgr.GetScheme(), certBundle.CertPem, filters.CredentialsOperatorLabelPredicate())
-		if err = reconciler.SetupWithManager(mgr); err != nil {
-			logrus.WithField("controller", "MutatingWebhookConfigs").WithError(err).Panic("unable to create controller")
-		}
-
-		if awsIAMEnabled {
-			awsWebhookHandler := sa_pod_webhook_generic.NewServiceAccountAnnotatingPodWebhook(mgr, awsCredentialsAgent)
-			mgr.GetWebhookServer().Register("/mutate-aws-v1-pod", &webhook.Admission{Handler: awsWebhookHandler})
-		}
-		if azureIAMEnabled {
-			azureWebhookHandler := sa_pod_webhook_generic.NewServiceAccountAnnotatingPodWebhook(mgr, azureCredentialsAgent)
-			mgr.GetWebhookServer().Register("/mutate-azure-v1-pod", &webhook.Admission{Handler: azureWebhookHandler})
 		}
 	}
 }
