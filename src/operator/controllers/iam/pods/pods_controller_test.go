@@ -54,6 +54,7 @@ func (s *TestPodsControllerSuite) SetupTest() {
 func (s *TestPodsControllerSuite) TestPodWithoutLabelsNotAffected() {
 	req := testutils.GetTestPodRequestSchema()
 	pod := testutils.GetTestPodSchema()
+	serviceAccount := testutils.GetTestServiceSchema()
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
@@ -61,6 +62,16 @@ func (s *TestPodsControllerSuite) TestPodWithoutLabelsNotAffected() {
 			return nil
 		},
 	)
+	s.client.EXPECT().Get(gomock.Any(), types.NamespacedName{
+		Namespace: serviceAccount.Namespace,
+		Name:      serviceAccount.Name,
+	}, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
+		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.ServiceAccount, arg3 ...client.GetOption) error {
+			serviceAccount.DeepCopyInto(arg2)
+			return nil
+		},
+	)
+
 	s.mockIAM.EXPECT().OnPodUpdate(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, false, nil)
 
 	res, err := s.reconciler.Reconcile(context.Background(), req)
@@ -71,10 +82,21 @@ func (s *TestPodsControllerSuite) TestPodWithoutLabelsNotAffected() {
 func (s *TestPodsControllerSuite) TestPodNotTerminatingNotAffected() {
 	req := testutils.GetTestPodRequestSchema()
 	pod := testutils.GetTestPodSchema()
+	serviceAccount := testutils.GetTestServiceSchema()
 
 	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&pod)).DoAndReturn(
 		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.Pod, arg3 ...client.GetOption) error {
 			pod.DeepCopyInto(arg2)
+			return nil
+		},
+	)
+
+	s.client.EXPECT().Get(gomock.Any(), types.NamespacedName{
+		Namespace: serviceAccount.Namespace,
+		Name:      serviceAccount.Name,
+	}, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
+		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.ServiceAccount, arg3 ...client.GetOption) error {
+			serviceAccount.DeepCopyInto(arg2)
 			return nil
 		},
 	)
