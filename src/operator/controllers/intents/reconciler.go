@@ -7,9 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
-	"github.com/otterize/intents-operator/src/operator/controllers/intents_reconcilers/database/databaseconfigurator"
-	"github.com/otterize/intents-operator/src/shared/clusterid"
-	"github.com/otterize/intents-operator/src/shared/databaseutils"
+	"github.com/otterize/intents-operator/src/shared/clusterutils"
+	"github.com/otterize/intents-operator/src/shared/databaseconfigurator/postgres"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/samber/lo"
@@ -27,7 +26,7 @@ import (
 )
 
 const (
-	PGCreateUserStatement databaseconfigurator.SQLSprintfStatement = "CREATE USER %s WITH PASSWORD %s"
+	PGCreateUserStatement postgres.SQLSprintfStatement = "CREATE USER %s WITH PASSWORD %s"
 )
 
 const (
@@ -139,15 +138,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
+	pgServerConfigs := otterizev1alpha3.PostgreSQLServerConfigList{}
+	err = r.client.List(ctx, &pgServerConfigs)
+	if err != nil {
+		r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonErrorFetchingPostgresServerConfig,
+			"Error trying to list PostgresServerConfigs. Error: %s", err.Error())
+		return ctrl.Result{}, errors.Wrap(err)
+	}
+
 	for _, databaseName := range dbNames {
-		pgServerConfigs := otterizev1alpha3.PostgreSQLServerConfigList{}
-		err := r.client.List(ctx, &pgServerConfigs)
-		if err != nil {
-			r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonErrorFetchingPostgresServerConfig,
-				"Error trying to fetch '%s' PostgresServerConf for client '%s'. Error: %s",
-				databaseName, intents.GetServiceName(), err.Error())
-			return ctrl.Result{}, errors.Wrap(err)
-		}
 		pgServerConf, err := findMatchingPGServerConfForDBInstance(databaseName, pgServerConfigs)
 		if err != nil {
 			r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonMissingPostgresServerConfig,
@@ -155,17 +154,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			return ctrl.Result{}, nil // Not returning error on purpose, missing PGServerConf - record event and move on
 		}
 
-		pgConfigurator := databaseconfigurator.NewPostgresConfigurator(pgServerConf.Spec, r.client)
-		connectionString := pgConfigurator.FormatConnectionString(pgServerConf.Spec.DatabaseName)
-		conn, err := pgx.Connect(ctx, connectionString)
-		if err != nil {
-			pgErr, ok := databaseutils.TranslatePostgresConnectionError(err)
-			if ok {
-				return ctrl.Result{}, errors.Wrap(fmt.Errorf(pgErr))
-			}
+		pgConfigurator := postgres.NewPostgresConfigurator(pgServerConf.Spec, r.client)
+		if err := pgConfigurator.SetConnection(ctx, pgServerConf.Spec.DatabaseName); err != nil {
 			return ctrl.Result{}, errors.Wrap(err)
 		}
-		pgConfigurator.SetConnection(ctx, conn)
 
 		err = r.handleDBUserCreation(ctx, intents, pgConfigurator, databaseName)
 		if err != nil {
@@ -177,36 +169,30 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 func (r *Reconciler) createPostgresUserForWorkload(
 	ctx context.Context,
-	pgConfigurator *databaseconfigurator.PostgresConfigurator,
+	pgConfigurator *postgres.PostgresConfigurator,
 	pgUsername string,
 	password string) error {
 
 	batch := pgx.Batch{}
-	stmt, err := PGCreateUserStatement.PrepareSanitized(pgx.Identifier{pgUsername}, databaseconfigurator.NonUserInputString(password))
+	stmt, err := PGCreateUserStatement.PrepareSanitized(pgx.Identifier{pgUsername}, postgres.NonUserInputString(password))
 	if err != nil {
 		return errors.Wrap(err)
 	}
 	batch.Queue(stmt)
-	batchResults := pgConfigurator.Conn.SendBatch(ctx, &batch)
-	for i := 0; i < batch.Len(); i++ {
-		if _, err := batchResults.Exec(); err != nil {
-			return errors.Wrap(err)
-		}
-	}
-	if err := batchResults.Close(); err != nil {
-		logrus.Errorf("Failed closing batch results")
+	if err := pgConfigurator.SendBatch(ctx, &batch); err != nil {
+		return errors.Wrap(err)
 	}
 
 	return nil
 }
 
 func (r *Reconciler) getPostgresUserForWorkload(ctx context.Context, clientName, namespace string) (string, error) {
-	clusterUID, err := clusterid.GetClusterUID(ctx)
+	clusterUID, err := clusterutils.GetClusterUID(ctx)
 	if err != nil {
 		return "", errors.Wrap(err)
 	}
-	username := databaseutils.BuildHashedUsername(clientName, namespace, clusterUID)
-	return databaseutils.KubernetesToPostgresName(username), nil
+	username := clusterutils.BuildHashedUsername(clientName, namespace, clusterUID)
+	return clusterutils.KubernetesToPostgresName(username), nil
 }
 
 func (r *Reconciler) fetchWorkloadPassword(ctx context.Context, clientIntents otterizev1alpha3.ClientIntents) (string, error) {
@@ -273,14 +259,14 @@ func (r *Reconciler) InitIntentsDatabaseServerIndices(mgr ctrl.Manager) error {
 func (r *Reconciler) handleDBUserCreation(
 	ctx context.Context,
 	intents otterizev1alpha3.ClientIntents,
-	pgConfigurator *databaseconfigurator.PostgresConfigurator,
+	pgConfigurator *postgres.PostgresConfigurator,
 	databaseName string) error {
 
 	pgUsername, err := r.getPostgresUserForWorkload(ctx, intents.GetServiceName(), intents.Namespace)
 	if err != nil {
 		return errors.Wrap(err)
 	}
-	exists, err := databaseutils.ValidateUserExists(ctx, pgUsername, pgConfigurator.Conn)
+	exists, err := pgConfigurator.ValidateUserExists(ctx, pgUsername)
 	if err != nil {
 		return errors.Wrap(err)
 	}

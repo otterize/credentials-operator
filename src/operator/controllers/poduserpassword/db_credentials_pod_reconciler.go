@@ -6,8 +6,7 @@ import (
 	"encoding/hex"
 	"github.com/aidarkhanov/nanoid"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
-	"github.com/otterize/intents-operator/src/shared/clusterid"
-	"github.com/otterize/intents-operator/src/shared/databaseutils"
+	"github.com/otterize/intents-operator/src/shared/clusterutils"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/samber/lo"
@@ -108,13 +107,13 @@ func (e *Reconciler) ensurePodUserAndPasswordPostgresSecret(ctx context.Context,
 		if err != nil {
 			return errors.Wrap(err)
 		}
-		clusterID, err := clusterid.GetClusterUID(ctx)
+		clusterID, err := clusterutils.GetClusterUID(ctx)
 		if err != nil {
 			return errors.Wrap(err)
 		}
 
-		username := databaseutils.BuildHashedUsername(serviceName, pod.Namespace, clusterID)
-		pgUsername := databaseutils.KubernetesToPostgresName(username)
+		username := clusterutils.BuildHashedUsername(serviceName, pod.Namespace, clusterID)
+		pgUsername := clusterutils.KubernetesToPostgresName(username)
 
 		secret := buildUserAndPasswordCredentialsSecret(secretName, pod.Namespace, pgUsername, password)
 		log.WithField("secret", secretName).Debug("Creating new secret with user-password credentials")

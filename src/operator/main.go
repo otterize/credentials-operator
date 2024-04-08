@@ -45,7 +45,7 @@ import (
 	operatorwebhooks "github.com/otterize/intents-operator/src/operator/webhooks"
 	"github.com/otterize/intents-operator/src/shared/awsagent"
 	"github.com/otterize/intents-operator/src/shared/azureagent"
-	"github.com/otterize/intents-operator/src/shared/clusterid"
+	"github.com/otterize/intents-operator/src/shared/clusterutils"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/filters"
 	"github.com/otterize/intents-operator/src/shared/gcpagent"
@@ -148,7 +148,7 @@ func main() {
 		logrus.Panic("POD_NAMESPACE environment variable is required")
 	}
 
-	clusterUID, err := clusterid.GetClusterUID(signalHandlerCtx)
+	clusterUID, err := clusterutils.GetClusterUID(signalHandlerCtx)
 	if err != nil {
 		logrus.WithError(err).Panic("Failed fetching cluster UID")
 	}
