@@ -268,11 +268,11 @@ func initAWSCredentialsAgent(ctx context.Context) *awscredentialsagent.Agent {
 		clusterName := viper.GetString(operatorconfig.AWSRolesAnywhereClusterName)
 
 		awsOptions = append(awsOptions, awsagent.WithRolesAnywhere(trustAnchorArn, trustDomain, clusterName))
-
-		if viper.GetBool(operatorconfig.AWSUseSoftDeleteStrategyKey) {
-			awsOptions = append(awsOptions, awsagent.WithSoftDeleteStrategy())
-		}
 	}
+	if viper.GetBool(operatorconfig.AWSUseSoftDeleteStrategyKey) {
+		awsOptions = append(awsOptions, awsagent.WithSoftDeleteStrategy())
+	}
+
 	awsAgent, err := awsagent.NewAWSAgent(ctx, awsOptions...)
 	if err != nil {
 		logrus.WithError(err).Panic("failed to initialize AWS agent")
