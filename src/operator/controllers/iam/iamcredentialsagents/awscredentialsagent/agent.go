@@ -36,13 +36,10 @@ const (
 
 type Agent struct {
 	*awsagent.Agent
-	markRolesAsUnusedInsteadOfDelete bool
-	enableAWSRoleAnywhere            bool
-	trustAnchorArn                   string
 }
 
-func NewAWSCredentialsAgent(awsAgent *awsagent.Agent, markRolesAsUnusedInsteadOfDelete bool, enableAWSRoleAnywhere bool, trustAnchorArn string) *Agent {
-	return &Agent{awsAgent, markRolesAsUnusedInsteadOfDelete, enableAWSRoleAnywhere, trustAnchorArn}
+func NewAWSCredentialsAgent(awsAgent *awsagent.Agent) *Agent {
+	return &Agent{awsAgent}
 }
 
 func (a *Agent) FinalizerName() string {
@@ -70,7 +67,7 @@ func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAcco
 		apiutils.RemoveLabel(serviceAccount, OtterizeAWSUseSoftDeleteKey)
 	}
 
-	if a.enableAWSRoleAnywhere {
+	if a.RolesAnywhereEnabled {
 		// In RolesAnywhere mode, the pod webhook, and not the reconciler, handles the role creation
 		if pod.Spec.Volumes == nil {
 			pod.Spec.Volumes = make([]corev1.Volume, 0)
@@ -89,7 +86,7 @@ func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAcco
 					ReadOnly: lo.ToPtr(true),
 					VolumeAttributes: map[string]string{
 						"aws.spiffe.csi.cert-manager.io/trust-profile": *profile.ProfileArn,
-						"aws.spiffe.csi.cert-manager.io/trust-anchor":  a.trustAnchorArn,
+						"aws.spiffe.csi.cert-manager.io/trust-anchor":  a.TrustAnchorArn,
 						"aws.spiffe.csi.cert-manager.io/role":          *role.Arn,
 						"aws.spiffe.csi.cert-manager.io/enable":        "true",
 					},
@@ -171,7 +168,7 @@ func (a *Agent) OnServiceAccountUpdate(ctx context.Context, serviceAccount *core
 
 	roleARN, ok := hasAWSAnnotation(serviceAccount)
 
-	if a.enableAWSRoleAnywhere {
+	if a.RolesAnywhereEnabled {
 		// In RolesAnywhere mode, the SPIFFE pod webhook, and not the reconciler, handles the role creation
 		return false, false, nil
 	}
@@ -194,7 +191,7 @@ func (a *Agent) OnServiceAccountUpdate(ctx context.Context, serviceAccount *core
 }
 
 func (a *Agent) shouldUseSoftDeleteStrategy(serviceAccount *corev1.ServiceAccount) bool {
-	if a.markRolesAsUnusedInsteadOfDelete {
+	if a.MarkRolesAsUnusedInsteadOfDelete {
 		return true
 	}
 	if serviceAccount.Labels == nil {
@@ -222,7 +219,7 @@ func (a *Agent) OnServiceAccountTermination(ctx context.Context, serviceAccount 
 		return fmt.Errorf("failed to remove service account: %w", err)
 	}
 
-	if a.enableAWSRoleAnywhere {
+	if a.RolesAnywhereEnabled {
 		deleted, err := a.DeleteRolesAnywhereProfileForServiceAccount(ctx, serviceAccount.Namespace, serviceAccount.Name)
 		if err != nil {
 			return fmt.Errorf("failed to remove rolesanywhere profile for service account: %w", err)

@@ -278,10 +278,7 @@ func initAWSCredentialsAgent(ctx context.Context) *awscredentialsagent.Agent {
 		logrus.WithError(err).Panic("failed to initialize AWS agent")
 	}
 
-	return awscredentialsagent.NewAWSCredentialsAgent(awsAgent,
-		viper.GetBool(operatorconfig.AWSUseSoftDeleteStrategyKey),
-		viper.GetBool(operatorconfig.EnableAWSRolesAnywhereKey),
-		viper.GetString(operatorconfig.AWSRolesAnywhereTrustAnchorARNKey))
+	return awscredentialsagent.NewAWSCredentialsAgent(awsAgent)
 }
 
 func initGCPCredentialsAgent(ctx context.Context, client controllerruntimeclient.Client) *gcpcredentialsagent.Agent {
