@@ -161,7 +161,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 		err = r.handleDBUserCreation(ctx, intents, pgConfigurator, databaseName)
 		if err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, errors.Wrap(err)
 		}
 	}
 	return ctrl.Result{}, nil
@@ -271,27 +271,28 @@ func (r *Reconciler) handleDBUserCreation(
 		return errors.Wrap(err)
 	}
 
-	if !exists {
-		password, err := r.fetchWorkloadPassword(ctx, intents)
-		if err != nil {
-			r.recorder.Eventf(&intents, v1.EventTypeWarning,
-				ReasonFailedReadingWorkloadPassword,
-				"Failed reading client %s Postgres password. Error: %s", intents.GetServiceName(), err.Error())
-			return errors.Wrap(err)
-		}
-
-		logrus.WithField("username", pgUsername).Infof(
-			"Username does not exist in database %s, creating it", databaseName)
-
-		err = r.createPostgresUserForWorkload(ctx, pgConfigurator, pgUsername, password)
-		if err != nil {
-			r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonFailedCreatingDatabaseUser,
-				"Failed creating database user. Error: %s", err.Error())
-			return errors.Wrap(err)
-		}
-		logrus.Info("User created successfully")
+	if exists {
+		return nil
 	}
 
+	password, err := r.fetchWorkloadPassword(ctx, intents)
+	if err != nil {
+		r.recorder.Eventf(&intents, v1.EventTypeWarning,
+			ReasonFailedReadingWorkloadPassword,
+			"Failed reading client %s Postgres password. Error: %s", intents.GetServiceName(), err.Error())
+		return errors.Wrap(err)
+	}
+
+	logrus.WithField("username", pgUsername).Infof(
+		"Username does not exist in database %s, creating it", databaseName)
+
+	err = r.createPostgresUserForWorkload(ctx, pgConfigurator, pgUsername, password)
+	if err != nil {
+		r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonFailedCreatingDatabaseUser,
+			"Failed creating database user. Error: %s", err.Error())
+		return errors.Wrap(err)
+	}
+	logrus.Info("User created successfully")
 	return nil
 }
 
@@ -311,12 +312,15 @@ func findMatchingPGServerConfForDBInstance(
 	databaseInstanceName string,
 	pgServerConfigList otterizev1alpha3.PostgreSQLServerConfigList) (*otterizev1alpha3.PostgreSQLServerConfig, error) {
 
-	for _, conf := range pgServerConfigList.Items {
-		if conf.Name == databaseInstanceName {
-			return &conf, nil
-		}
+	conf, found := lo.Find(pgServerConfigList.Items, func(conf otterizev1alpha3.PostgreSQLServerConfig) bool {
+		return conf.Name == databaseInstanceName
+	})
+
+	if !found {
+		return nil, errors.Wrap(fmt.Errorf(
+			"did not find Postgres server config to match database '%s' in the cluster", databaseInstanceName))
 	}
 
-	return nil, errors.Wrap(fmt.Errorf(
-		"did not find Postgres server config to match database '%s' in the cluster", databaseInstanceName))
+	return &conf, nil
+
 }
