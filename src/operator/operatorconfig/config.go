@@ -21,8 +21,6 @@ const (
 	EnableGCPServiceAccountManagementDefault   = false
 	EnableAzureServiceAccountManagementKey     = "enable-azure-serviceaccount-management"
 	EnableAzureServiceAccountManagementDefault = false
-	EnableDatabasePolicy                       = "enable-database-policy-creation"
-	EnableDatabasePolicyDefault                = false
 	AzureSubscriptionIdKey                     = "azure-subscription-id"
 	AzureSubscriptionIdDefault                 = ""
 	AzureResourceGroupKey                      = "azure-resource-group"
@@ -66,7 +64,6 @@ func init() {
 	viper.SetDefault(EnableGCPServiceAccountManagementKey, EnableGCPServiceAccountManagementDefault)
 	viper.SetDefault(EnableAzureServiceAccountManagementKey, EnableAzureServiceAccountManagementDefault)
 	viper.SetDefault(EnableAWSRolesAnywhereKey, EnableAWSRolesAnywhereDefault)
-	viper.SetDefault(EnableDatabasePolicy, EnableDatabasePolicyDefault)
 	viper.SetDefault(TelemetryErrorsAPIKeyKey, TelemetryErrorsAPIKeyDefault)
 	viper.SetDefault(MetricsAddrKey, MetricsAddrDefault)
 	viper.SetDefault(ProbeAddrKey, ProbeAddrDefault)

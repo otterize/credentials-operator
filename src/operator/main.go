@@ -235,11 +235,9 @@ func main() {
 		go certPodReconciler.MaintenanceLoop(signalHandlerCtx)
 	}
 
-	if viper.GetBool(operatorconfig.EnableDatabasePolicy) {
-		podUserAndPasswordReconciler := poduserpassword.NewReconciler(client, scheme, eventRecorder, serviceIdResolver)
-		if err = podUserAndPasswordReconciler.SetupWithManager(mgr); err != nil {
-			logrus.WithField("controller", "podUserAndPassword").WithError(err).Panic("unable to create controller")
-		}
+	podUserAndPasswordReconciler := poduserpassword.NewReconciler(client, scheme, eventRecorder, serviceIdResolver)
+	if err = podUserAndPasswordReconciler.SetupWithManager(mgr); err != nil {
+		logrus.WithField("controller", "podUserAndPassword").WithError(err).Panic("unable to create controller")
 	}
 
 	intentsReconciler := intents.NewReconciler(client, scheme, eventRecorder, serviceIdResolver)
