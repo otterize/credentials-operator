@@ -42,7 +42,6 @@ type Reconciler struct {
 	scheme            *runtime.Scheme
 	recorder          record.EventRecorder
 	serviceIdResolver *serviceidresolver.Resolver
-	clusterUID        string
 }
 
 func NewReconciler(client client.Client, scheme *runtime.Scheme, eventRecorder record.EventRecorder, serviceIdResolver *serviceidresolver.Resolver) *Reconciler {
@@ -154,7 +153,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			return ctrl.Result{}, nil // Not returning error on purpose, missing PGServerConf - record event and move on
 		}
 
-		pgConfigurator := postgres.NewPostgresConfigurator(pgServerConf.Spec, r.client)
+		pgConfigurator := postgres.NewPostgresConfigurator(pgServerConf.Spec)
 		if err := pgConfigurator.SetConnection(ctx, pgServerConf.Spec.DatabaseName); err != nil {
 			return ctrl.Result{}, errors.Wrap(err)
 		}
