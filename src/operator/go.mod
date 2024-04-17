@@ -1,8 +1,6 @@
 module github.com/otterize/credentials-operator/src
 
-go 1.21.5
-
-toolchain go1.21.6
+go 1.22.1
 
 require (
 	github.com/GoogleCloudPlatform/k8s-config-connector v1.113.0
@@ -14,7 +12,7 @@ require (
 	github.com/bombsimon/logrusr/v3 v3.0.0
 	github.com/cert-manager/cert-manager v1.12.3
 	github.com/google/uuid v1.6.0
-	github.com/otterize/intents-operator/src v0.0.0-20240416110253-a3d23b5839bb
+	github.com/otterize/intents-operator/src v0.0.0-20240417091634-adb4fe059904
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.1
 	github.com/samber/lo v1.33.0
 	github.com/sirupsen/logrus v1.9.0
