@@ -150,7 +150,7 @@ func (a *Agent) reconcileAWSRole(ctx context.Context, serviceAccount *corev1.Ser
 		}
 	}
 
-	role, err = a.agent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, false /* FIXME */)
+	role, err = a.agent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, a.shouldUseSoftDeleteStrategy(serviceAccount))
 	if err != nil {
 		return false, nil, nil, errors.Errorf("failed creating AWS role for service account: %w", err)
 	}
