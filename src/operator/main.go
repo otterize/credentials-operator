@@ -148,7 +148,7 @@ func main() {
 		logrus.Panic("POD_NAMESPACE environment variable is required")
 	}
 
-	clusterUID, err := clusterutils.GetClusterUID(signalHandlerCtx)
+	clusterUID, err := clusterutils.GetOrCreateClusterUID(signalHandlerCtx)
 	if err != nil {
 		logrus.WithError(err).Panic("Failed fetching cluster UID")
 	}
