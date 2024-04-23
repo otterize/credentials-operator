@@ -15,7 +15,7 @@ require (
 	github.com/bombsimon/logrusr/v3 v3.0.0
 	github.com/cert-manager/cert-manager v1.12.3
 	github.com/jackc/pgx/v5 v5.5.5
-	github.com/otterize/intents-operator/src v0.0.0-20240421123418-1157d2d64104
+	github.com/otterize/intents-operator/src v0.0.0-20240423122216-b0fb1fad9e73
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.1
 	github.com/samber/lo v1.36.0
 	github.com/sirupsen/logrus v1.9.3
