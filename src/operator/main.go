@@ -49,6 +49,7 @@ import (
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/filters"
 	"github.com/otterize/intents-operator/src/shared/gcpagent"
+	sharedconfig "github.com/otterize/intents-operator/src/shared/operatorconfig"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/otterize/intents-operator/src/shared/telemetries/componentinfo"
 	"github.com/otterize/intents-operator/src/shared/telemetries/errorreporter"
@@ -59,6 +60,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 	"os"
+	"path"
 	controllerruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -270,17 +272,34 @@ func main() {
 	}
 }
 
-func initAWSCredentialsAgent(ctx context.Context) *awscredentialsagent.Agent {
-	awsOptions := make([]awsagent.Option, 0)
-	if viper.GetBool(operatorconfig.EnableAWSRolesAnywhereKey) {
-		trustAnchorArn := viper.GetString(operatorconfig.AWSRolesAnywhereTrustAnchorARNKey)
-		trustDomain := viper.GetString(operatorconfig.AWSRolesAnywhereSPIFFETrustDomainKey)
-		clusterName := viper.GetString(operatorconfig.AWSRolesAnywhereClusterName)
-
-		awsOptions = append(awsOptions, awsagent.WithRolesAnywhere(trustAnchorArn, trustDomain, clusterName))
+func initAWSMultiaccountCredentialsAgent(ctx context.Context, agentOptions []awsagent.Option, accounts []sharedconfig.AWSAccount, clusterName string, keyPath string, certPath string) iamcredentialsagents.IAMCredentialsAgent {
+	credentialsAgent, err := awscredentialsagent.NewMultiaccountAWSCredentialsAgent(ctx, accounts, agentOptions, clusterName, keyPath, certPath)
+	if err != nil {
+		logrus.WithError(err).Panic("failed to initialize AWS agent")
 	}
+	return credentialsAgent
+}
+
+func initAWSCredentialsAgent(ctx context.Context) iamcredentialsagents.IAMCredentialsAgent {
+	clusterName := viper.GetString(operatorconfig.AWSRolesAnywhereClusterName)
+	certPath := path.Join(viper.GetString(sharedconfig.AWSRolesAnywhereCertDirKey), viper.GetString(sharedconfig.AWSRolesAnywhereCertFilenameKey))
+	keyPath := path.Join(viper.GetString(sharedconfig.AWSRolesAnywhereCertDirKey), viper.GetString(sharedconfig.AWSRolesAnywherePrivKeyFilenameKey))
+	awsOptions := make([]awsagent.Option, 0)
 	if viper.GetBool(operatorconfig.AWSUseSoftDeleteStrategyKey) {
 		awsOptions = append(awsOptions, awsagent.WithSoftDeleteStrategy())
+	}
+
+	if viper.GetBool(operatorconfig.EnableAWSRolesAnywhereKey) {
+		accounts := sharedconfig.GetRolesAnywhereAWSAccounts()
+		if len(accounts) == 0 {
+			logrus.Panic("no AWS accounts configured even though RolesAnywhere is enabled")
+		}
+		if len(accounts) == 1 {
+			awsOptions = append(awsOptions, awsagent.WithRolesAnywhere(accounts[0], clusterName, keyPath, certPath))
+		} else {
+			return initAWSMultiaccountCredentialsAgent(ctx, awsOptions, accounts, clusterName, keyPath, certPath)
+		}
+
 	}
 
 	awsAgent, err := awsagent.NewAWSAgent(ctx, awsOptions...)
