@@ -75,6 +75,9 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 		return ctrl.Result{}, errors.Wrap(err)
 	}
+	if !pod.DeletionTimestamp.IsZero() {
+		return ctrl.Result{}, nil
+	}
 
 	if !e.shouldCreateUserAndPasswordSecretForPod(pod) {
 		return ctrl.Result{}, nil

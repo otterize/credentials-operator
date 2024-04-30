@@ -63,7 +63,12 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *Reconciler) mapPodToClientIntents(ctx context.Context, obj client.Object) []reconcile.Request {
+	requests := make([]reconcile.Request, 0)
 	pod := obj.(*v1.Pod)
+	if !pod.DeletionTimestamp.IsZero() {
+		return requests
+	}
+
 	otterizeIdentity, err := r.serviceIdResolver.ResolvePodToServiceIdentity(context.Background(), pod)
 	if err != nil {
 		logrus.Errorf("Failed resovling Otterize identity for pod %s: %v", pod.Name, err)
@@ -80,7 +85,6 @@ func (r *Reconciler) mapPodToClientIntents(ctx context.Context, obj client.Objec
 	if err != nil {
 		logrus.Errorf("Failed to list intents for client %s: %v", fullClientName, err)
 	}
-	requests := make([]reconcile.Request, 0)
 	for _, clientIntents := range clientIntentsList.Items {
 		request := reconcile.Request{
 			NamespacedName: types.NamespacedName{
