@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/amit7itz/goset"
-	"github.com/jackc/pgx/v5"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
 	"github.com/otterize/intents-operator/src/shared/clusterutils"
@@ -23,10 +22,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-)
-
-const (
-	PGCreateUserStatement postgres.SQLSprintfStatement = "CREATE USER %s WITH PASSWORD %s"
 )
 
 const (
@@ -157,36 +152,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			return ctrl.Result{}, nil // Not returning error on purpose, missing PGServerConf - record event and move on
 		}
 
-		pgConfigurator := postgres.NewPostgresConfigurator(pgServerConf.Spec)
-		if err := pgConfigurator.SetConnection(ctx, postgres.PGDefaultDatabase); err != nil {
+		pgConfigurator, err := postgres.NewPostgresConfigurator(ctx, pgServerConf.Spec)
+		if err != nil {
+			r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonMissingPostgresServerConfig,
+				"Error connecting to PostgreSQL server. Error: %s", err.Error())
 			return ctrl.Result{}, errors.Wrap(err)
 		}
-
 		err = r.handleDBUserCreation(ctx, intents, pgConfigurator, databaseName)
 		if err != nil {
 			return ctrl.Result{}, errors.Wrap(err)
 		}
 	}
 	return ctrl.Result{}, nil
-}
-
-func (r *Reconciler) createPostgresUserForWorkload(
-	ctx context.Context,
-	pgConfigurator *postgres.PostgresConfigurator,
-	pgUsername string,
-	password string) error {
-
-	batch := pgx.Batch{}
-	stmt, err := PGCreateUserStatement.PrepareSanitized(pgx.Identifier{pgUsername}, postgres.NonUserInputString(password))
-	if err != nil {
-		return errors.Wrap(err)
-	}
-	batch.Queue(stmt)
-	if err := pgConfigurator.SendBatch(ctx, &batch); err != nil {
-		return errors.Wrap(err)
-	}
-
-	return nil
 }
 
 func (r *Reconciler) getPostgresUserForWorkload(ctx context.Context, clientName, namespace string) (string, error) {
@@ -289,7 +266,7 @@ func (r *Reconciler) handleDBUserCreation(
 	logrus.WithField("username", pgUsername).Infof(
 		"Username does not exist in database %s, creating it", databaseName)
 
-	err = r.createPostgresUserForWorkload(ctx, pgConfigurator, pgUsername, password)
+	err = pgConfigurator.CreateUser(ctx, pgUsername, password)
 	if err != nil {
 		r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonFailedCreatingDatabaseUser,
 			"Failed creating database user. Error: %s", err.Error())
