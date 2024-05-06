@@ -65,7 +65,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *Reconciler) mapPodToClientIntents(ctx context.Context, obj client.Object) []reconcile.Request {
 	requests := make([]reconcile.Request, 0)
 	pod := obj.(*v1.Pod)
-	if !pod.DeletionTimestamp.IsZero() {
+	if !pod.DeletionTimestamp.IsZero() || isPodStatusDone(pod) {
 		return requests
 	}
 
@@ -74,7 +74,7 @@ func (r *Reconciler) mapPodToClientIntents(ctx context.Context, obj client.Objec
 		logrus.Errorf("Failed resovling Otterize identity for pod %s: %v", pod.Name, err)
 	}
 	fullClientName := fmt.Sprintf("%s.%s", otterizeIdentity.Name, otterizeIdentity.Namespace)
-	logrus.Infof("Enqueueing client intents for client '%s'", fullClientName)
+	logrus.Infof("Enqueueing client intents for client '%s' due to pod change", fullClientName)
 
 	clientIntentsList := otterizev1alpha3.ClientIntentsList{}
 	err = r.client.List(ctx,
@@ -96,6 +96,10 @@ func (r *Reconciler) mapPodToClientIntents(ctx context.Context, obj client.Objec
 	}
 
 	return requests
+}
+
+func isPodStatusDone(pod *v1.Pod) bool {
+	return pod.Status.Phase == v1.PodSucceeded || pod.Status.Phase == v1.PodFailed
 }
 
 func (r *Reconciler) mapPGServerConfToClientIntents(ctx context.Context, obj client.Object) []reconcile.Request {
@@ -127,8 +131,16 @@ func (r *Reconciler) mapPGServerConfToClientIntents(ctx context.Context, obj cli
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	terminating, err := r.isNamespaceTerminating(ctx, req.Namespace)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err)
+	}
+	if terminating {
+		return ctrl.Result{}, nil
+	}
+
 	var intents otterizev1alpha3.ClientIntents
-	err := r.client.Get(ctx, req.NamespacedName, &intents)
+	err = r.client.Get(ctx, req.NamespacedName, &intents)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -297,6 +309,17 @@ func (r *Reconciler) handleDBUserCreation(
 	}
 	logrus.Info("User created successfully")
 	return nil
+}
+
+func (r *Reconciler) isNamespaceTerminating(ctx context.Context, namespace string) (bool, error) {
+	// The credentials operator doesn't have any cleanup to do, like removing permissions or deleting users
+	// If a namespace is being deleted, we can stop reconciliation and let the intents operator handle everything else
+
+	ns := v1.Namespace{}
+	if err := r.client.Get(ctx, types.NamespacedName{Name: namespace}, &ns); err != nil {
+		return false, errors.Wrap(err)
+	}
+	return !ns.DeletionTimestamp.IsZero(), nil
 }
 
 func extractDBInstanceNames(intents otterizev1alpha3.ClientIntents) []string {
