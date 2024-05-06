@@ -7,7 +7,6 @@ import (
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
 	"github.com/otterize/intents-operator/src/shared/clusterutils"
-	"github.com/otterize/intents-operator/src/shared/databaseconfigurator"
 	"github.com/otterize/intents-operator/src/shared/databaseconfigurator/postgres"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
@@ -152,14 +151,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				"Could not find matching PostgreSQLServerConfig. Error: %s", err.Error())
 			return ctrl.Result{}, nil // Not returning error on purpose, missing PGServerConf - record event and move on
 		}
-
-		pgConfigurator, err := postgres.NewPostgresConfigurator(ctx, pgServerConf.Spec)
-		if err != nil {
-			r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonMissingPostgresServerConfig,
-				"Error connecting to PostgreSQL server. Error: %s", err.Error())
-			return ctrl.Result{}, errors.Wrap(err)
-		}
-		err = r.handleDBUserCreation(ctx, intents, pgConfigurator, databaseName)
+		err = r.handleDBUserCreation(ctx, intents, pgServerConf, databaseName)
 		if err != nil {
 			return ctrl.Result{}, errors.Wrap(err)
 		}
@@ -240,14 +232,22 @@ func (r *Reconciler) InitIntentsDatabaseServerIndices(mgr ctrl.Manager) error {
 func (r *Reconciler) handleDBUserCreation(
 	ctx context.Context,
 	intents otterizev1alpha3.ClientIntents,
-	dbConfigurator databaseconfigurator.DatabaseConfigurator,
+	pgServerConf *otterizev1alpha3.PostgreSQLServerConfig,
 	databaseName string) error {
+
+	pgConfigurator, err := postgres.NewPostgresConfigurator(ctx, pgServerConf.Spec)
+	if err != nil {
+		r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonMissingPostgresServerConfig,
+			"Error connecting to PostgreSQL server. Error: %s", err.Error())
+		return errors.Wrap(err)
+	}
+	defer pgConfigurator.CloseConnection(ctx)
 
 	pgUsername, err := r.getPostgresUserForWorkload(ctx, intents.GetServiceName(), intents.Namespace)
 	if err != nil {
 		return errors.Wrap(err)
 	}
-	exists, err := dbConfigurator.ValidateUserExists(ctx, pgUsername)
+	exists, err := pgConfigurator.ValidateUserExists(ctx, pgUsername)
 	if err != nil {
 		return errors.Wrap(err)
 	}
@@ -267,7 +267,7 @@ func (r *Reconciler) handleDBUserCreation(
 	logrus.WithField("username", pgUsername).Infof(
 		"Username does not exist in database %s, creating it", databaseName)
 
-	err = dbConfigurator.CreateUser(ctx, pgUsername, password)
+	err = pgConfigurator.CreateUser(ctx, pgUsername, password)
 	if err != nil {
 		r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonFailedCreatingDatabaseUser,
 			"Failed creating database user. Error: %s", err.Error())
