@@ -7,6 +7,7 @@ import (
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
 	"github.com/otterize/intents-operator/src/shared/clusterutils"
+	"github.com/otterize/intents-operator/src/shared/databaseconfigurator"
 	"github.com/otterize/intents-operator/src/shared/databaseconfigurator/postgres"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
@@ -239,14 +240,14 @@ func (r *Reconciler) InitIntentsDatabaseServerIndices(mgr ctrl.Manager) error {
 func (r *Reconciler) handleDBUserCreation(
 	ctx context.Context,
 	intents otterizev1alpha3.ClientIntents,
-	pgConfigurator *postgres.PostgresConfigurator,
+	dbConfigurator databaseconfigurator.DatabaseConfigurator,
 	databaseName string) error {
 
 	pgUsername, err := r.getPostgresUserForWorkload(ctx, intents.GetServiceName(), intents.Namespace)
 	if err != nil {
 		return errors.Wrap(err)
 	}
-	exists, err := pgConfigurator.ValidateUserExists(ctx, pgUsername)
+	exists, err := dbConfigurator.ValidateUserExists(ctx, pgUsername)
 	if err != nil {
 		return errors.Wrap(err)
 	}
@@ -266,7 +267,7 @@ func (r *Reconciler) handleDBUserCreation(
 	logrus.WithField("username", pgUsername).Infof(
 		"Username does not exist in database %s, creating it", databaseName)
 
-	err = pgConfigurator.CreateUser(ctx, pgUsername, password)
+	err = dbConfigurator.CreateUser(ctx, pgUsername, password)
 	if err != nil {
 		r.recorder.Eventf(&intents, v1.EventTypeWarning, ReasonFailedCreatingDatabaseUser,
 			"Failed creating database user. Error: %s", err.Error())
