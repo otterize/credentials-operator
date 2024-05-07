@@ -32,15 +32,15 @@ const (
 	OtterizeIntentsClientIndexNameField     = "spec.service.name"
 )
 
-type Reconciler struct {
+type DatabaseUserReconciler struct {
 	client            client.Client
 	scheme            *runtime.Scheme
 	recorder          record.EventRecorder
 	serviceIdResolver *serviceidresolver.Resolver
 }
 
-func NewReconciler(client client.Client, scheme *runtime.Scheme, eventRecorder record.EventRecorder, serviceIdResolver *serviceidresolver.Resolver) *Reconciler {
-	return &Reconciler{
+func NewReconciler(client client.Client, scheme *runtime.Scheme, eventRecorder record.EventRecorder, serviceIdResolver *serviceidresolver.Resolver) *DatabaseUserReconciler {
+	return &DatabaseUserReconciler{
 		client:            client,
 		scheme:            scheme,
 		serviceIdResolver: serviceIdResolver,
@@ -48,7 +48,7 @@ func NewReconciler(client client.Client, scheme *runtime.Scheme, eventRecorder r
 	}
 }
 
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *DatabaseUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{RecoverPanic: lo.ToPtr(true)}).
 		For(&otterizev1alpha3.ClientIntents{}).
@@ -57,10 +57,10 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *Reconciler) mapPodToClientIntents(ctx context.Context, obj client.Object) []reconcile.Request {
+func (r *DatabaseUserReconciler) mapPodToClientIntents(ctx context.Context, obj client.Object) []reconcile.Request {
 	requests := make([]reconcile.Request, 0)
 	pod := obj.(*v1.Pod)
-	if !pod.DeletionTimestamp.IsZero() {
+	if !pod.DeletionTimestamp.IsZero() || isPodStatusDone(pod) {
 		return requests
 	}
 
@@ -69,7 +69,7 @@ func (r *Reconciler) mapPodToClientIntents(ctx context.Context, obj client.Objec
 		logrus.Errorf("Failed resovling Otterize identity for pod %s: %v", pod.Name, err)
 	}
 	fullClientName := fmt.Sprintf("%s.%s", otterizeIdentity.Name, otterizeIdentity.Namespace)
-	logrus.Infof("Enqueueing client intents for client '%s'", fullClientName)
+	logrus.Infof("Enqueueing client intents for client '%s' due to pod change", fullClientName)
 
 	clientIntentsList := otterizev1alpha3.ClientIntentsList{}
 	err = r.client.List(ctx,
@@ -93,7 +93,11 @@ func (r *Reconciler) mapPodToClientIntents(ctx context.Context, obj client.Objec
 	return requests
 }
 
-func (r *Reconciler) mapPGServerConfToClientIntents(ctx context.Context, obj client.Object) []reconcile.Request {
+func isPodStatusDone(pod *v1.Pod) bool {
+	return pod.Status.Phase == v1.PodSucceeded || pod.Status.Phase == v1.PodFailed
+}
+
+func (r *DatabaseUserReconciler) mapPGServerConfToClientIntents(ctx context.Context, obj client.Object) []reconcile.Request {
 	pgServerConf := obj.(*otterizev1alpha3.PostgreSQLServerConfig)
 	logrus.Infof("Enqueueing client intents for PostgreSQLServerConfig change %s", pgServerConf.Name)
 
@@ -121,9 +125,19 @@ func (r *Reconciler) mapPGServerConfToClientIntents(ctx context.Context, obj cli
 	return requests
 }
 
-func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *DatabaseUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// The credentials operator doesn't have any cleanup to do, like removing permissions or deleting users
+	// If a namespace is being deleted, we can stop reconciliation and let the intents operator handle everything else
+	terminating, err := r.isNamespaceTerminating(ctx, req.Namespace)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err)
+	}
+	if terminating {
+		return ctrl.Result{}, nil
+	}
+
 	var intents otterizev1alpha3.ClientIntents
-	err := r.client.Get(ctx, req.NamespacedName, &intents)
+	err = r.client.Get(ctx, req.NamespacedName, &intents)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -159,7 +173,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return ctrl.Result{}, nil
 }
 
-func (r *Reconciler) getPostgresUserForWorkload(ctx context.Context, clientName, namespace string) (string, error) {
+func (r *DatabaseUserReconciler) getPostgresUserForWorkload(ctx context.Context, clientName, namespace string) (string, error) {
 	clusterUID, err := clusterutils.GetClusterUID(ctx)
 	if err != nil {
 		return "", errors.Wrap(err)
@@ -168,7 +182,7 @@ func (r *Reconciler) getPostgresUserForWorkload(ctx context.Context, clientName,
 	return clusterutils.KubernetesToPostgresName(username), nil
 }
 
-func (r *Reconciler) fetchWorkloadPassword(ctx context.Context, clientIntents otterizev1alpha3.ClientIntents) (string, error) {
+func (r *DatabaseUserReconciler) fetchWorkloadPassword(ctx context.Context, clientIntents otterizev1alpha3.ClientIntents) (string, error) {
 	pod, err := r.serviceIdResolver.ResolveClientIntentToPod(ctx, clientIntents)
 	if err != nil {
 		return "", errors.Wrap(err)
@@ -189,7 +203,7 @@ func (r *Reconciler) fetchWorkloadPassword(ctx context.Context, clientIntents ot
 	return string(secret.Data["password"]), nil
 }
 
-func (r *Reconciler) InitIntentsClientIndices(mgr ctrl.Manager) error {
+func (r *DatabaseUserReconciler) InitIntentsClientIndices(mgr ctrl.Manager) error {
 	err := mgr.GetCache().IndexField(
 		context.Background(),
 		&otterizev1alpha3.ClientIntents{}, OtterizeIntentsClientIndexNameField,
@@ -204,7 +218,7 @@ func (r *Reconciler) InitIntentsClientIndices(mgr ctrl.Manager) error {
 	return nil
 }
 
-func (r *Reconciler) InitIntentsDatabaseServerIndices(mgr ctrl.Manager) error {
+func (r *DatabaseUserReconciler) InitIntentsDatabaseServerIndices(mgr ctrl.Manager) error {
 	err := mgr.GetCache().IndexField(
 		context.Background(),
 		&otterizev1alpha3.ClientIntents{},
@@ -229,7 +243,7 @@ func (r *Reconciler) InitIntentsDatabaseServerIndices(mgr ctrl.Manager) error {
 	return nil
 }
 
-func (r *Reconciler) handleDBUserCreation(
+func (r *DatabaseUserReconciler) handleDBUserCreation(
 	ctx context.Context,
 	intents otterizev1alpha3.ClientIntents,
 	pgServerConf *otterizev1alpha3.PostgreSQLServerConfig,
@@ -275,6 +289,14 @@ func (r *Reconciler) handleDBUserCreation(
 	}
 	logrus.Info("User created successfully")
 	return nil
+}
+
+func (r *DatabaseUserReconciler) isNamespaceTerminating(ctx context.Context, namespace string) (bool, error) {
+	ns := v1.Namespace{}
+	if err := r.client.Get(ctx, types.NamespacedName{Name: namespace}, &ns); err != nil {
+		return false, errors.Wrap(err)
+	}
+	return !ns.DeletionTimestamp.IsZero(), nil
 }
 
 func extractDBInstanceNames(intents otterizev1alpha3.ClientIntents) []string {
