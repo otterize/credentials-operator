@@ -178,6 +178,10 @@ func (r *DatabaseUserReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		err = r.handleDBUserCreation(ctx, intents, pgConfigurator, databaseName)
 		if err != nil {
+			if errors.Is(err, serviceidresolver.ErrPodNotFound) {
+				// Reconciler will be called again if needed, safe to ignore this error since the pod is gone.
+				return ctrl.Result{}, nil
+			}
 			return ctrl.Result{}, errors.Wrap(err)
 		}
 	}
@@ -215,10 +219,6 @@ func (r *DatabaseUserReconciler) getPostgresUserForWorkload(ctx context.Context,
 func (r *DatabaseUserReconciler) fetchWorkloadPassword(ctx context.Context, clientIntents otterizev1alpha3.ClientIntents) (string, error) {
 	pod, err := r.serviceIdResolver.ResolveClientIntentToPod(ctx, clientIntents)
 	if err != nil {
-		if errors.Is(err, serviceidresolver.ErrPodNotFound) {
-			// Reconciler will be called again if needed, safe to ignore this error since the pod is gone.
-			return "", nil
-		}
 		return "", errors.Wrap(err)
 	}
 	secretName, ok := pod.Annotations[metadata.UserAndPasswordSecretNameAnnotation]
