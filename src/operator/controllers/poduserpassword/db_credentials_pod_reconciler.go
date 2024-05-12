@@ -6,7 +6,10 @@ import (
 	"encoding/hex"
 	"github.com/aidarkhanov/nanoid"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
+	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
 	"github.com/otterize/intents-operator/src/shared/databaseconfigurator"
+	"github.com/otterize/intents-operator/src/shared/databaseconfigurator/mysql"
+	"github.com/otterize/intents-operator/src/shared/databaseconfigurator/postgres"
 	"github.com/otterize/intents-operator/src/shared/errors"
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/samber/lo"
@@ -27,6 +30,7 @@ import (
 const (
 	ReasonEnsuredPodUserAndPassword        = "EnsuredPodUserAndPassword"
 	ReasonEnsuringPodUserAndPasswordFailed = "EnsuringPodUserAndPasswordFailed"
+	ReasonMissingDatabaseServerConfig      = "MissingDatabaseServerConfig"
 	ReasonPodOwnerResolutionFailed         = "PodOwnerResolutionFailed"
 )
 
@@ -94,26 +98,27 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	logrus.Debug("Ensuring user-password credentials secrets for pod")
-	err = e.ensurePodUserAndPasswordSecret(ctx, &pod, pod.Annotations[metadata.UserAndPasswordSecretNameAnnotation])
+	err, password := e.ensurePodUserAndPasswordSecret(ctx, &pod, pod.Annotations[metadata.UserAndPasswordSecretNameAnnotation])
 	if err != nil {
 		e.recorder.Eventf(&pod, v1.EventTypeWarning, ReasonEnsuringPodUserAndPasswordFailed, "Failed to ensure user-password credentials secret: %s", err.Error())
 		return ctrl.Result{}, errors.Wrap(err)
 	}
 
 	logrus.Debug("Validating password for all databases")
-	err = e.ensurePasswordInDatabases(ctx, pod)
+	err = e.ensurePasswordInDatabases(ctx, pod, password)
 	e.recorder.Event(&pod, v1.EventTypeNormal, ReasonEnsuredPodUserAndPassword, "Ensured user-password credentials in specified secret")
 	return ctrl.Result{}, nil
 }
 
-func (e *Reconciler) ensurePodUserAndPasswordSecret(ctx context.Context, pod *v1.Pod, secretName string) error {
+func (e *Reconciler) ensurePodUserAndPasswordSecret(ctx context.Context, pod *v1.Pod, secretName string) (error, string) {
 	log := logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace})
-	err := e.client.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: secretName}, &v1.Secret{})
+	secret := v1.Secret{}
+	err := e.client.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: secretName}, &secret)
 	if apierrors.IsNotFound(err) {
 		log.Debug("Creating user-password credentials secret for pod")
 		password, err := createServicePassword()
 		if err != nil {
-			return errors.Wrap(err)
+			return errors.Wrap(err), ""
 		}
 
 		databaseUsername := pod.Annotations[databaseconfigurator.DatabaseUsernameAnnotation]
@@ -121,24 +126,62 @@ func (e *Reconciler) ensurePodUserAndPasswordSecret(ctx context.Context, pod *v1
 		secret := buildUserAndPasswordCredentialsSecret(secretName, pod.Namespace, databaseUsername, password)
 		log.WithField("secret", secretName).Debug("Creating new secret with user-password credentials")
 		if err := e.client.Create(ctx, secret); err != nil {
-			return errors.Wrap(err)
+			return errors.Wrap(err), ""
 		}
-		return nil
+		return nil, password
 	}
 
 	if err != nil {
-		return errors.Wrap(err)
+		return errors.Wrap(err), ""
 	}
 	log.Debug("Secret exists, nothing to do")
-	return nil
+	return nil, string(secret.Data["password"])
 }
 
-func (e *Reconciler) ensurePasswordInDatabases(ctx context.Context, pod v1.Pod) error {
+func (e *Reconciler) ensurePasswordInDatabases(ctx context.Context, pod v1.Pod, password string) error {
 	databases := strings.Split(pod.Annotations[databaseconfigurator.DatabaseAccessAnnotation], ",")
+	username := pod.Annotations[databaseconfigurator.DatabaseUsernameAnnotation]
+	pgServerConfigs := otterizev1alpha3.PostgreSQLServerConfigList{}
+	err := e.client.List(ctx, &pgServerConfigs)
+	if err != nil {
+		return errors.Wrap(err)
+	}
+	mysqlServerConfigs := otterizev1alpha3.MySQLServerConfigList{}
+	err = e.client.List(ctx, &mysqlServerConfigs)
+	if err != nil {
+		return errors.Wrap(err)
+	}
+
 	for _, database := range databases {
-		// Get PG server conf or MySQL server conf
-		// Create configurator
-		// Call alter user password
+		var dbconfigurator databaseconfigurator.DatabaseConfigurator
+		mysqlConf, found := lo.Find(mysqlServerConfigs.Items, func(config otterizev1alpha3.MySQLServerConfig) bool {
+			return config.Name == database
+		})
+		if found {
+			dbconfigurator, err = mysql.NewMySQLConfigurator(ctx, mysqlConf.Spec)
+			if err != nil {
+				return errors.Wrap(err)
+			}
+			err = dbconfigurator.AlterUserPassword(ctx, username, password)
+			if err != nil {
+				return errors.Wrap(err)
+			}
+
+		}
+		pgServerConf, found := lo.Find(pgServerConfigs.Items, func(config otterizev1alpha3.PostgreSQLServerConfig) bool {
+			return config.Name == database
+		})
+		if found {
+			dbconfigurator, err = postgres.NewPostgresConfigurator(ctx, pgServerConf.Spec)
+			if err != nil {
+				return errors.Wrap(err)
+			}
+			err = dbconfigurator.AlterUserPassword(ctx, username, password)
+			if err != nil {
+				return errors.Wrap(err)
+			}
+		}
+		// TODO: Handle missing server confs
 	}
 	return nil
 }
