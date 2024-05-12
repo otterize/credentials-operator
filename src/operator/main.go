@@ -118,6 +118,7 @@ func initSpireClient(ctx context.Context, spireServerAddr string) (spireclient.S
 func main() {
 	errorreporter.Init("credentials-operator", version.Version(), viper.GetString(operatorconfig.TelemetryErrorsAPIKeyKey))
 	defer errorreporter.AutoNotify()
+	shared.RegisterPanicHandlers()
 
 	var secretsManager tls_pod.SecretsManager
 	var workloadRegistry tls_pod.WorkloadRegistry
@@ -130,8 +131,6 @@ func main() {
 	})
 
 	ctrl.SetLogger(logrusr.New(logrus.StandardLogger()))
-
-	shared.RegisterPanicHandlers()
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
