@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"github.com/aidarkhanov/nanoid"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
@@ -106,6 +107,9 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	logrus.Debug("Validating password for all databases")
 	err = e.ensurePasswordInDatabases(ctx, pod, password)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err)
+	}
 	e.recorder.Event(&pod, v1.EventTypeNormal, ReasonEnsuredPodUserAndPassword, "Ensured user-password credentials in specified secret")
 	return ctrl.Result{}, nil
 }
@@ -166,8 +170,9 @@ func (e *Reconciler) ensurePasswordInDatabases(ctx context.Context, pod v1.Pod, 
 			if err != nil {
 				return errors.Wrap(err)
 			}
-
+			return nil
 		}
+
 		pgServerConf, found := lo.Find(pgServerConfigs.Items, func(config otterizev1alpha3.PostgreSQLServerConfig) bool {
 			return config.Name == database
 		})
@@ -180,8 +185,11 @@ func (e *Reconciler) ensurePasswordInDatabases(ctx context.Context, pod v1.Pod, 
 			if err != nil {
 				return errors.Wrap(err)
 			}
+			return nil
 		}
-		// TODO: Handle missing server confs
+		// We can only reach here if a server config was deleted after the intents operator updated the annotation on the pod
+		// TODO: Log error and continue instead ?
+		return errors.Wrap(fmt.Errorf("no matching server config found for database %s", database))
 	}
 	return nil
 }
