@@ -2,10 +2,7 @@ package poduserpassword
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"github.com/aidarkhanov/nanoid"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
 	"github.com/otterize/intents-operator/src/shared/databaseconfigurator"
@@ -15,7 +12,6 @@ import (
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/crypto/pbkdf2"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -120,7 +116,7 @@ func (e *Reconciler) ensurePodUserAndPasswordSecret(ctx context.Context, pod *v1
 	err := e.client.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: secretName}, &secret)
 	if apierrors.IsNotFound(err) {
 		log.Debug("Creating user-password credentials secret for pod")
-		password, err := createServicePassword()
+		password, err := databaseconfigurator.GenerateRandomPassword()
 		if err != nil {
 			return errors.Wrap(err), ""
 		}
@@ -206,18 +202,4 @@ func buildUserAndPasswordCredentialsSecret(name, namespace, pgUsername, password
 		},
 		Type: v1.SecretTypeOpaque,
 	}
-}
-
-func createServicePassword() (string, error) {
-	password, err := nanoid.Generate(DefaultCredentialsAlphabet, DefaultCredentialsLen)
-	if err != nil {
-		return "", errors.Wrap(err)
-	}
-	salt, err := nanoid.Generate(DefaultCredentialsAlphabet, 8)
-	if err != nil {
-		return "", errors.Wrap(err)
-	}
-
-	dk := pbkdf2.Key([]byte(password), []byte(salt), 2048, 16, sha256.New)
-	return hex.EncodeToString(dk), nil
 }
