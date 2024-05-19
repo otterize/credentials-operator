@@ -59,11 +59,7 @@ func (e *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (e *Reconciler) shouldHandleCredentialsForPod(pod v1.Pod) bool {
-	if pod.Annotations == nil {
-		return false
-	}
-
-	return hasDatabaseUsernameAnnotation(pod) && hasUserAndPasswordSecretAnnotation(pod)
+	return pod.Annotations != nil && hasDatabaseUsernameAnnotation(pod) && hasUserAndPasswordSecretAnnotation(pod)
 }
 
 func hasUserAndPasswordSecretAnnotation(pod v1.Pod) bool {
@@ -163,6 +159,7 @@ func (e *Reconciler) ensurePasswordInDatabases(ctx context.Context, pod v1.Pod, 
 				"Failed to ensure database password in %s. Missing database server config", database)
 			continue
 		}
+		defer dbconfigurator.CloseConnection(ctx)
 		if err := dbconfigurator.AlterUserPassword(ctx, username, password); err != nil {
 			return errors.Wrap(err)
 		}
