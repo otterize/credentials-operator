@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"strings"
+	"time"
 )
 
 const (
@@ -38,6 +39,8 @@ const (
 const (
 	DefaultCredentialsAlphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	DefaultCredentialsLen      = 16
+	RefreshSecretsLoopTick     = time.Minute
+	OtterizeManagedSecretLabel = "credentials-operator.otterize.com/managed-secret"
 )
 
 type Reconciler struct {
@@ -194,11 +197,42 @@ func (e *Reconciler) ensurePasswordInDatabases(ctx context.Context, pod v1.Pod, 
 	return nil
 }
 
+func (e *Reconciler) RotateSecretsLoop(ctx context.Context) {
+	refreshSecretsTicker := time.NewTicker(RefreshSecretsLoopTick)
+	for {
+		select {
+		case <-refreshSecretsTicker.C:
+			go func() {
+				err := e.RotateSecrets(ctx)
+				if err != nil {
+					logrus.WithError(err).Error("failed refreshing TLS secrets")
+				}
+			}()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (e *Reconciler) RotateSecrets(ctx context.Context) error {
+	otterizeSecrets := v1.SecretList{}
+	if err := e.client.List(ctx, &otterizeSecrets, &client.MatchingLabels{OtterizeManagedSecretLabel: "true"}); err != nil {
+		return errors.Wrap(err)
+	}
+	secretsNeedingRefresh := lo.Filter(otterizeSecrets.Items, func(secret v1.Secret) bool {
+
+	})
+	for _, secret := range otterizeSecrets.Items {
+
+	}
+}
+
 func buildUserAndPasswordCredentialsSecret(name, namespace, pgUsername, password string) *v1.Secret {
 	return &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels:    map[string]string{OtterizeManagedSecretLabel: "true"},
 		},
 		Data: map[string][]byte{
 			"username": []byte(pgUsername),
