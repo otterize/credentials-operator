@@ -2,7 +2,6 @@ package poduserpassword
 
 import (
 	"context"
-	"fmt"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
 	"github.com/otterize/intents-operator/src/shared/databaseconfigurator"
@@ -27,7 +26,7 @@ import (
 const (
 	ReasonEnsuredPodUserAndPassword        = "EnsuredPodUserAndPassword"
 	ReasonEnsuringPodUserAndPasswordFailed = "EnsuringPodUserAndPasswordFailed"
-	ReasonMissingDatabaseServerConfig      = "MissingDatabaseServerConfig"
+	ReasonEnsuringDatabasePasswordFailed   = "EnsuringDatabasePasswordFailed"
 	ReasonPodOwnerResolutionFailed         = "PodOwnerResolutionFailed"
 )
 
@@ -101,7 +100,7 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, errors.Wrap(err)
 	}
 
-	logrus.Debug("Validating password for all databases")
+	logrus.Debug("Validating password in all databases")
 	err = e.ensurePasswordInDatabases(ctx, pod, password)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err)
@@ -146,6 +145,7 @@ func (e *Reconciler) ensurePasswordInDatabases(ctx context.Context, pod v1.Pod, 
 	if err != nil {
 		return errors.Wrap(err)
 	}
+
 	mysqlServerConfigs := otterizev1alpha3.MySQLServerConfigList{}
 	err = e.client.List(ctx, &mysqlServerConfigs)
 	if err != nil {
@@ -153,41 +153,53 @@ func (e *Reconciler) ensurePasswordInDatabases(ctx context.Context, pod v1.Pod, 
 	}
 
 	for _, database := range databases {
-		var dbconfigurator databaseconfigurator.DatabaseConfigurator
-		mysqlConf, found := lo.Find(mysqlServerConfigs.Items, func(config otterizev1alpha3.MySQLServerConfig) bool {
-			return config.Name == database
-		})
-		if found {
-			dbconfigurator, err = mysql.NewMySQLConfigurator(ctx, mysqlConf.Spec)
-			if err != nil {
-				return errors.Wrap(err)
-			}
-			err = dbconfigurator.AlterUserPassword(ctx, username, password)
-			if err != nil {
-				return errors.Wrap(err)
-			}
-			return nil
+		dbconfigurator, found, err := e.createDBConfigurator(ctx, database, mysqlServerConfigs.Items, pgServerConfigs.Items)
+		if err != nil {
+			return errors.Wrap(err)
 		}
-
-		pgServerConf, found := lo.Find(pgServerConfigs.Items, func(config otterizev1alpha3.PostgreSQLServerConfig) bool {
-			return config.Name == database
-		})
-		if found {
-			dbconfigurator, err = postgres.NewPostgresConfigurator(ctx, pgServerConf.Spec)
-			if err != nil {
-				return errors.Wrap(err)
-			}
-			err = dbconfigurator.AlterUserPassword(ctx, username, password)
-			if err != nil {
-				return errors.Wrap(err)
-			}
-			return nil
+		if !found {
+			logrus.Warningf("Missing database server config for db: %s", database)
+			e.recorder.Eventf(&pod, v1.EventTypeWarning, ReasonEnsuringDatabasePasswordFailed,
+				"Failed to ensure database password in %s. Missing database server config", database)
+			continue
 		}
-		// We can only reach here if a server config was deleted after the intents operator updated the annotation on the pod
-		// TODO: Log error and continue instead ?
-		return errors.Wrap(fmt.Errorf("no matching server config found for database %s", database))
+		if err := dbconfigurator.AlterUserPassword(ctx, username, password); err != nil {
+			return errors.Wrap(err)
+		}
 	}
+
 	return nil
+}
+
+func (e *Reconciler) createDBConfigurator(
+	ctx context.Context,
+	database string,
+	mysqlServerConfigs []otterizev1alpha3.MySQLServerConfig,
+	pgServerConfigs []otterizev1alpha3.PostgreSQLServerConfig) (databaseconfigurator.DatabaseConfigurator, bool, error) {
+
+	mysqlConf, found := lo.Find(mysqlServerConfigs, func(config otterizev1alpha3.MySQLServerConfig) bool {
+		return config.Name == database
+	})
+	if found {
+		dbconfigurator, err := mysql.NewMySQLConfigurator(ctx, mysqlConf.Spec)
+		if err != nil {
+			return nil, false, errors.Wrap(err)
+		}
+		return dbconfigurator, true, nil
+	}
+
+	pgServerConf, found := lo.Find(pgServerConfigs, func(config otterizev1alpha3.PostgreSQLServerConfig) bool {
+		return config.Name == database
+	})
+	if found {
+		dbconfigurator, err := postgres.NewPostgresConfigurator(ctx, pgServerConf.Spec)
+		if err != nil {
+			return nil, false, errors.Wrap(err)
+		}
+		return dbconfigurator, true, nil
+	}
+
+	return nil, false, nil
 }
 
 func buildUserAndPasswordCredentialsSecret(name, namespace, pgUsername, password string) *v1.Secret {
