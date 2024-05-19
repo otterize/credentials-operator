@@ -27,12 +27,6 @@ const (
 	ReasonEnsuredPodUserAndPassword        = "EnsuredPodUserAndPassword"
 	ReasonEnsuringPodUserAndPasswordFailed = "EnsuringPodUserAndPasswordFailed"
 	ReasonEnsuringDatabasePasswordFailed   = "EnsuringDatabasePasswordFailed"
-	ReasonPodOwnerResolutionFailed         = "PodOwnerResolutionFailed"
-)
-
-const (
-	DefaultCredentialsAlphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	DefaultCredentialsLen      = 16
 )
 
 type Reconciler struct {
