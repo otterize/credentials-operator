@@ -173,7 +173,6 @@ func (e *Reconciler) ensurePasswordInDatabases(ctx context.Context, pod v1.Pod, 
 			logrus.Warningf("Missing database server config for db: %s", database)
 			e.recorder.Eventf(&pod, v1.EventTypeWarning, ReasonEnsuringDatabasePasswordFailed,
 				"Failed to ensure database password in %s. Missing database server config", database)
-			continue
 		}
 	}
 	return nil
