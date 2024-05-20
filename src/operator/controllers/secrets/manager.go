@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	SecretExpiryDelta = 10 * time.Minute
+	secretExpiryDelta = 10 * time.Minute
 )
 
 var _ K8sSecretsManagerSubclass[*corev1.Secret] = &DirectSecretsManager{}
@@ -44,7 +44,7 @@ func (m *DirectSecretsManager) NewSecretObject() *corev1.Secret {
 
 func (m *DirectSecretsManager) IsRefreshNeeded(secret *corev1.Secret) bool {
 	log := logrus.WithFields(logrus.Fields{"secret.namespace": secret.Namespace, "secret.name": secret.Name})
-	expiryBaseline := time.Now().Add(SecretExpiryDelta)
+	expiryBaseline := time.Now().Add(secretExpiryDelta)
 	expiryStr, ok := secret.Annotations[metadata.TLSSecretExpiryAnnotation]
 	if !ok {
 		log.Warn("secret missing expiry annotation, will re-create it")
