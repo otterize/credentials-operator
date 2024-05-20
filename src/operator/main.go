@@ -41,6 +41,7 @@ import (
 	"github.com/otterize/credentials-operator/src/operatorconfig"
 	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
 	mutatingwebhookconfiguration "github.com/otterize/intents-operator/src/operator/controllers/mutating_webhook_controller"
+	"github.com/otterize/intents-operator/src/operator/otterizecrds"
 	operatorwebhooks "github.com/otterize/intents-operator/src/operator/webhooks"
 	"github.com/otterize/intents-operator/src/shared"
 	"github.com/otterize/intents-operator/src/shared/awsagent"
@@ -59,8 +60,10 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"os"
 	"path"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	controllerruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -91,7 +94,7 @@ const (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(certmanager.AddToScheme(scheme))
-
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(gcpiamv1.AddToScheme(scheme))
 	utilruntime.Must(gcpk8sv1.AddToScheme(scheme))
 	utilruntime.Must(otterizev1alpha3.AddToScheme(scheme))
@@ -142,13 +145,25 @@ func main() {
 		LeaderElectionID:       "credentials-operator.otterize.com",
 	})
 	if err != nil {
-		logrus.WithError(err).Panic("unable to start manager")
+		logrus.WithError(err).Panic("unable to initialize manager")
 	}
 
 	signalHandlerCtx := ctrl.SetupSignalHandler()
 	podNamespace := os.Getenv("POD_NAMESPACE")
 	if podNamespace == "" {
 		logrus.Panic("POD_NAMESPACE environment variable is required")
+	}
+
+	directClient, err := client.New(ctrl.GetConfigOrDie(), client.Options{Scheme: mgr.GetScheme()})
+	if err != nil {
+		logrus.WithError(err).Panic("unable to create kubernetes API client")
+	}
+
+	// Required for cases where the intents operator starts after the credentials operator, and the credentials
+	// operator requires ClientIntents to be deployed.
+	err = otterizecrds.Ensure(signalHandlerCtx, directClient, podNamespace)
+	if err != nil {
+		logrus.WithError(err).Panic("unable to ensure otterize CRDs")
 	}
 
 	clusterUID, err := clusterutils.GetOrCreateClusterUID(signalHandlerCtx)
