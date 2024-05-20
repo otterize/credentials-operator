@@ -3,6 +3,7 @@ package poduserpassword
 import (
 	"context"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
+	"github.com/otterize/credentials-operator/src/operatorconfig"
 	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
 	"github.com/otterize/intents-operator/src/shared/clusterutils"
 	"github.com/otterize/intents-operator/src/shared/databaseconfigurator"
@@ -12,6 +13,7 @@ import (
 	"github.com/otterize/intents-operator/src/shared/serviceidresolver"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,6 +32,10 @@ const (
 	ReasonGeneratePodDatabaseUserFailed    = "GeneratePodDatabaseUserFailed"
 	ReasonEnsuringPodUserAndPasswordFailed = "EnsuringPodUserAndPasswordFailed"
 	ReasonEnsuringDatabasePasswordFailed   = "EnsuringDatabasePasswordFailed"
+)
+
+const (
+	RefreshSecretsLoopTick = time.Minute
 )
 
 type Reconciler struct {
@@ -242,7 +248,7 @@ func (e *Reconciler) RotateSecretsLoop(ctx context.Context) {
 			go func() {
 				err := e.RotateSecrets(ctx)
 				if err != nil {
-					logrus.WithError(err).Error("failed refreshing TLS secrets")
+					logrus.WithError(err).Error("failed refreshing user-password secrets")
 				}
 			}()
 		case <-ctx.Done():
@@ -253,15 +259,60 @@ func (e *Reconciler) RotateSecretsLoop(ctx context.Context) {
 
 func (e *Reconciler) RotateSecrets(ctx context.Context) error {
 	otterizeSecrets := v1.SecretList{}
-	if err := e.client.List(ctx, &otterizeSecrets, &client.MatchingLabels{OtterizeManagedSecretLabel: "true"}); err != nil {
+	if err := e.client.List(ctx, &otterizeSecrets, &client.MatchingLabels{metadata.SecretTypeLabel: string(v1.SecretTypeOpaque)}); err != nil {
 		return errors.Wrap(err)
 	}
-	secretsNeedingRefresh := lo.Filter(otterizeSecrets.Items, func(secret v1.Secret) bool {
-
+	secretsNeedingRotation := lo.Filter(otterizeSecrets.Items, func(secret v1.Secret, _ int) bool {
+		return shouldRotateSecret(secret)
 	})
-	for _, secret := range otterizeSecrets.Items {
 
+	for _, secret := range secretsNeedingRotation {
+		if err := e.rotateSecret(ctx, secret); err != nil {
+			return errors.Wrap(err)
+		}
+		logrus.Infof("Rotated secret: %s.%s", secret.Name, secret.Namespace)
 	}
+	return nil
+}
+
+func (e *Reconciler) rotateSecret(ctx context.Context, secret v1.Secret) error {
+	updatedSecret := secret.DeepCopy()
+	password, err := databaseconfigurator.GenerateRandomPassword()
+	if err != nil {
+		return errors.Wrap(err)
+	}
+	updatedSecret.Data["password"] = []byte(password)
+	if updatedSecret.Annotations == nil {
+		updatedSecret.Annotations = map[string]string{metadata.SecretLastUpdatedTimestampAnnotation: time.Now().Format(time.RFC3339)}
+	} else {
+		updatedSecret.Annotations[metadata.SecretLastUpdatedTimestampAnnotation] = time.Now().Format(time.RFC3339)
+	}
+	if err := e.client.Patch(ctx, updatedSecret, client.MergeFrom(&secret)); err != nil {
+		return errors.Wrap(err)
+	}
+
+	return nil
+}
+
+func shouldRotateSecret(secret v1.Secret) bool {
+	if secret.Annotations == nil {
+		return true
+	}
+
+	lastUpdatedStr, ok := secret.Annotations[metadata.SecretLastUpdatedTimestampAnnotation]
+	if !ok {
+		return true
+	}
+	rotationInterval := viper.GetDuration(operatorconfig.DatabasePasswordRotationIntervalKey)
+	lastUpdatedTime, err := time.Parse(time.RFC3339, lastUpdatedStr)
+	if err != nil {
+		logrus.WithError(err).Errorf("failed parsing last updated time from secret: %s.%s, will re-create it", secret.Name, secret.Namespace)
+	}
+	if lastUpdatedTime.Add(rotationInterval).Before(time.Now()) {
+		return true
+	}
+
+	return false
 }
 
 func buildUserAndPasswordCredentialsSecret(name, namespace, pgUsername, password string) *v1.Secret {
@@ -269,7 +320,10 @@ func buildUserAndPasswordCredentialsSecret(name, namespace, pgUsername, password
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
-			Labels:    map[string]string{OtterizeManagedSecretLabel: "true"},
+			Labels:    map[string]string{metadata.SecretTypeLabel: string(v1.SecretTypeOpaque)},
+			Annotations: map[string]string{
+				metadata.SecretLastUpdatedTimestampAnnotation: time.Now().Format(time.RFC3339),
+			},
 		},
 		Data: map[string][]byte{
 			"username": []byte(pgUsername),
