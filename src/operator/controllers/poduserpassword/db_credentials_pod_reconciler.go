@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/otterize/credentials-operator/src/controllers/metadata"
 	otterizev1alpha3 "github.com/otterize/intents-operator/src/operator/api/v1alpha3"
+	"github.com/otterize/intents-operator/src/shared/clusterutils"
 	"github.com/otterize/intents-operator/src/shared/databaseconfigurator"
 	"github.com/otterize/intents-operator/src/shared/databaseconfigurator/mysql"
 	"github.com/otterize/intents-operator/src/shared/databaseconfigurator/postgres"
@@ -25,6 +26,7 @@ import (
 
 const (
 	ReasonEnsuredPodUserAndPassword        = "EnsuredPodUserAndPassword"
+	ReasonGeneratePodDatabaseUserFailed    = "GeneratePodDatabaseUserFailed"
 	ReasonEnsuringPodUserAndPasswordFailed = "EnsuringPodUserAndPasswordFailed"
 	ReasonEnsuringDatabasePasswordFailed   = "EnsuringDatabasePasswordFailed"
 )
@@ -53,7 +55,7 @@ func (e *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (e *Reconciler) shouldHandleCredentialsForPod(pod v1.Pod) bool {
-	return pod.Annotations != nil && hasDatabaseUsernameAnnotation(pod) && hasUserAndPasswordSecretAnnotation(pod)
+	return pod.Annotations != nil && hasUserAndPasswordSecretAnnotation(pod)
 }
 
 func hasUserAndPasswordSecretAnnotation(pod v1.Pod) bool {
@@ -61,8 +63,8 @@ func hasUserAndPasswordSecretAnnotation(pod v1.Pod) bool {
 	return ok
 }
 
-func hasDatabaseUsernameAnnotation(pod v1.Pod) bool {
-	_, ok := pod.Annotations[databaseconfigurator.DatabaseUsernameAnnotation]
+func hasDatabaseAccessAnnotation(pod v1.Pod) bool {
+	_, ok := pod.Annotations[databaseconfigurator.DatabaseAccessAnnotation]
 	return ok
 }
 
@@ -83,23 +85,46 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
+	username, err := e.generateServiceDatabaseUsername(ctx, &pod)
+	if err != nil {
+		e.recorder.Eventf(&pod, v1.EventTypeWarning, ReasonGeneratePodDatabaseUserFailed, "Failed to generate database username: %s", err.Error())
+		return ctrl.Result{}, errors.Wrap(err)
+	}
+
 	logrus.Debug("Ensuring user-password credentials secrets for pod")
-	err, password := e.ensurePodUserAndPasswordSecret(ctx, &pod, pod.Annotations[metadata.UserAndPasswordSecretNameAnnotation])
+	password, err := e.ensurePodUserAndPasswordSecret(ctx, &pod, pod.Annotations[metadata.UserAndPasswordSecretNameAnnotation], username)
 	if err != nil {
 		e.recorder.Eventf(&pod, v1.EventTypeWarning, ReasonEnsuringPodUserAndPasswordFailed, "Failed to ensure user-password credentials secret: %s", err.Error())
 		return ctrl.Result{}, errors.Wrap(err)
 	}
 
-	logrus.Debug("Validating password in all databases")
-	err = e.ensurePasswordInDatabases(ctx, pod, password)
-	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err)
+	if hasDatabaseAccessAnnotation(pod) {
+		logrus.Debug("Validating password in all databases")
+		err = e.ensurePasswordInDatabases(ctx, pod, username, password)
+		if err != nil {
+			return ctrl.Result{}, errors.Wrap(err)
+		}
 	}
 	e.recorder.Event(&pod, v1.EventTypeNormal, ReasonEnsuredPodUserAndPassword, "Ensured user-password credentials in specified secret")
 	return ctrl.Result{}, nil
 }
 
-func (e *Reconciler) ensurePodUserAndPasswordSecret(ctx context.Context, pod *v1.Pod, secretName string) (error, string) {
+func (e *Reconciler) generateServiceDatabaseUsername(ctx context.Context, pod *v1.Pod) (string, error) {
+	serviceID, err := e.serviceIdResolver.ResolvePodToServiceIdentity(ctx, pod)
+	if err != nil {
+		return "", errors.Wrap(err)
+	}
+
+	clusterID, err := clusterutils.GetClusterUID(ctx)
+	if err != nil {
+		return "", errors.Wrap(err)
+	}
+
+	username := clusterutils.BuildHashedUsername(serviceID.Name, pod.Namespace, clusterID)
+	return clusterutils.KubernetesToPostgresName(username), nil
+}
+
+func (e *Reconciler) ensurePodUserAndPasswordSecret(ctx context.Context, pod *v1.Pod, secretName string, username string) (string, error) {
 	log := logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace})
 	secret := v1.Secret{}
 	err := e.client.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: secretName}, &secret)
@@ -107,29 +132,26 @@ func (e *Reconciler) ensurePodUserAndPasswordSecret(ctx context.Context, pod *v1
 		log.Debug("Creating user-password credentials secret for pod")
 		password, err := databaseconfigurator.GenerateRandomPassword()
 		if err != nil {
-			return errors.Wrap(err), ""
+			return "", errors.Wrap(err)
 		}
 
-		databaseUsername := pod.Annotations[databaseconfigurator.DatabaseUsernameAnnotation]
-
-		secret := buildUserAndPasswordCredentialsSecret(secretName, pod.Namespace, databaseUsername, password)
+		secret := buildUserAndPasswordCredentialsSecret(secretName, pod.Namespace, username, password)
 		log.WithField("secret", secretName).Debug("Creating new secret with user-password credentials")
 		if err := e.client.Create(ctx, secret); err != nil {
-			return errors.Wrap(err), ""
+			return "", errors.Wrap(err)
 		}
-		return nil, password
+		return password, nil
 	}
 
 	if err != nil {
-		return errors.Wrap(err), ""
+		return "", errors.Wrap(err)
 	}
 	log.Debug("Secret exists, nothing to do")
-	return nil, string(secret.Data["password"])
+	return string(secret.Data["password"]), nil
 }
 
-func (e *Reconciler) ensurePasswordInDatabases(ctx context.Context, pod v1.Pod, password string) error {
+func (e *Reconciler) ensurePasswordInDatabases(ctx context.Context, pod v1.Pod, username string, password string) error {
 	databases := strings.Split(pod.Annotations[databaseconfigurator.DatabaseAccessAnnotation], ",")
-	username := pod.Annotations[databaseconfigurator.DatabaseUsernameAnnotation]
 	pgServerConfigs := otterizev1alpha3.PostgreSQLServerConfigList{}
 	err := e.client.List(ctx, &pgServerConfigs)
 	if err != nil {
