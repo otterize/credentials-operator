@@ -143,22 +143,17 @@ func (e *Reconciler) ensurePasswordInDatabases(ctx context.Context, pod v1.Pod, 
 	}
 
 	for _, database := range databases {
-		dbconfigurator, found, err := e.createDBConfigurator(ctx, database, mysqlServerConfigs.Items, pgServerConfigs.Items)
+		configFound, err := e.ensurePasswordInDatabaseInstance(ctx, database, mysqlServerConfigs.Items, pgServerConfigs.Items, username, password)
 		if err != nil {
 			return errors.Wrap(err)
 		}
-		if !found {
+		if !configFound {
 			logrus.Warningf("Missing database server config for db: %s", database)
 			e.recorder.Eventf(&pod, v1.EventTypeWarning, ReasonEnsuringDatabasePasswordFailed,
 				"Failed to ensure database password in %s. Missing database server config", database)
 			continue
 		}
-		defer dbconfigurator.CloseConnection(ctx)
-		if err := dbconfigurator.AlterUserPassword(ctx, username, password); err != nil {
-			return errors.Wrap(err)
-		}
 	}
-
 	return nil
 }
 
@@ -193,6 +188,29 @@ func (e *Reconciler) createDBConfigurator(
 	return nil, false, nil
 }
 
+func (e *Reconciler) ensurePasswordInDatabaseInstance(
+	ctx context.Context,
+	database string,
+	mysqlServerConfigs []otterizev1alpha3.MySQLServerConfig,
+	pgServerConfigs []otterizev1alpha3.PostgreSQLServerConfig,
+	username string,
+	password string) (bool, error) {
+
+	dbConfigurator, found, err := e.createDBConfigurator(ctx, database, mysqlServerConfigs, pgServerConfigs)
+	if err != nil {
+		return false, errors.Wrap(err)
+	}
+	if !found {
+		return false, nil
+	}
+
+	defer dbConfigurator.CloseConnection(ctx)
+	if err := dbConfigurator.AlterUserPassword(ctx, username, password); err != nil {
+		return false, errors.Wrap(err)
+	}
+
+	return true, nil
+}
 func buildUserAndPasswordCredentialsSecret(name, namespace, pgUsername, password string) *v1.Secret {
 	return &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
