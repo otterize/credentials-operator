@@ -32,10 +32,11 @@ const (
 	ReasonGeneratePodDatabaseUserFailed    = "GeneratePodDatabaseUserFailed"
 	ReasonEnsuringPodUserAndPasswordFailed = "EnsuringPodUserAndPasswordFailed"
 	ReasonEnsuringDatabasePasswordFailed   = "EnsuringDatabasePasswordFailed"
+	ReasonRotatingSecretFailed             = "RotatingSecretFailed"
 )
 
 const (
-	RefreshSecretsLoopTick = time.Minute
+	RefreshSecretsLoopTick = time.Minute * 5
 )
 
 type Reconciler struct {
@@ -246,9 +247,9 @@ func (e *Reconciler) RotateSecretsLoop(ctx context.Context) {
 		select {
 		case <-refreshSecretsTicker.C:
 			go func() {
-				err := e.RotateSecrets(ctx)
+				err := e.RotateSecretsAndAlterPasswords(ctx)
 				if err != nil {
-					logrus.WithError(err).Error("failed refreshing user-password secrets")
+					logrus.WithError(err).Error("failed rotating user-password secrets")
 				}
 			}()
 		case <-ctx.Done():
@@ -257,21 +258,32 @@ func (e *Reconciler) RotateSecretsLoop(ctx context.Context) {
 	}
 }
 
-func (e *Reconciler) RotateSecrets(ctx context.Context) error {
+func (e *Reconciler) RotateSecretsAndAlterPasswords(ctx context.Context) error {
 	otterizeSecrets := v1.SecretList{}
 	if err := e.client.List(ctx, &otterizeSecrets, &client.MatchingLabels{metadata.SecretTypeLabel: string(v1.SecretTypeOpaque)}); err != nil {
 		return errors.Wrap(err)
 	}
+
 	secretsNeedingRotation := lo.Filter(otterizeSecrets.Items, func(secret v1.Secret, _ int) bool {
 		return shouldRotateSecret(secret)
 	})
+	rotatedSecrets := make([]v1.Secret, 0)
 
 	for _, secret := range secretsNeedingRotation {
 		if err := e.rotateSecret(ctx, secret); err != nil {
-			return errors.Wrap(err)
+			e.recorder.Eventf(&secret, v1.EventTypeWarning, ReasonRotatingSecretFailed, "Failed to rotate secret: %s", err.Error())
+			continue
 		}
+
+		rotatedSecrets = append(rotatedSecrets, secret)
 		logrus.Infof("Rotated secret: %s.%s", secret.Name, secret.Namespace)
 	}
+
+	err := e.runAlterPasswordForSecrets(ctx, rotatedSecrets)
+	if err != nil {
+		return errors.Wrap(err)
+	}
+
 	return nil
 }
 
@@ -294,11 +306,68 @@ func (e *Reconciler) rotateSecret(ctx context.Context, secret v1.Secret) error {
 	return nil
 }
 
+func (e *Reconciler) runAlterPasswordForSecrets(ctx context.Context, secrets []v1.Secret) interface{} {
+	pgServerConfigs := otterizev1alpha3.PostgreSQLServerConfigList{}
+	err := e.client.List(ctx, &pgServerConfigs)
+	if err != nil {
+		return errors.Wrap(err)
+	}
+
+	mysqlServerConfigs := otterizev1alpha3.MySQLServerConfigList{}
+	err = e.client.List(ctx, &mysqlServerConfigs)
+	if err != nil {
+		return errors.Wrap(err)
+	}
+
+	allConfigurators := e.GetAllDBConfigurators(ctx, mysqlServerConfigs.Items, pgServerConfigs.Items)
+	for _, secret := range secrets {
+		username := string(secret.Data["username"])
+		password := string(secret.Data["password"])
+		for _, dbConfigurator := range allConfigurators {
+			exists, err := dbConfigurator.ValidateUserExists(ctx, username)
+			if err != nil {
+				return errors.Wrap(err)
+			}
+			if !exists {
+				continue
+			}
+			if err := dbConfigurator.AlterUserPassword(ctx, username, password); err != nil {
+				return errors.Wrap(err)
+			}
+		}
+	}
+	for _, dbConfigurator := range allConfigurators {
+		dbConfigurator.CloseConnection(ctx)
+	}
+
+	return nil
+}
+
+func (e *Reconciler) GetAllDBConfigurators(ctx context.Context, mysqlServerConfigs []otterizev1alpha3.MySQLServerConfig, pgServerConfigs []otterizev1alpha3.PostgreSQLServerConfig) []databaseconfigurator.DatabaseConfigurator {
+	configurators := make([]databaseconfigurator.DatabaseConfigurator, 0)
+	for _, mysqlServerConfig := range mysqlServerConfigs {
+		dbconfigurator, err := mysql.NewMySQLConfigurator(ctx, mysqlServerConfig.Spec)
+		if err != nil {
+			logrus.WithError(err).Errorf("Failed to create configurator for MySQL server config: %s", mysqlServerConfig.Name)
+			continue
+		}
+		configurators = append(configurators, dbconfigurator)
+	}
+	for _, pgServerConfig := range pgServerConfigs {
+		dbconfigurator, err := postgres.NewPostgresConfigurator(ctx, pgServerConfig.Spec)
+		if err != nil {
+			logrus.WithError(err).Errorf("Failed to create configurator for PostgreSQL server config: %s", pgServerConfig.Name)
+			continue
+		}
+		configurators = append(configurators, dbconfigurator)
+	}
+	return configurators
+}
+
 func shouldRotateSecret(secret v1.Secret) bool {
 	if secret.Annotations == nil {
 		return true
 	}
-
 	lastUpdatedStr, ok := secret.Annotations[metadata.SecretLastUpdatedTimestampAnnotation]
 	if !ok {
 		return true
