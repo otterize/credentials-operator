@@ -270,12 +270,12 @@ func (e *Reconciler) RotateSecretsAndAlterPasswords(ctx context.Context) error {
 	rotatedSecrets := make([]v1.Secret, 0)
 
 	for _, secret := range secretsNeedingRotation {
-		if err := e.rotateSecret(ctx, secret); err != nil {
+		updatedSecret, err := e.rotateSecret(ctx, secret)
+		if err != nil {
 			e.recorder.Eventf(&secret, v1.EventTypeWarning, ReasonRotatingSecretFailed, "Failed to rotate secret: %s", err.Error())
 			continue
 		}
-
-		rotatedSecrets = append(rotatedSecrets, secret)
+		rotatedSecrets = append(rotatedSecrets, updatedSecret)
 		logrus.Infof("Rotated secret: %s.%s", secret.Name, secret.Namespace)
 	}
 
@@ -287,11 +287,11 @@ func (e *Reconciler) RotateSecretsAndAlterPasswords(ctx context.Context) error {
 	return nil
 }
 
-func (e *Reconciler) rotateSecret(ctx context.Context, secret v1.Secret) error {
+func (e *Reconciler) rotateSecret(ctx context.Context, secret v1.Secret) (v1.Secret, error) {
 	updatedSecret := secret.DeepCopy()
 	password, err := databaseconfigurator.GenerateRandomPassword()
 	if err != nil {
-		return errors.Wrap(err)
+		return v1.Secret{}, errors.Wrap(err)
 	}
 	updatedSecret.Data["password"] = []byte(password)
 	if updatedSecret.Annotations == nil {
@@ -300,13 +300,13 @@ func (e *Reconciler) rotateSecret(ctx context.Context, secret v1.Secret) error {
 		updatedSecret.Annotations[metadata.SecretLastUpdatedTimestampAnnotation] = time.Now().Format(time.RFC3339)
 	}
 	if err := e.client.Patch(ctx, updatedSecret, client.MergeFrom(&secret)); err != nil {
-		return errors.Wrap(err)
+		return v1.Secret{}, errors.Wrap(err)
 	}
 
-	return nil
+	return *updatedSecret, nil
 }
 
-func (e *Reconciler) runAlterPasswordForSecrets(ctx context.Context, secrets []v1.Secret) interface{} {
+func (e *Reconciler) runAlterPasswordForSecrets(ctx context.Context, secrets []v1.Secret) error {
 	pgServerConfigs := otterizev1alpha3.PostgreSQLServerConfigList{}
 	err := e.client.List(ctx, &pgServerConfigs)
 	if err != nil {
