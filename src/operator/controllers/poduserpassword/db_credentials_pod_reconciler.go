@@ -320,6 +320,8 @@ func (e *Reconciler) runAlterPasswordForSecrets(ctx context.Context, secrets []v
 	}
 
 	allConfigurators := e.GetAllDBConfigurators(ctx, mysqlServerConfigs.Items, pgServerConfigs.Items)
+	defer closeAllConnections(ctx, allConfigurators)
+
 	for _, secret := range secrets {
 		username := string(secret.Data["username"])
 		password := string(secret.Data["password"])
@@ -332,15 +334,18 @@ func (e *Reconciler) runAlterPasswordForSecrets(ctx context.Context, secrets []v
 				continue
 			}
 			if err := dbConfigurator.AlterUserPassword(ctx, username, password); err != nil {
-				return errors.Wrap(err)
+				logrus.WithError(err).Errorf("Failed to alter user-password for secret: %s", secret.Name)
 			}
 		}
 	}
+
+	return nil
+}
+
+func closeAllConnections(ctx context.Context, allConfigurators []databaseconfigurator.DatabaseConfigurator) {
 	for _, dbConfigurator := range allConfigurators {
 		dbConfigurator.CloseConnection(ctx)
 	}
-
-	return nil
 }
 
 func (e *Reconciler) GetAllDBConfigurators(ctx context.Context, mysqlServerConfigs []otterizev1alpha3.MySQLServerConfig, pgServerConfigs []otterizev1alpha3.PostgreSQLServerConfig) []databaseconfigurator.DatabaseConfigurator {
