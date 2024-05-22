@@ -379,6 +379,7 @@ func shouldRotateSecret(secret v1.Secret) bool {
 	lastUpdatedTime, err := time.Parse(time.RFC3339, lastUpdatedStr)
 	if err != nil {
 		logrus.WithError(err).Errorf("failed parsing last updated time from secret: %s.%s, will re-create it", secret.Name, secret.Namespace)
+		return true
 	}
 	if lastUpdatedTime.Add(rotationInterval).Before(time.Now()) {
 		return true
