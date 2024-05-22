@@ -186,61 +186,6 @@ func (e *Reconciler) ensurePasswordInDatabases(ctx context.Context, pod v1.Pod, 
 	return nil
 }
 
-func (e *Reconciler) createDBConfigurator(
-	ctx context.Context,
-	database string,
-	mysqlServerConfigs []otterizev1alpha3.MySQLServerConfig,
-	pgServerConfigs []otterizev1alpha3.PostgreSQLServerConfig) (databaseconfigurator.DatabaseConfigurator, bool, error) {
-
-	mysqlConf, found := lo.Find(mysqlServerConfigs, func(config otterizev1alpha3.MySQLServerConfig) bool {
-		return config.Name == database
-	})
-	if found {
-		dbconfigurator, err := mysql.NewMySQLConfigurator(ctx, mysqlConf.Spec)
-		if err != nil {
-			return nil, false, errors.Wrap(err)
-		}
-		return dbconfigurator, true, nil
-	}
-
-	pgServerConf, found := lo.Find(pgServerConfigs, func(config otterizev1alpha3.PostgreSQLServerConfig) bool {
-		return config.Name == database
-	})
-	if found {
-		dbconfigurator, err := postgres.NewPostgresConfigurator(ctx, pgServerConf.Spec)
-		if err != nil {
-			return nil, false, errors.Wrap(err)
-		}
-		return dbconfigurator, true, nil
-	}
-
-	return nil, false, nil
-}
-
-func (e *Reconciler) ensurePasswordInDatabaseInstance(
-	ctx context.Context,
-	database string,
-	mysqlServerConfigs []otterizev1alpha3.MySQLServerConfig,
-	pgServerConfigs []otterizev1alpha3.PostgreSQLServerConfig,
-	username string,
-	password string) (bool, error) {
-
-	dbConfigurator, found, err := e.createDBConfigurator(ctx, database, mysqlServerConfigs, pgServerConfigs)
-	if err != nil {
-		return false, errors.Wrap(err)
-	}
-	if !found {
-		return false, nil
-	}
-
-	defer dbConfigurator.CloseConnection(ctx)
-	if err := dbConfigurator.AlterUserPassword(ctx, username, password); err != nil {
-		return false, errors.Wrap(err)
-	}
-
-	return true, nil
-}
-
 func (e *Reconciler) RotateSecretsLoop(ctx context.Context) {
 	refreshSecretsTicker := time.NewTicker(RefreshSecretsLoopTick)
 	for {
@@ -263,7 +208,6 @@ func (e *Reconciler) RotateSecretsAndAlterPasswords(ctx context.Context) error {
 	if err := e.client.List(ctx, &otterizeSecrets, &client.MatchingLabels{metadata.SecretTypeLabel: string(v1.SecretTypeOpaque)}); err != nil {
 		return errors.Wrap(err)
 	}
-
 	secretsNeedingRotation := lo.Filter(otterizeSecrets.Items, func(secret v1.Secret, _ int) bool {
 		return shouldRotateSecret(secret)
 	})
@@ -342,6 +286,60 @@ func (e *Reconciler) runAlterPasswordForSecrets(ctx context.Context, secrets []v
 	return nil
 }
 
+func (e *Reconciler) createDBConfigurator(
+	ctx context.Context,
+	database string,
+	mysqlServerConfigs []otterizev1alpha3.MySQLServerConfig,
+	pgServerConfigs []otterizev1alpha3.PostgreSQLServerConfig) (databaseconfigurator.DatabaseConfigurator, bool, error) {
+
+	mysqlConf, found := lo.Find(mysqlServerConfigs, func(config otterizev1alpha3.MySQLServerConfig) bool {
+		return config.Name == database
+	})
+	if found {
+		dbconfigurator, err := mysql.NewMySQLConfigurator(ctx, mysqlConf.Spec)
+		if err != nil {
+			return nil, false, errors.Wrap(err)
+		}
+		return dbconfigurator, true, nil
+	}
+
+	pgServerConf, found := lo.Find(pgServerConfigs, func(config otterizev1alpha3.PostgreSQLServerConfig) bool {
+		return config.Name == database
+	})
+	if found {
+		dbconfigurator, err := postgres.NewPostgresConfigurator(ctx, pgServerConf.Spec)
+		if err != nil {
+			return nil, false, errors.Wrap(err)
+		}
+		return dbconfigurator, true, nil
+	}
+
+	return nil, false, nil
+}
+
+func (e *Reconciler) ensurePasswordInDatabaseInstance(
+	ctx context.Context,
+	database string,
+	mysqlServerConfigs []otterizev1alpha3.MySQLServerConfig,
+	pgServerConfigs []otterizev1alpha3.PostgreSQLServerConfig,
+	username string,
+	password string) (bool, error) {
+
+	dbConfigurator, found, err := e.createDBConfigurator(ctx, database, mysqlServerConfigs, pgServerConfigs)
+	if err != nil {
+		return false, errors.Wrap(err)
+	}
+	if !found {
+		return false, nil
+	}
+
+	defer dbConfigurator.CloseConnection(ctx)
+	if err := dbConfigurator.AlterUserPassword(ctx, username, password); err != nil {
+		return false, errors.Wrap(err)
+	}
+
+	return true, nil
+}
 func closeAllConnections(ctx context.Context, allConfigurators []databaseconfigurator.DatabaseConfigurator) {
 	for _, dbConfigurator := range allConfigurators {
 		dbConfigurator.CloseConnection(ctx)
