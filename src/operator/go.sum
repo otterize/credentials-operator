@@ -432,10 +432,12 @@ github.com/onsi/ginkgo/v2 v2.14.0 h1:vSmGj2Z5YPb9JwCWT6z6ihcUvDhuXLc3sJiqd3jMKAY
 github.com/onsi/ginkgo/v2 v2.14.0/go.mod h1:JkUdW7JkN0V6rFvsHcJ478egV3XH9NxpD27Hal/PhZw=
 github.com/onsi/gomega v1.30.0 h1:hvMK7xYz4D3HapigLTeGdId/NcfQx1VHMJc60ew99+8=
 github.com/onsi/gomega v1.30.0/go.mod h1:9sxs+SwGrKI0+PWe4Fxa9tFQQBG5xSsSbMXOI8PPpoQ=
-github.com/otterize/intents-operator/src v0.0.0-20240521053840-36662b8fd8fa h1:R+wqqZ5Gd/MoD3Jy9I2e6ZxBylh63D+EAJx87x1wzIE=
-github.com/otterize/intents-operator/src v0.0.0-20240521053840-36662b8fd8fa/go.mod h1:7vDL6/NAo7AobUGqDGU/277xGyb0KTRQoqRjoouhh44=
 github.com/otterize/intents-operator/src v0.0.0-20240521104220-ba00b7c59637 h1:fhtXDgHYymOrHaAdaBg7kTs8D53u35nmGXYLiDhVjtU=
 github.com/otterize/intents-operator/src v0.0.0-20240521104220-ba00b7c59637/go.mod h1:7vDL6/NAo7AobUGqDGU/277xGyb0KTRQoqRjoouhh44=
+github.com/otterize/intents-operator/src v0.0.0-20240623092600-0eb9a9628a9f h1:Gj2hrAncbdgXICnnxpICu4NbNd1Dc+GciNGlqClg13g=
+github.com/otterize/intents-operator/src v0.0.0-20240623092600-0eb9a9628a9f/go.mod h1:7vDL6/NAo7AobUGqDGU/277xGyb0KTRQoqRjoouhh44=
+github.com/otterize/intents-operator/src v0.1.15 h1:Cd0dMKLsi6iz1y3c0KKrq4dXABWVrq2Jo37aQAYcJQA=
+github.com/otterize/intents-operator/src v0.1.15/go.mod h1:J3iXhY18AZzG19op3JbnduQyJtGu0OUaM44Kb/OxDuI=
 github.com/otterize/lox v0.0.0-20220525164329-9ca2bf91c3dd h1:7Sb95VrtAPb9m2ewtqLnX1oeKQy03dt7yr6F/hP7Htg=
 github.com/otterize/lox v0.0.0-20220525164329-9ca2bf91c3dd/go.mod h1:RXvgymN8MxiELFkmGHzJ23KJU2ObVsNsNSM80/HO8qQ=
 github.com/otterize/nilable v0.0.0-20240410132629-f242bb6f056f h1:gv92189CW53A+Y0UQ550zr6RfCBYqvYJ8oq6Jll1YqQ=
