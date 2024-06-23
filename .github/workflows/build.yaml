@@ -66,7 +66,7 @@ jobs:
             "VERSION=0.0.${{ github.run_id }}"
 
   helm-e2e-test:
-    uses: otterize/helm-charts/.github/workflows/e2e-test.yaml@c867344a7eb64a42667765e87cf96b0d4b97d685
+    uses: otterize/helm-charts/.github/workflows/e2e-test.yaml@3b2a612385d4765a6a6b27b6ecb262980fe19a3e
     name: Trigger e2e tests from helm charts repo
     secrets: inherit
     with:
