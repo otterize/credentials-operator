@@ -147,7 +147,7 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 
 		if hasRestartAnnotation(pod) {
-			logrus.Info("Triggering pod restart for newly created secret")
+			logrus.Debug("Triggering pod restart for newly created secret")
 			err := e.TriggerPodRestart(ctx, &pod)
 			if err != nil {
 				e.recorder.Eventf(&pod, v1.EventTypeWarning,
@@ -202,7 +202,7 @@ func (e *Reconciler) ensurePodUserAndPasswordSecret(ctx context.Context, pod *v1
 
 	// If secret exists but is being deleted we need to requeue until it is deleted
 	if !secret.DeletionTimestamp.IsZero() {
-		logrus.Info("Secret is being deleted, retriggering reconcile")
+		logrus.Debug("Secret is being deleted, retriggering reconcile")
 		return ctrl.Result{Requeue: true}, false, nil
 	}
 
