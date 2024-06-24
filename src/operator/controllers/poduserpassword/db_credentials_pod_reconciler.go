@@ -144,15 +144,17 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			if err != nil {
 				return ctrl.Result{}, errors.Wrap(err)
 			}
-		}
-
-		if hasRestartAnnotation(pod) {
-			logrus.Debug("Triggering pod restart for newly created secret")
-			err := e.TriggerPodRestart(ctx, &pod)
-			if err != nil {
-				e.recorder.Eventf(&pod, v1.EventTypeWarning,
-					ReasonRestartingPodAfterSecretRotationFailed, "Failed restarting pod after secret creation: %s", err.Error())
+			// We only move on to restart if the pod has any database annotations
+			// Basically, we did not run "alter password" in any databases, we don't need to trigger restarts
+			if hasRestartAnnotation(pod) {
+				logrus.Debug("Triggering pod restart for newly created secret")
+				err := e.TriggerPodRestart(ctx, &pod)
+				if err != nil {
+					e.recorder.Eventf(&pod, v1.EventTypeWarning,
+						ReasonRestartingPodAfterSecretRotationFailed, "Failed restarting pod after secret creation: %s", err.Error())
+				}
 			}
+
 		}
 
 		e.recorder.Event(&pod, v1.EventTypeNormal, ReasonEnsuredPodUserAndPassword, "Ensured user-password credentials in specified secret")
