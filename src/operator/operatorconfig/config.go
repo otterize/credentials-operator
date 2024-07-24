@@ -51,8 +51,8 @@ const (
 	EnableLeaderElectionKey                    = "leader-elect"
 	EnableLeaderElectionDefault                = false
 	EnvPrefix                                  = "OTTERIZE"
-	EnablePasswordRotationKey                  = "enabled-password-rotation"
-	EnablePasswordRotationDefault              = false
+	EnableSecretRotationKey                    = "enable-secret-rotation"
+	EnableSecretRotationDefault                = false
 	DatabasePasswordRotationIntervalKey        = "database-password-rotation-interval"
 	DatabasePasswordRotationIntervalDefault    = time.Hour * 8
 )
@@ -81,7 +81,7 @@ func init() {
 	viper.SetDefault(CertManagerUseClustierIssuerKey, CertManagerUseClusterIssuerDefault)
 	viper.SetDefault(UseCertManagerApproverKey, UseCertManagerApproverDefault)
 	viper.SetDefault(AWSUseSoftDeleteStrategyKey, AWSUseSoftDeleteStrategyDefault)
-	viper.SetDefault(EnablePasswordRotationKey, EnablePasswordRotationDefault)
+	viper.SetDefault(EnableSecretRotationKey, EnableSecretRotationDefault)
 	viper.SetDefault(DebugKey, DebugDefault)
 	viper.SetEnvPrefix(EnvPrefix)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
