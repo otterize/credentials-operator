@@ -127,6 +127,14 @@ func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAcco
 				Name:  "AWS_ROLES_ANYWHERE_TRUST_ANCHOR_ARN",
 				Value: a.agent.TrustAnchorArn,
 			},
+			{
+				Name:  "AWS_ROLES_ANYWHERE_PRIVATE_KEY_PATH",
+				Value: "/aws-config/tls.key",
+			},
+			{
+				Name:  "AWS_ROLES_ANYWHERE_CERT_PATH",
+				Value: "/aws-config/tls.crt",
+			},
 		}
 
 		for i := range pod.Spec.Containers {
