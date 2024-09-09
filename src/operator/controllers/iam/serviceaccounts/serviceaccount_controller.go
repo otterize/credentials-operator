@@ -47,20 +47,18 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, errors.Wrap(err)
 	}
 
-	value, ok := serviceAccount.Labels[r.agent.ServiceAccountLabel()]
+	_, ok := serviceAccount.Labels[r.agent.ServiceAccountLabel()]
 	if !ok {
 		logger.Debugf("serviceAccount not labeled with %s, skipping", r.agent.ServiceAccountLabel())
 		return ctrl.Result{}, nil
 	}
 
-	isReferencedByPods := value == metadata.OtterizeServiceAccountHasPodsValue
-
 	// Perform cleanup if the service account is being deleted or no longer referenced by pods
-	if serviceAccount.DeletionTimestamp == nil && isReferencedByPods {
-		return r.handleServiceAccountUpdate(ctx, serviceAccount)
+	if serviceAccount.DeletionTimestamp != nil {
+		return r.handleServiceAccountCleanup(ctx, serviceAccount)
 	}
 
-	return r.handleServiceAccountCleanup(ctx, serviceAccount)
+	return r.handleServiceAccountUpdate(ctx, serviceAccount)
 }
 
 func (r *ServiceAccountReconciler) handleServiceAccountUpdate(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
@@ -86,12 +84,6 @@ func (r *ServiceAccountReconciler) handleServiceAccountUpdate(ctx context.Contex
 }
 
 func (r *ServiceAccountReconciler) handleServiceAccountCleanup(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
-	logger := logrus.WithField("name", serviceAccount.Name).WithField("namespace", serviceAccount.Namespace)
-	if !controllerutil.ContainsFinalizer(&serviceAccount, r.agent.FinalizerName()) && !controllerutil.ContainsFinalizer(&serviceAccount, metadata.DeprecatedIAMRoleFinalizer) {
-		logger.Debug("service account does not have the Otterize finalizer, skipping")
-		return ctrl.Result{}, nil
-	}
-
 	if err := r.agent.OnServiceAccountTermination(ctx, &serviceAccount); err != nil {
 		return ctrl.Result{}, errors.Errorf("failed to remove service account: %w", err)
 	}

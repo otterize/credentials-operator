@@ -9,8 +9,7 @@ type IAMCredentialsAgent interface {
 	// FinalizerName returns the name of the finalizer that the agent will add to pods & service accounts
 	FinalizerName() string
 
-	// ServiceAccountLabel returns the label that the agent will use to mark service accounts with having / not having pods
-	// managed by this agent
+	// ServiceAccountLabel returns the label that the agent will use to mark service accounts with having pods managed by this agent
 	ServiceAccountLabel() string
 
 	// AppliesOnPod returns true if the agent should manage the pod
