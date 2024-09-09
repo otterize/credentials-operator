@@ -251,8 +251,6 @@ func hasAWSAnnotation(serviceAccount *corev1.ServiceAccount) (string, bool) {
 func (a *Agent) OnServiceAccountTermination(ctx context.Context, serviceAccount *corev1.ServiceAccount) error {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
 
-	logger.Info("deleting AWS role for ServiceAccount")
-
 	err := a.agent.DeleteOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name)
 	if err != nil {
 		return errors.Errorf("failed to remove service account: %w", err)
@@ -268,7 +266,7 @@ func (a *Agent) OnServiceAccountTermination(ctx context.Context, serviceAccount 
 			logger.Debug("rolesanywhere profile for service account did not exist when deletion was attempted")
 		}
 
-		logger.Info("deleted rolesanywhere profile for service account")
+		logger.Debug("deleted rolesanywhere profile for service account")
 	}
 
 	return nil
