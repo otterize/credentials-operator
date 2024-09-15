@@ -21,9 +21,12 @@ import (
 )
 
 const (
+	testPodName             = "pod"
 	testNamespace           = "namespace"
 	testServiceAccountName  = "serviceaccount"
+	testPodUID              = "pod-uid"
 	testRoleARN             = "role-arn"
+	testRoleName            = "role-name"
 	mockFinalizer           = "credentials-operator.otterize.com/mock-finalizer"
 	mockServiceAccountLabel = "credentials-operator.otterize.com/mock-service-account-managed"
 )
@@ -52,7 +55,7 @@ func (s *TestServiceAccountSuite) SetupTest() {
 // 4. SA with finalizer causes deletion to role but role is 404 so sa is terminated successfully.
 // 5. SA with finalizer causes update to role but role update returns error so is retried, and terminates successfully on second attempt.
 
-func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountNotTerminatingNotAffected() {
+func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountNotTerminatingAndHasPodsNotAffected() {
 	req := testutils.GetTestServiceRequestSchema()
 
 	serviceAccount := testutils.GetTestServiceSchema()
@@ -124,6 +127,35 @@ func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountTerminat
 	updatedServiceAccount := serviceAccount.DeepCopy()
 	s.Require().True(controllerutil.RemoveFinalizer(updatedServiceAccount, mockFinalizer))
 	s.client.EXPECT().Patch(gomock.Any(), updatedServiceAccount, gomock.Any())
+
+	res, err := s.reconciler.Reconcile(context.Background(), req)
+	s.Require().NoError(err)
+	s.Require().Empty(res)
+}
+
+func (s *TestServiceAccountSuite) TestServiceAccountSuite_ServiceAccountServiceAccountLabeledNoPodsDeletesRoleAndDoesntRemoveFinalizer() {
+	req := testutils.GetTestServiceRequestSchema()
+
+	serviceAccount := corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        testServiceAccountName,
+			Namespace:   testNamespace,
+			Annotations: map[string]string{awscredentialsagent.ServiceAccountAWSRoleARNAnnotation: testRoleARN},
+			Labels: map[string]string{
+				mockServiceAccountLabel: metadata.OtterizeServiceAccountHasNoPodsValue,
+			},
+			Finalizers: []string{mockFinalizer},
+		},
+	}
+
+	s.client.EXPECT().Get(gomock.Any(), req.NamespacedName, gomock.AssignableToTypeOf(&serviceAccount)).DoAndReturn(
+		func(arg0 context.Context, arg1 types.NamespacedName, arg2 *corev1.ServiceAccount, arg3 ...client.GetOption) error {
+			serviceAccount.DeepCopyInto(arg2)
+			return nil
+		},
+	)
+
+	s.mockIAM.EXPECT().OnServiceAccountTermination(context.Background(), gomock.AssignableToTypeOf(&serviceAccount)).Return(nil)
 
 	res, err := s.reconciler.Reconcile(context.Background(), req)
 	s.Require().NoError(err)
