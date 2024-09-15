@@ -86,6 +86,12 @@ func (r *ServiceAccountReconciler) handleServiceAccountUpdate(ctx context.Contex
 }
 
 func (r *ServiceAccountReconciler) handleServiceAccountCleanup(ctx context.Context, serviceAccount corev1.ServiceAccount) (ctrl.Result, error) {
+	logger := logrus.WithField("name", serviceAccount.Name).WithField("namespace", serviceAccount.Namespace)
+	if !controllerutil.ContainsFinalizer(&serviceAccount, r.agent.FinalizerName()) && !controllerutil.ContainsFinalizer(&serviceAccount, metadata.DeprecatedIAMRoleFinalizer) {
+		logger.Debug("service account does not have the Otterize finalizer, skipping")
+		return ctrl.Result{}, nil
+	}
+
 	if err := r.agent.OnServiceAccountTermination(ctx, &serviceAccount); err != nil {
 		return ctrl.Result{}, errors.Errorf("failed to remove service account: %w", err)
 	}
