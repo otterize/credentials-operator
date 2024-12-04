@@ -35,6 +35,8 @@ func (r *ServiceAccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := logrus.WithFields(logrus.Fields{"serviceAccount": req.Name, "namespace": req.Namespace})
+
 	serviceAccount := corev1.ServiceAccount{}
 
 	err := r.Get(ctx, req.NamespacedName, &serviceAccount)
@@ -43,6 +45,12 @@ func (r *ServiceAccountReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, errors.Wrap(err)
+	}
+
+	_, ok := serviceAccount.Labels[r.agent.ServiceAccountLabel()]
+	if !ok {
+		logger.Debugf("serviceAccount not labeled with %s, skipping", r.agent.ServiceAccountLabel())
+		return ctrl.Result{}, nil
 	}
 
 	// Perform cleanup if the service account is being deleted or no longer referenced by pods
