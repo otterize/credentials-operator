@@ -68,11 +68,15 @@ func (r *PodReconciler) handlePodUpdate(ctx context.Context, pod corev1.Pod) (ct
 		return ctrl.Result{}, nil
 	}
 
+	logger.Debug("Otterize IAM label found on pod")
+
 	var serviceAccount corev1.ServiceAccount
 	err := r.Get(ctx, types.NamespacedName{Name: pod.Spec.ServiceAccountName, Namespace: pod.Namespace}, &serviceAccount)
 	if err != nil {
 		return ctrl.Result{}, errors.Errorf("failed to get service account: %w", err)
 	}
+
+	logger = logger.WithField("serviceAccount", serviceAccount.Name)
 
 	updatedServiceAccount := serviceAccount.DeepCopy()
 	updatedPod := pod.DeepCopy()
@@ -85,6 +89,7 @@ func (r *PodReconciler) handlePodUpdate(ctx context.Context, pod corev1.Pod) (ct
 		return ctrl.Result{Requeue: true}, nil
 	}
 	if updated {
+		logger.Info("updating Otterize IAM managed pod")
 		controllerutil.AddFinalizer(updatedPod, r.agent.FinalizerName())
 		err := r.Patch(ctx, updatedPod, client.MergeFrom(&pod))
 		if err != nil {
@@ -94,6 +99,7 @@ func (r *PodReconciler) handlePodUpdate(ctx context.Context, pod corev1.Pod) (ct
 			return ctrl.Result{}, errors.Wrap(err)
 		}
 
+		logger.Info("updating Otterize IAM managed serviceAccount")
 		apiutils.AddLabel(updatedServiceAccount, r.agent.ServiceAccountLabel(), metadata.OtterizeServiceAccountHasPodsValue)
 		err = r.Patch(ctx, updatedServiceAccount, client.MergeFrom(&serviceAccount))
 		if err != nil {
