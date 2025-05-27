@@ -128,8 +128,8 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	logrus.Debug("Ensuring user-password credentials secrets for pod")
 	if secretNameErrors := validation.IsDNS1123Subdomain(secretName); len(secretNameErrors) > 0 {
 		secretNameErrorsString := strings.Join(secretNameErrors, ", ")
-		logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace, "secretName": secretName}).
-			Warningf("Invalid secret name: %s", secretNameErrorsString)
+		logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace, "secretName": secretName, "errors": secretNameErrors}).
+			Warningf("Invalid secret name")
 		e.recorder.Eventf(&pod, v1.EventTypeWarning, ReasonEnsuringPodUserAndPasswordFailed, "Invalid secret name %s: %s", secretName, secretNameErrorsString)
 		return ctrl.Result{}, nil
 	}
