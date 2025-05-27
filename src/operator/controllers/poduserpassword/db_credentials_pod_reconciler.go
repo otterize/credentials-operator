@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -125,6 +126,13 @@ func (e *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	secretName := pod.Annotations[metadata.UserAndPasswordSecretNameAnnotation]
 	logrus.Debug("Ensuring user-password credentials secrets for pod")
+	if secretNameErrors := validation.IsDNS1123Subdomain(secretName); len(secretNameErrors) > 0 {
+		secretNameErrorsString := strings.Join(secretNameErrors, ", ")
+		logrus.WithFields(logrus.Fields{"pod": pod.Name, "namespace": pod.Namespace, "secretName": secretName}).
+			Warningf("Invalid secret name: %s", secretNameErrorsString)
+		e.recorder.Eventf(&pod, v1.EventTypeWarning, ReasonEnsuringPodUserAndPasswordFailed, "Invalid secret name %s: %s", secretName, secretNameErrorsString)
+		return ctrl.Result{}, nil
+	}
 	result, created, password, err := e.ensurePodUserAndPasswordSecret(ctx, &pod, secretName, username)
 	if err != nil {
 		e.recorder.Eventf(&pod, v1.EventTypeWarning, ReasonEnsuringPodUserAndPasswordFailed, "Failed to ensure user-password credentials secret: %s", err.Error())
