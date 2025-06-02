@@ -1,6 +1,7 @@
 package awscredentialsagent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
@@ -197,8 +198,11 @@ func (a *Agent) reconcileAWSRoleForRolesAnywhere(ctx context.Context, serviceAcc
 		}
 	}
 
-	// TODO: compute trust relationship.
-	role, err = a.agent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, a.shouldUseSoftDeleteStrategy(serviceAccount))
+	additionalTrustRelationshipStatementsTyped, err := a.calculateTrustRelationshipsFromServiceAccount(serviceAccount)
+	if err != nil {
+		return false, nil, nil, errors.Wrap(err)
+	}
+	role, err = a.agent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, a.shouldUseSoftDeleteStrategy(serviceAccount), additionalTrustRelationshipStatementsTyped)
 	if err != nil {
 		return false, nil, nil, errors.Errorf("failed creating AWS role for service account: %w", err)
 	}
@@ -217,6 +221,21 @@ func (a *Agent) OnPodUpdate(ctx context.Context, pod *corev1.Pod, serviceAccount
 	return false, false, nil
 }
 
+func (a *Agent) calculateTrustRelationshipsFromServiceAccount(serviceAccount *corev1.ServiceAccount) ([]awsagent.StatementEntry, error) {
+	additionalTrustRelationshipStatementsTyped := make([]awsagent.StatementEntry, 0)
+	additionalTrustRelationshipStatements, ok := serviceAccount.Annotations[OtterizeAWSAdditionalTrustRelationshipStatementsAnnotation]
+	if ok {
+		dec := json.NewDecoder(bytes.NewReader([]byte(additionalTrustRelationshipStatements)))
+		dec.DisallowUnknownFields()
+		err := dec.Decode(&additionalTrustRelationshipStatementsTyped)
+		if err != nil {
+			return nil, errors.Errorf("failed to unmarshal additional trust relationship statements: %w", err)
+		}
+	}
+
+	return additionalTrustRelationshipStatementsTyped, nil
+}
+
 func (a *Agent) OnServiceAccountUpdate(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updated bool, requeue bool, err error) {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
 
@@ -227,18 +246,12 @@ func (a *Agent) OnServiceAccountUpdate(ctx context.Context, serviceAccount *core
 		return false, false, nil
 	}
 
-	var additionalTrustRelationshipStatementsTyped []awsagent.StatementEntry
-	additionalTrustRelationshipStatements, ok := serviceAccount.Annotations[OtterizeAWSAdditionalTrustRelationshipStatementsAnnotation]
-	if ok {
-		err := json.Unmarshal([]byte(additionalTrustRelationshipStatements), &additionalTrustRelationshipStatementsTyped)
-		if err != nil {
-			return false, false, errors.Errorf("failed to unmarshal additional trust relationship statements: %w", err)
-		}
-		logger.WithField("statements", additionalTrustRelationshipStatementsTyped).Debug("Adding additional trust relationship statements to role")
-
+	additionalTrustRelationshipStatementsTyped, err := a.calculateTrustRelationshipsFromServiceAccount(serviceAccount)
+	if err != nil {
+		return false, false, errors.Wrap(err)
 	}
 
-	role, err := a.agent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, a.shouldUseSoftDeleteStrategy(serviceAccount), additionalTrustRelationshipStatementsTyped...)
+	role, err := a.agent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, a.shouldUseSoftDeleteStrategy(serviceAccount), additionalTrustRelationshipStatementsTyped)
 
 	if err != nil {
 		return false, false, errors.Errorf("failed creating AWS role for service account: %w", err)
