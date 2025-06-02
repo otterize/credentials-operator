@@ -172,36 +172,11 @@ func (a *Agent) reconcileAWSRoleForRolesAnywhere(ctx context.Context, serviceAcc
 			}, nil
 	}
 
-	if roleARN, ok := hasAWSAnnotation(serviceAccount); ok {
-		generatedRoleARN := a.agent.GenerateRoleARN(serviceAccount.Namespace, serviceAccount.Name)
-		found, role, err := a.agent.GetOtterizeRole(ctx, serviceAccount.Namespace, serviceAccount.Name)
-
-		// TODO: check if role is missing necessary trust relationship.
-
-		if err != nil {
-			return false, nil, nil, errors.Errorf("failed getting AWS role: %w", err)
-		}
-
-		foundProfile, profile, err := a.agent.GetOtterizeProfile(ctx, serviceAccount.Namespace, serviceAccount.Name)
-		if err != nil {
-			return false, nil, nil, errors.Errorf("failed getting AWS profile: %w", err)
-		}
-
-		if found && foundProfile {
-			if generatedRoleARN != roleARN {
-				logger.WithField("arn", *role.Arn).Debug("ServiceAccount AWS role exists, but annotation is misconfigured, should be updated")
-				return true, role, profile, nil
-			}
-			logger.WithField("arn", *role.Arn).Debug("ServiceAccount has matching AWS role")
-
-			return false, role, profile, nil
-		}
-	}
-
 	additionalTrustRelationshipStatementsTyped, err := a.calculateTrustRelationshipsFromServiceAccount(serviceAccount)
 	if err != nil {
 		return false, nil, nil, errors.Wrap(err)
 	}
+
 	role, err = a.agent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, a.shouldUseSoftDeleteStrategy(serviceAccount), additionalTrustRelationshipStatementsTyped)
 	if err != nil {
 		return false, nil, nil, errors.Errorf("failed creating AWS role for service account: %w", err)
