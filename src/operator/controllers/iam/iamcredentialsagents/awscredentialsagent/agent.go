@@ -1,7 +1,9 @@
 package awscredentialsagent
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	rolesanywhereTypes "github.com/aws/aws-sdk-go-v2/service/rolesanywhere/types"
 	"github.com/otterize/credentials-operator/src/shared/apiutils"
@@ -26,6 +28,9 @@ const (
 	// OtterizeServiceAccountAWSRoleARNAnnotation is used to update a Pod in the mutating webhook with the role ARN
 	// so that reinvocation is triggered for the EKS pod identity mutating webhook.
 	OtterizeServiceAccountAWSRoleARNAnnotation = "credentials-operator.otterize.com/eks-role-arn"
+
+	// OtterizeAWSAdditionalTrustRelationshipStatementsAnnotation is used to add additional trust relationship statements to the role.
+	OtterizeAWSAdditionalTrustRelationshipStatementsAnnotation = "credentials-operator.otterize.com/additional-role-trust-relationship-statements"
 
 	// OtterizeAWSUseSoftDeleteKey is used to mark workloads that should not have their corresponding roles deleted,
 	// but should be tagged as deleted instead (aka soft delete strategy).
@@ -60,6 +65,16 @@ func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAcco
 	apiutils.AddAnnotation(serviceAccount, ServiceAccountAWSRoleARNAnnotation, roleArn)
 	apiutils.AddAnnotation(serviceAccount, awsagent.ServiceAccountAWSAccountIDAnnotation, a.agent.AccountID)
 	apiutils.AddAnnotation(pod, OtterizeServiceAccountAWSRoleARNAnnotation, roleArn)
+	additionalStatements, ok := pod.Annotations[OtterizeAWSAdditionalTrustRelationshipStatementsAnnotation]
+	if ok {
+		var statements []awsagent.StatementEntry
+		err := json.Unmarshal([]byte(additionalStatements), &statements)
+		if err != nil {
+			return errors.Errorf("failed to unmarshal additional trust relationship statements: %w", err)
+		}
+		logger.WithField("statements", statements).Debug("Adding additional trust relationship statements to role")
+		apiutils.AddAnnotation(serviceAccount, OtterizeAWSAdditionalTrustRelationshipStatementsAnnotation, additionalStatements)
+	}
 
 	podUseSoftDeleteLabelValue, podUseSoftDeleteLabelExists := pod.Labels[OtterizeAWSUseSoftDeleteKey]
 	shouldMarkForSoftDelete := podUseSoftDeleteLabelExists && podUseSoftDeleteLabelValue == OtterizeAWSUseSoftDeleteValue
@@ -77,7 +92,7 @@ func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAcco
 			pod.Spec.Volumes = make([]corev1.Volume, 0)
 		}
 
-		_, role, profile, err := a.reconcileAWSRole(ctx, serviceAccount, dryRun)
+		_, role, profile, err := a.reconcileAWSRoleForRolesAnywhere(ctx, serviceAccount, pod, dryRun)
 		if err != nil {
 			return errors.Errorf("failed reconciling AWS role: %w", err)
 		}
@@ -147,7 +162,7 @@ func (a *Agent) OnPodAdmission(ctx context.Context, pod *corev1.Pod, serviceAcco
 	return nil
 }
 
-func (a *Agent) reconcileAWSRole(ctx context.Context, serviceAccount *corev1.ServiceAccount, dryRun bool) (updateAnnotation bool, role *awstypes.Role, profile *rolesanywhereTypes.ProfileDetail, err error) {
+func (a *Agent) reconcileAWSRoleForRolesAnywhere(ctx context.Context, serviceAccount *corev1.ServiceAccount, pod *corev1.Pod, dryRun bool) (updateAnnotation bool, role *awstypes.Role, profile *rolesanywhereTypes.ProfileDetail, err error) {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
 	if dryRun {
 		return false, &awstypes.Role{
@@ -157,31 +172,12 @@ func (a *Agent) reconcileAWSRole(ctx context.Context, serviceAccount *corev1.Ser
 			}, nil
 	}
 
-	if roleARN, ok := hasAWSAnnotation(serviceAccount); ok {
-		generatedRoleARN := a.agent.GenerateRoleARN(serviceAccount.Namespace, serviceAccount.Name)
-		found, role, err := a.agent.GetOtterizeRole(ctx, serviceAccount.Namespace, serviceAccount.Name)
-
-		if err != nil {
-			return false, nil, nil, errors.Errorf("failed getting AWS role: %w", err)
-		}
-
-		foundProfile, profile, err := a.agent.GetOtterizeProfile(ctx, serviceAccount.Namespace, serviceAccount.Name)
-		if err != nil {
-			return false, nil, nil, errors.Errorf("failed getting AWS profile: %w", err)
-		}
-
-		if found && foundProfile {
-			if generatedRoleARN != roleARN {
-				logger.WithField("arn", *role.Arn).Debug("ServiceAccount AWS role exists, but annotation is misconfigured, should be updated")
-				return true, role, profile, nil
-			}
-			logger.WithField("arn", *role.Arn).Debug("ServiceAccount has matching AWS role")
-
-			return false, role, profile, nil
-		}
+	additionalTrustRelationshipStatementsTyped, err := a.calculateTrustRelationshipsFromServiceAccount(serviceAccount)
+	if err != nil {
+		return false, nil, nil, errors.Wrap(err)
 	}
 
-	role, err = a.agent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, a.shouldUseSoftDeleteStrategy(serviceAccount))
+	role, err = a.agent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, a.shouldUseSoftDeleteStrategy(serviceAccount), additionalTrustRelationshipStatementsTyped)
 	if err != nil {
 		return false, nil, nil, errors.Errorf("failed creating AWS role for service account: %w", err)
 	}
@@ -200,6 +196,21 @@ func (a *Agent) OnPodUpdate(ctx context.Context, pod *corev1.Pod, serviceAccount
 	return false, false, nil
 }
 
+func (a *Agent) calculateTrustRelationshipsFromServiceAccount(serviceAccount *corev1.ServiceAccount) ([]awsagent.StatementEntry, error) {
+	additionalTrustRelationshipStatementsTyped := make([]awsagent.StatementEntry, 0)
+	additionalTrustRelationshipStatements, ok := serviceAccount.Annotations[OtterizeAWSAdditionalTrustRelationshipStatementsAnnotation]
+	if ok {
+		dec := json.NewDecoder(bytes.NewReader([]byte(additionalTrustRelationshipStatements)))
+		dec.DisallowUnknownFields()
+		err := dec.Decode(&additionalTrustRelationshipStatementsTyped)
+		if err != nil {
+			return nil, errors.Errorf("failed to unmarshal additional trust relationship statements: %w", err)
+		}
+	}
+
+	return additionalTrustRelationshipStatementsTyped, nil
+}
+
 func (a *Agent) OnServiceAccountUpdate(ctx context.Context, serviceAccount *corev1.ServiceAccount) (updated bool, requeue bool, err error) {
 	logger := logrus.WithFields(logrus.Fields{"serviceAccount": serviceAccount.Name, "namespace": serviceAccount.Namespace})
 
@@ -210,7 +221,12 @@ func (a *Agent) OnServiceAccountUpdate(ctx context.Context, serviceAccount *core
 		return false, false, nil
 	}
 
-	role, err := a.agent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, a.shouldUseSoftDeleteStrategy(serviceAccount))
+	additionalTrustRelationshipStatementsTyped, err := a.calculateTrustRelationshipsFromServiceAccount(serviceAccount)
+	if err != nil {
+		return false, false, errors.Wrap(err)
+	}
+
+	role, err := a.agent.CreateOtterizeIAMRole(ctx, serviceAccount.Namespace, serviceAccount.Name, a.shouldUseSoftDeleteStrategy(serviceAccount), additionalTrustRelationshipStatementsTyped)
 
 	if err != nil {
 		return false, false, errors.Errorf("failed creating AWS role for service account: %w", err)
